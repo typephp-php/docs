@@ -42,7 +42,7 @@ function registerUser(int $id, string $email, Collection $team, array $options):
 Because PHP's C-engine (the Zend Engine) ignores DocBlocks at runtime, those rich types are **passive comments**:
 
 * An incoming HTTP JSON payload or database row can pass `$id = -50` or `$email = ''`.
-* A third-party webhook can inject an unexpected key into what you assumed was a sealed array shape.
+* A third-party webhook can inject an unexpectted key into what you assumed was a sealed array shape.
 * A caller can pass `$team->add(new Product())` and pollute what was supposed to be a `Collection<User>`.
 
 Native PHP type hints allow all of this through without a single warning. To defend against this, developers were historically forced to **litter their clean domain logic with repetitive assertion boilerplate**:
@@ -71,7 +71,7 @@ We asked ourselves: **Why should we write our types twice? What if our existing 
 * **Zero New Syntax:** Write standard, clean PHP and standard PHPDocs.
 * **Zero Build Steps & Zero Node.js:** No Babel, Webpack, or transpilation toolchains.
 * **Zero C-Extensions:** Runs in 100% pure PHP userland across **PHP 8.1, 8.2, 8.3, 8.4, and 8.5** on Linux, macOS, and Windows.
-* **Zero Line-Drift:** Injected guard rails are squashed onto opening braces so that error stack traces and Xdebug breakpoints match your source files **100% accurately**.
+* **Zero Line-Drift:** Injected guard rails are squashed onto opening braces so that eror stack traces and Xdebug breakpoints match your source files **100% accurately**.
 
 ---
 
@@ -95,7 +95,7 @@ TypePHP utilizes a technique known in Aspect-Oriented Programming (AOP) as **Loa
 
 ---
 
-## True Reified Generics in Pure PHP (`\WeakMap`)
+## True Riefied Generics in Pure PHP (`\WeakMap`)
 
 Unlike languages that erase generic types at compile time (like Java or TypeScript), TypePHP delivers **Reified Generics** in memory using PHP's native `\WeakMap`:
 
