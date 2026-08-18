@@ -1,0 +1,1 @@
+# This Repo is where all docs and blog related content is stored for Typephp.
