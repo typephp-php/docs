@@ -20,14 +20,14 @@ Articles, architecture deep-dives, release notes, and tutorials from the TypePHP
       <span>5 min read</span>
     </div>
     <h2 class="blog-post-title">
-      <a href="/typephp/blog/introducing-typephp">The Death of the 'DocBlock Lie': Introducing TypePHP and Runtime Reified Generics in Pure PHP</a>
+      <a href="/docs/blog/introducing-typephp">The Death of the 'DocBlock Lie': Introducing TypePHP and Runtime Reified Generics in Pure PHP</a>
     </h2>
     <p class="blog-post-excerpt">
       An introduction to TypePHP: how it uses Load-Time Weaving via native StreamWrappers to enforce PHPDoc contracts at runtime, eliminates the "DocBlock Lie", and brings true Reified Generics to modern PHP without transpilers or C-extensions.
     </p>
     <div class="blog-post-footer">
       <span class="blog-author">By <b>Reymart Calicdan</b></span>
-      <a class="blog-read-more" href="/typephp/blog/introducing-typephp">Read Article →</a>
+      <a class="blog-read-more" href="/docs/blog/introducing-typephp">Read Article →</a>
     </div>
   </article>
 
