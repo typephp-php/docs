@@ -85,7 +85,7 @@ export default defineConfig({
       }
     ],
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/typephp-php/typephp' }
+      { icon: 'github', link: 'https://github.com/typephp-php/docs' }
     ],
     search: {
       provider: 'local'

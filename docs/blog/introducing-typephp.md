@@ -68,7 +68,7 @@ We asked ourselves: **Why should we write our types twice? What if our existing 
 
 ## Enter TypePHP
 
-**[TypePHP](https://github.com/typephp-php/typephp)** is a transparent, pure-PHP runtime type checker that turns your existing DocBlocks (`@param`, `@return`, `@var`, `@template`, `@property`, `@method`, array shapes, integer ranges, and scalar refinements) into **active runtime guard rails** during execution.
+**[TypePHP](https://github.com/typephp-php/docs)** is a transparent, pure-PHP runtime type checker that turns your existing DocBlocks (`@param`, `@return`, `@var`, `@template`, `@property`, `@method`, array shapes, integer ranges, and scalar refinements) into **active runtime guard rails** during execution.
 
 * **Zero New Syntax:** Write standard, clean PHP and standard PHPDocs.
 * **Zero Build Steps & Zero Node.js:** No Babel, Webpack, or transpilation toolchains.
@@ -203,4 +203,4 @@ Every function contract, array shape, integer range, and generic container in yo
 * **[Documentation Website »](/getting-started/installation)**
 * **[Quick Start Guide »](/getting-started/quick-start)**
 * **[Generics Deep Dive »](/generics/basics-and-bounds)**
-* **[GitHub Repository »](https://github.com/typephp-php/typephp)**
+* **[GitHub Repository »](https://github.com/typephp-php/docs)**

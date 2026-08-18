@@ -11,7 +11,7 @@ hero:
       link: /getting-started/installation
     - theme: alt
       text: "View on GitHub"
-      link: https://github.com/typephp-php/typephp
+      link: https://github.com/typephp-php/docs
 
 features:
   - title: "Zero Production Overhead"
