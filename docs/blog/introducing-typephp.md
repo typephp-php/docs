@@ -13,15 +13,13 @@ next: false
 # The Death of the 'DocBlock Lie': Introducing TypePHP and Runtime Reified Generics in Pure PHP
 
 <div class="blog-post-meta" style="margin-bottom: 24px;">
-  <span class="blog-badge badge-announcement">Release v0.5.0</span>
+  <span class="blog-badge badge-announcement">Release</span>
   <span>August 18, 2026</span>
   <span class="dot">•</span>
   <span>3 min read</span>
-  <span class="dot">•</span>
-  <span>By <b>Reymart Calicdan</b></span>
 </div>
 
-For the past several years, the PHP ecosystem has undergone a massive renaissance. With tools like **PHPStan**, **Psalm**, and **Pest**, PHP developers now write some of the most strictly-typed, expressive codebases in the world.
+For the past several years, the PHP ecosystem has undergone a massive renaissance. With tools like **PHPStan**, **Psalm**, and **Pest**, PHP developers now write some of the most strictly-typed, expresive codebases in the world.
 
 We routinely write rich, descriptive DocBlocks:
 
