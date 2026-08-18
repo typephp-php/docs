@@ -33,12 +33,14 @@
     }
 }
 
-/* ================= BLOG FEED STYLES ================= */
+.blog-feed-container {
+    margin-top: 24px;
+}
+
 .blog-feed {
     display: flex;
     flex-direction: column;
     gap: 24px;
-    margin-top: 32px;
 }
 
 .blog-post-card {
@@ -71,6 +73,12 @@
     padding: 2px 8px;
     border-radius: 4px;
     letter-spacing: 0.5px;
+}
+
+.badge-guide {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+    border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
 .badge-announcement {
@@ -107,7 +115,7 @@
 .blog-post-footer {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     padding-top: 14px;
     border-top: 1px solid var(--vp-c-divider);
     font-size: 13.5px;
@@ -139,19 +147,19 @@
     border-radius: 6px;
     font-size: 13.5px;
     color: var(--vp-c-text-1);
-    text-decoration: none;
+    background: var(--vp-c-bg-soft);
+    cursor: pointer;
     transition: all 0.2s ease;
 }
 
-.pagination-btn:hover:not(.disabled) {
+.pagination-btn:hover:not(:disabled) {
     border-color: var(--vp-c-brand-1);
     color: var(--vp-c-brand-1);
 }
 
-.pagination-btn.disabled {
+.pagination-btn:disabled {
     opacity: 0.4;
     cursor: not-allowed;
-    pointer-events: none;
 }
 
 .pagination-pages {
@@ -169,10 +177,20 @@
     font-size: 14px;
     font-weight: 600;
     border: 1px solid var(--vp-c-divider);
+    background: var(--vp-c-bg-soft);
+    color: var(--vp-c-text-1);
+    cursor: pointer;
+    transition: all 0.2s ease;
 }
 
 .page-number.active {
     background: var(--vp-c-brand-1);
     color: #fff;
     border-color: var(--vp-c-brand-1);
+}
+
+.badge-guide {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+    border: 1px solid rgba(59, 130, 246, 0.3);
 }

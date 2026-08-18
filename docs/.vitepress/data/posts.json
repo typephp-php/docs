@@ -1,0 +1,20 @@
+[
+  {
+    "title": "How to Enforce Runtime Generics on Third-Party Collections (Doctrine, Ramsey) with TypePHP",
+    "url": "/docs/blog/reifying-third-party-collections",
+    "date": "August 18, 2026",
+    "readTime": "4 min read",
+    "badge": "Guide",
+    "badgeClass": "badge-guide",
+    "excerpt": "A step-by-step tutorial on making third-party collections (Doctrine ArrayCollection, Ramsey Collection) reified and strictly type-checked at runtime using path whitelisting and TypePHP extensions."
+  },
+  {
+    "title": "The Death of the 'DocBlock Lie': Introducing TypePHP and Runtime Reified Generics in Pure PHP",
+    "url": "/docs/blog/introducing-typephp",
+    "date": "August 18, 2026",
+    "readTime": "5 min read",
+    "badge": "Announcement",
+    "badgeClass": "badge-announcement",
+    "excerpt": "An introduction to TypePHP: how it uses Load-Time Weaving via native StreamWrappers to enforce PHPDoc contracts at runtime, eliminates the \"DocBlock Lie\", and brings true Reified Generics to modern PHP without transpilers or C-extensions."
+  }
+]
