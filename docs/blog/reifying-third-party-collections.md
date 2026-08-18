@@ -1,5 +1,5 @@
 ---
-title: "How to Enforce Runtime Generics on Third-Party Collections (Doctrine, Ramsey) with TypePHP"
+title: "How to Enforce Runtime Generics on Third-Party Collections Libraries (Doctrine, Ramsey, Laravel Collections) with TypePHP"
 description: "A comprehensive guide on making third-party collections reified and strictly type-checked at runtime across Symfony, Laravel, PHPUnit, and Pest."
 date: 2026-08-18
 layout: doc

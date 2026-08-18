@@ -1,6 +1,6 @@
 [
   {
-    "title": "How to Enforce Runtime Generics on Third-Party Collections (Doctrine, Ramsey) with TypePHP",
+    "title": "How to Enforce Runtime Generics on Third-Party Collections Libraries (Doctrine, Ramsey, Laravel Collections) with TypePHP",
     "url": "/docs/blog/reifying-third-party-collections",
     "date": "August 18, 2026",
     "readTime": "6 min read",
