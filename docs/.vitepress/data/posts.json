@@ -12,7 +12,7 @@
     "title": "The Death of the 'DocBlock Lie': Introducing TypePHP and Runtime Reified Generics in Pure PHP",
     "url": "/docs/blog/introducing-typephp",
     "date": "August 18, 2026",
-    "readTime": "5 min read",
+    "readTime": "6 min read",
     "badge": "Announcement",
     "badgeClass": "badge-announcement",
     "excerpt": "An introduction to TypePHP: how it uses Load-Time Weaving via native StreamWrappers to enforce PHPDoc contracts at runtime, eliminates the \"DocBlock Lie\", and brings true Reified Generics to modern PHP without transpilers or C-extensions."
