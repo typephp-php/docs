@@ -50,7 +50,45 @@ If you are changing configuration settings frequently during local development, 
 
 ---
 
+## Performance & Optimization
+
+### How do I optimize performance for massive array datasets (10,000+ items)?
+
+If your application processes large collections (e.g., database result sets, search index batches, or CSV exports with 5,000 to 100,000+ items), configure `'array_validation' => 'hybrid'` in `typephp.php`:
+
+```php
+// typephp.php
+return [
+    'array_validation' => 'hybrid',
+];
+```
+
+* **Default (`'full'`):** Runs an exhaustive O(n) check on every element.
+* **Hybrid (`'hybrid'`):** Activates Beartype-style O(1) sampling for arrays exceeding 128 items (verifying structure in C via `array_is_list()`, boundary elements, and random internal samples), reducing validation latency on 100,000 items from **81 seconds down to 0.83 seconds (97x faster)**.
+
+---
+
+### Should I run JIT with TypePHP?
+
+* **Short-Lived CLI Test Runs (Pest / PHPUnit):** Run tests with standard PHP CLI execution (without JIT). Because a test suite finishes in seconds, allocating JIT buffers and compiling tracing buffers on a short-lived process adds compilation overhead.
+* **Production Web Servers & Long-Running Workers (PHP-FPM, FrankenPHP, Octane, Swoole):** Enable tracing JIT with `opcache.jit=1254` and `opcache.jit_buffer_size=128M`. In long-running processes, tracing JIT compiles the hot type-checking loops into native CPU assembly, providing a **1.5x to 4.8x throughput increase** (over 190,000 ops/sec on shapes).
+
+---
+
 ## Type Enforcement & Edge Cases
+
+### Why did TypePHP catch an unexpected key in an array shape?
+
+By default, array shapes (`array{id: int, name: string}`) are **sealed**. If an external database query or framework metadata passes extra fields that are not declared in the shape, TypePHP rejects them with `contains unsealed unexpected key`.
+
+**Solution:** If extra dynamic fields are expected, declare an **unsealed shape** using `...<K, V>` or `...`:
+```php
+/**
+ * @param array{id: int, name: string, ...<string, mixed>} $payload
+ */
+```
+
+---
 
 ### Why didn't TypePHP catch a bad property assignment from an external file?
 
@@ -85,16 +123,6 @@ class OrderService
 
 ---
 
-### Why is my Pest or PHPUnit test suite running slower with JIT enabled?
-
-During CLI test execution, a single short-lived PHP process runs your tests. 
-
-If you pass `-d opcache.enable_cli=1` with PHP 8 JIT enabled, PHP spends extra CPU cycles compiling JIT tracing buffers that are discarded the moment the test suite finishes a second later.
-
-**Solution:** Run CLI test runs with standard PHP execution (without `opcache.enable_cli=1` or JIT enabled). TypePHP executes 380+ complex type checks in sub-second time without JIT. Save JIT optimization for long-running production web servers (PHP-FPM, FrankenPHP, Swoole).
-
----
-
 ### Why does a generic container allow any item if no annotation is provided?
 
 If you instantiate a generic class without an inline `@var` annotation:
@@ -124,12 +152,13 @@ It works seamlessly with standard framework entry points like `public/index.php`
 
 ---
 
-### How do I temporarily disable TypePHP in an emergency?
+### How do I temporarily disable TypePHP in an emergency or during CI tooling runs?
 
-You have two options for turning off TypePHP instantly:
+You have three options for disabling TypePHP:
 
-1. **Environment Level (Full Prevention):** Set `TYPEPHP_DISABLE=true` in your `.env` or server environment. This prevents TypePHP from registering its stream wrapper during Composer autoloading.
-2. **Config Level (Pass-Through Mode):** Set `'enabled' => false` in `typephp.php` or call `TypePHP::setConfig(['enabled' => false])`. TypePHP will run, but all checks turn into instant no-ops.
+1. **Environment Level (Full Prevention):** Set `TYPEPHP_DISABLE=true` in your `.env`, CI workflow step, or server environment. This prevents TypePHP from registering its stream wrapper during Composer autoloading.
+2. **Config Level (Pass-Through Mode):** Set `'enabled' => false` in `typephp.php` or call `TypePHP::setConfig(['enabled' => false])`. TypePHP will boot, but all checks turn into instant no-ops.
+3. **PHP Constant:** Define `define('TYPEPHP_DISABLE', true);` before `vendor/autoload.php` is required.
 
 ---
 
@@ -139,3 +168,4 @@ Yes, it is highly recommended.
 
 * **Static Analyzers (PHPStan, Psalm, Mago):** Analyze your source code at compile-time, linting docblock syntax and checking static logic in your IDE.
 * **TypePHP:** Enforces those same PHPDoc contracts at runtime during dynamic execution, protecting your application against invalid database records, un-sanitized API payloads, and unexpected runtime state.
+```

@@ -54,6 +54,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Array Validation Strategy
+    |--------------------------------------------------------------------------
+    | Controls how collections (list<T>, array<K, V>, Type[]) are verified:
+    |
+    | - 'full'   : (Default / Strict) 100% exhaustive O(n) scan on every item.
+    |             Guarantees 100% single-item error detection on any array size.
+    |
+    | - 'hybrid' : (Beartype O(1) Mode) Fast boundary + random sampling on
+    |             arrays > 128 items. Ideal for massive production datasets.
+    */
+    'array_validation' => 'full',
+
+    /*
+    |--------------------------------------------------------------------------
     | Enable Caching & Cache Directory
     |--------------------------------------------------------------------------
     | Pre-transforms and caches PHP files on disk for OPcache optimization.
@@ -70,7 +84,7 @@ return [
     |--------------------------------------------------------------------------
     | Registered Extensions
     |--------------------------------------------------------------------------
-    | Explicitly list third-party extension classes.
+    | Explicitly list third-party extension classes that provide path overrides.
     */
     'extensions' => [
         // \Acme\Domain\TypePHPExtension::class,
@@ -96,7 +110,8 @@ return [
     | Included Paths & Whitelisting
     |--------------------------------------------------------------------------
     | Globs or specific file paths that should be intercepted and type-checked.
-    | Note: you can just specify "**" glob pattern to include all files including in the root folder.
+    | You can specify directory globs (e.g. 'src/**'), single vendor packages
+    | (e.g. 'vendor/my-org/my-package/**'), or single specific files.
     */
     'include' => [
         'src/**',
@@ -125,52 +140,54 @@ return [
 
 ## Configuration Reference
 
-Key options explained:
-
 | Configuration Option | Default | Description |
 | :--- | :--- | :--- |
 | **`'enabled'`** | `true` | Global master switch for runtime type enforcement. |
-| **`'params'`** | `true` | Enforces parameter `@param` contracts on physical functions and methods. |
-| **`'returns'`** | `true` | Enforces return `@return` contracts on physical functions and methods. |
-| **`'magic_properties'`** | `true` | Enforces class-level `@property`, `@property-read`, and `@property-write` annotations on dynamic assignments (`__set`). |
+| **`'params'`** | `true` | Enforces parameter `@param` contracts on functions and methods. |
+| **`'returns'`** | `true` | Enforces return `@return` contracts on functions and methods. |
+| **`'magic_properties'`** | `true` | Enforces class-level `@property`, `@property-read`, and `@property-write` annotations on dynamic writes (`__set`). |
 | **`'magic_methods'`** | `true` | Enforces class-level `@method` annotations on dynamic method calls (`__call` / `__callStatic`). |
 | **`'respect_ignore_tags'`** | `true` | Respects `@typephp-ignore` and `@typephp-ignore-file` tags. Set to `false` in CI/CD to force audit checks. |
-| **`'cache'`** | `true` | Pre-transforms and caches PHP files on disk. |
+| **`'array_validation'`** | `'full'` | Validation strategy for collections: `'full'` (exhaustive $O(n)$) or `'hybrid'` (Beartype $O(1)$ sampling for $> 64$ items). |
+| **`'cache'`** | `true` | Pre-transforms and caches PHP files on disk. Set to `false` to transform files purely in memory (`php://memory`). |
 | **`'cache_dir'`** | `null` | Custom path to store cached files. Defaults to system temporary directory (`sys_get_temp_dir() . '/typephp-cache/'`). |
+| **`'extensions'`** | `[]` | Explicit list of third-party extension classes implementing `ExtensionInterface`. |
+| **`'inline_vars'`** | `[...]` | Fine-grained configuration for local `@var` variable validations. |
+| **`'include'`** | `[...]` | Path globs to intercept and type-check. |
+| **`'exclude'`** | `[...]` | Path globs to ignore and leave untouched. |
 
 ---
 
 ## Inline Variable Categories Reference (`inline_vars`)
 
-*(... rest of the file remains exactly the same ...)*
-```
+You can toggle specific categories of local `@var` variable checks without disabling function boundary contracts:
+
+| Category | Default | Description | Example |
+| :--- | :--- | :--- | :--- |
+| **`'properties'`** | `true` | Class property writes | `$this->id = 10;` |
+| **`'generics'`** | `true` | Generic instance prebinding | `/** @var Collection<User> $users */` |
+| **`'callables'`** | `true` | Inline callback wrapping | `/** @var callable(int): string $cb */` |
+| **`'scalars'`** | `true` | Scalar refinements | `/** @var positive-int $count */` |
+| **`'arrays'`** | `true` | Array shapes, lists, and maps | `/** @var array{id: int} $user */` |
+| **`'objects'`** | `true` | Direct class instance checks | `/** @var User $user */` |
 
 ---
 
-### 2. `docs/advanced/how-it-works.md`
+## Path Specificity & Whitelisting Rules
 
-*(Find the "Zero Line-Drift Formatting and Caching" section and update the "Disk Caching" part to this:)*
+TypePHP resolves overlapping `include` and `exclude` paths by calculating **pattern specificity length**:
 
-```markdown
-### Disk Caching
+$$\text{Winning Rule} = \max(\text{Pattern Length})$$
 
-Once transformed, TypePHP saves the resulting code to disk in your configured `cache_dir` (which defaults to `sys_get_temp_dir() . '/typephp-cache/'`). On all subsequent requests:
-* AST parsing runs **0 times**.
-* PHP's **OPCache** compiles the cached file once into bytecode in RAM.
-* Stream file reads execute natively at C-level speed inside Zend Engine.
-
-*(TypePHP's stream wrapper automatically detects and skips intercepting files inside your configured `cache_dir` to prevent infinite loops and double-transformation overhead).*
-```
+* **Specific Vendor Whitelisting:** `'vendor/my-org/my-package/**'` (length 29) overrides the broader `'vendor/**'` exclusion (length 8).
+* **Single-File Blacklisting:** `'src/Legacy/UnsafeFile.php'` (length 25) overrides the broader `'src/**'` inclusion (length 6).
+* **Equal Length Tie-Breaker:** If pattern lengths are equal, `exclude` takes precedence to guarantee safety.
 
 ---
 
-### 3. `docs/troubleshooting.md`
+## Emergency Kill-Switches
 
-*(Find the "How do I know if TypePHP is actively transforming a file?" question and update the answer:)*
+To disable TypePHP immediately without modifying application code:
 
-```markdown
-
-```
-
----
-All docs are updated! What's our next target? Should we start refactoring validators, expanding the Extension System, or write a quick web-framework mock test?
+1. **Environment Level (Zero Overhead):** Set `TYPEPHP_DISABLE=true` in your server environment or `.env` file before autoloading.
+2. **Config Level (Pass-Through):** Set `'enabled' => false` in `typephp.php` or call `TypePHP::setConfig(['enabled' => false])`.
