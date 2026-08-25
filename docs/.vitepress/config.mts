@@ -57,6 +57,7 @@ export default defineConfig({
         items: [
           { text: 'How It Works', link: '/advanced/how-it-works' },
           { text: 'Liskov & Inheritance', link: '/advanced/liskov-and-inheritance' },
+          { text: 'Stub Files', link: '/advanced/stubs' },
           { text: 'Vendor Isolation', link: '/advanced/vendor-and-path-filtering' },
           { text: 'Ignore Annotations', link: '/advanced/ignore-annotations' },
           { text: 'Extensions', link: '/advanced/extensions' },
