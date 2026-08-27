@@ -4,33 +4,33 @@ layout: home
 hero:
   name: "TypePHP"
   text: "Transparent Runtime Type Enforcement"
-  tagline: "No transpilation. No build steps. No C-extensions. Just 100% pure PHP that makes your existing DocBlocks scream the moment types fail."
+  tagline: "The first pure userland PHP library to transparently enforce DocBlock types at runtime. Bringing reified generics, typed arrays, and static analysis type refinements to life with zero new syntax, zero build steps, and zero C-extensions."
   actions:
     - theme: brand
       text: "Get Started →"
       link: /getting-started/installation
     - theme: alt
       text: "View on GitHub"
-      link: https://github.com/typephp-php/docs
+      link: https://github.com/typephp-php/typephp
 
 features:
-  - title: "Zero Production Overhead"
-    details: "Install as a development dependency to enforce strict types during local testing and CI/CD pipelines, guaranteeing absolute zero performance cost in live production environments."
-  - title: "No Transpilation or C-Extensions"
-    details: "Operates 100% in pure PHP user-land using native stream wrappers and AST transformations. No build scripts, Node.js tools, or C-extensions required."
-  - title: "True Runtime Generics"
-    details: "Binds generic template types to specific object instances dynamically using native WeakMap memory tracking."
-  - title: "Arrays, Shapes & Extractions"
-    details: "Deeply validates sequential lists, typed arrays, array shapes, and key-of / value-of constant extractions out of the box."
+  - title: "First-of-its-Kind in Userland"
+    details: "Operates 100% in pure PHP userland via native stream wrappers and AST transformations. No custom PHP binaries, C-extensions, FFI, or build steps required."
+  - title: "True Reified Generics"
+    details: "The only PHP engine that statefully reifies generic templates per object instance in memory using native WeakMap tracking, with full support for variance, nested generics, upper bounds, and clone preservation."
+  - title: "Advanced Type Enhancements"
+    details: "Enforces typed arrays, sequential lists, array shapes, DNF, scalar refinements , and key-of / value-of extractions live at runtime."
+  - title: "Zero Line-Drift & Total Compatibility"
+    details: "100% drop-in compatible with any existing PHP 8.1+ codebase (Laravel, Symfony, Shopware). Error traces in Ignition, Symfony, and Pest highlight the exact source line without drift."
 ---
 
-::: tip Pure PHP • Zero Transpilation • Zero Build Steps
-**You don't have to change a single line of code, and you don't need a compilation build toolchain.** TypePHP operates entirely in native PHP user-land and no custom PHP binaries, C-extensions, or Node.js transpilers needed. Drop TypePHP into your existing project, run your code, and your DocBlocks will instantly start screaming at runtime when dynamic data violates a type contract.
+::: tip The First Pure Userland Runtime Contract Engine for PHP
+**You don't have to refactor a single line of code, learn new syntax, or compile C-extensions.** TypePHP bridges the gap between static analysis and runtime execution. Drop TypePHP into your existing project, and your PHPStan and Psalm DocBlocks will immediately start enforcing reified generics, typed arrays, and shape contracts the moment your code runs.
 :::
 
 ## See It In Action
 
-TypePHP operates entirely in user-land using native stream wrappers and AST transformations. Because it requires no C-extensions or FFI, you can drop it into any PHP 8.1+ project or web framework effortlessly. It reads your existing PHPDoc annotations and enforces them the moment your code runs.
+TypePHP operates entirely in userland using native stream wrappers and AST transformations. Because it requires no C-extensions or FFI, you can drop it into any PHP 8.1+ project or web framework effortlessly. It reads your existing PHPDoc annotations and enforces them the moment your code runs.
 
 ### Real-World Framework Guard Rails (Laravel / Symfony)
 Prevent dynamic data bugs from leaking into database queries or API responses:
@@ -63,8 +63,8 @@ class User extends Model
 
 ---
 
-### True Runtime Generics
-Define generic templates and TypePHP will track their state in memory per object instance:
+### True Runtime Generics with Reified Memory State
+Define generic templates and TypePHP tracks their state per object instance in memory using native `\WeakMap`:
 
 ```php
 /**
@@ -76,7 +76,7 @@ class Collection
     public function add(mixed $item): void { /* ... */ }
 }
 
-// Prebind T = User to this specific object instance
+// Prebind T = User to this specific object instance in memory
 /** @var Collection<User> $users */
 $users = new Collection();
 
@@ -123,7 +123,7 @@ $service->connect(['driver' => 'pdo_invalid']);
 
 ---
 
-## Precise Call-Site Trace Attribution
+## Precise Call-Site Trace Attribution (Zero Line-Drift)
 
 A common problem with AST code injection is that adding new statements pushes subsequent code down, causing line numbers in stack traces to drift out of sync.
 
@@ -139,4 +139,3 @@ When a type contract fails, web exception handlers (**Laravel Ignition, Whoops, 
 
 ### CLI Test Runner Trace (Pest PHP)
 ![Pest CLI Exception Trace](/pest-error-screen.png)
-```
