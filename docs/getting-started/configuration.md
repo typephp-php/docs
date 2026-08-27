@@ -36,6 +36,28 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Respect Ignore Docblock Tags
+    |--------------------------------------------------------------------------
+    | Set to false in CI/CD runs to force type-checking on @typephp-ignore methods.
+    */
+    'respect_ignore_tags' => true,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Respect Native Parameter Nullability
+    |--------------------------------------------------------------------------
+    | When true (default), if a native PHP parameter explicitly declares
+    | nullable syntax (e.g. ?array $param = null or int|null $id = null),
+    | TypePHP permits null even if the DocBlock author omitted "|null"
+    | (e.g. @param string[] $param).
+    |
+    | Set to false for strict pedantic enforcement where DocBlocks are the
+    | absolute law and null is rejected unless explicitly typed in the DocBlock.
+    */
+    'respect_native_nullability' => true,
+
+    /*
+    |--------------------------------------------------------------------------
     | Magic Annotations (@property & @method)
     |--------------------------------------------------------------------------
     | Enforces class-level annotations for dynamic properties and magic methods
@@ -43,14 +65,6 @@ return [
     */
     'magic_properties' => true,
     'magic_methods'    => true,
-
-    /*
-    |--------------------------------------------------------------------------
-    | Respect Ignore Docblock Tags
-    |--------------------------------------------------------------------------
-    | Set to false in CI/CD runs to force type-checking on @typephp-ignore methods.
-    */
-    'respect_ignore_tags' => true,
 
     /*
     |--------------------------------------------------------------------------
@@ -62,7 +76,7 @@ return [
     |             Guarantees 100% single-item error detection on any array size.
     |
     | - 'hybrid' : (Beartype O(1) Mode) Fast boundary + random sampling on
-    |             arrays > 128 items. Ideal for massive production datasets.
+    |             arrays > 64 items. Ideal for massive production datasets.
     */
     'array_validation' => 'full',
 
@@ -88,6 +102,17 @@ return [
     */
     'extensions' => [
         // \Acme\Domain\TypePHPExtension::class,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Stub Files (DocBlock Overrides for Third-Party & Vendor Packages)
+    |--------------------------------------------------------------------------
+    | Path globs or specific file paths containing stub files (.stub, .stub.php, .php)
+    | that override inaccurate or missing DocBlocks in third-party vendor packages.
+    */
+    'stubs' => [
+        // 'stubs/**',
     ],
 
     /*
@@ -145,13 +170,15 @@ return [
 | **`'enabled'`** | `true` | Global master switch for runtime type enforcement. |
 | **`'params'`** | `true` | Enforces parameter `@param` contracts on functions and methods. |
 | **`'returns'`** | `true` | Enforces return `@return` contracts on functions and methods. |
+| **`'respect_ignore_tags'`** | `true` | Respects `@typephp-ignore` and `@typephp-ignore-file` tags. Set to `false` in CI/CD to force audit checks. |
+| **`'respect_native_nullability'`** | `true` | When `true` (default), permits `null` if native PHP explicitly declares nullable syntax (`?Type` or `Type\|null = null`) even if omitted in the DocBlock. Set to `false` for strict pedantic enforcement. |
 | **`'magic_properties'`** | `true` | Enforces class-level `@property`, `@property-read`, and `@property-write` annotations on dynamic writes (`__set`). |
 | **`'magic_methods'`** | `true` | Enforces class-level `@method` annotations on dynamic method calls (`__call` / `__callStatic`). |
-| **`'respect_ignore_tags'`** | `true` | Respects `@typephp-ignore` and `@typephp-ignore-file` tags. Set to `false` in CI/CD to force audit checks. |
 | **`'array_validation'`** | `'full'` | Validation strategy for collections: `'full'` (exhaustive $O(n)$) or `'hybrid'` (Beartype $O(1)$ sampling for $> 64$ items). |
 | **`'cache'`** | `true` | Pre-transforms and caches PHP files on disk. Set to `false` to transform files purely in memory (`php://memory`). |
 | **`'cache_dir'`** | `null` | Custom path to store cached files. Defaults to system temporary directory (`sys_get_temp_dir() . '/typephp-cache/'`). |
 | **`'extensions'`** | `[]` | Explicit list of third-party extension classes implementing `ExtensionInterface`. |
+| **`'stubs'`** | `[]` | Path globs pointing to `.stub` files that override third-party vendor DocBlocks. |
 | **`'inline_vars'`** | `[...]` | Fine-grained configuration for local `@var` variable validations. |
 | **`'include'`** | `[...]` | Path globs to intercept and type-check. |
 | **`'exclude'`** | `[...]` | Path globs to ignore and leave untouched. |

@@ -36,7 +36,66 @@ Use Stub's DocBlock        Use Real Reflection
 
 1. **PHPDoc-Only Extraction**: TypePHP extracts **only the DocBlocks** from the stub file. Method bodies remain empty shells (`public function find(int $id): void {}`), and native parameter/return types in the stub are ignored in favor of the real runtime class reflection.
 2. **Any File Extension Supported**: You can name your stub files with `.stub`, `.stub.php`, `.php`, `.stubs`, or any custom extension. Using `.stub` is recommended to prevent IDEs from indexing duplicate class definitions.
-3. **Exact Symbol Matching**: Namespaces, class names, interface names, trait names, method names, and property names in the stub must match the original target class.
+3. **O(1) Execution Speed**: Stubs are parsed once during boot/cache warm-up into `StubManager` in static memory, adding zero disk I/O to repeated runtime method calls.
+
+---
+
+## Namespace & File Structure Guidelines
+
+To ensure TypePHP accurately maps your stub overrides to the target vendor classes, follow these rules:
+
+### 1. In-File Namespace and Class Name Must Match the Target FQCN
+TypePHP indexes stubs using their **Fully Qualified Class Name (FQCN)**:
+* If the target class is `Vendor\Billing\BillingService`, the stub file **must** declare `namespace Vendor\Billing;` and `class BillingService`.
+* If the namespace is missing or renamed (e.g. `namespace App\Stubs;`), TypePHP will index the stub under the wrong key and will not apply the override.
+
+```php
+// Correct: Target FQCN matches exactly
+namespace Vendor\Billing;
+
+class BillingService
+{
+    /** @param positive-int $id */
+    public function find(int $id): void {}
+}
+```
+
+### 2. File Names and Folder Structures Do NOT Need to Follow PSR-4
+Unlike application code, stub files do not have to mirror vendor directory structures on disk:
+* Target File: `vendor/vendor-name/package-name/src/Services/BillingService.php`
+* Valid Stub File Paths:
+  * `stubs/BillingService.stub`
+  * `stubs/vendor_fixes.stub.php`
+  * `stubs/billing.stub`
+  * `stubs/overrides/anything.stubs`
+
+As long as the file is located within a path matched by the `'stubs'` configuration glob in `typephp.php`, TypePHP will load and index it.
+
+### 3. Multiple Namespaces and Classes Can Live in a Single File
+You can consolidate multiple vendor overrides into a single stub file by declaring multiple `namespace` blocks:
+
+```php
+<?php
+
+namespace Vendor\Auth;
+
+class AuthService
+{
+    /** @param non-empty-string $token */
+    public function verify(string $token): bool {}
+}
+
+namespace Vendor\Billing;
+
+class Invoice
+{
+    /** @var positive-int */
+    public int $amount;
+}
+```
+
+### 4. Method Bodies and Implementations Must Be Empty Shells
+TypePHP only extracts the PHPDoc comments from stubs. Keep method bodies empty (`{}`) and omit unused internal methods to keep stub files clean and maintainable.
 
 ---
 
@@ -231,4 +290,4 @@ Calling `$repo->calculateScore(-5, 'sports')` will be validated and rejected by 
 
 1. **Vendor Isolation is Preserved**: Un-stubbed vendor files in `vendor/` remain completely ignored by `FileFilter`, protecting your application from third-party DocBlock bleed.
 2. **Liskov Substitution Principle (LSP)**: Child classes extending stubbed vendor classes or implementing stubbed vendor interfaces automatically inherit the stub's clean contracts.
-3. **O(1) Execution Speed**: Stubs are parsed once during boot/cache warm-up into `StubManager` in static memory, adding zero disk I/O to runtime method calls.
+3. **O(1) Execution Speed**: Stubs are parsed once during boot/cache warm-up into `StubManager` in static memory, adding zero disk I/O to repeated runtime method calls.
