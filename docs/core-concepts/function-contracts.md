@@ -37,6 +37,71 @@ registerUser(-5, 'Alice', 'admin');
 
 ---
 
+## Native Parameter Nullability & DocBlock Refinement (`?Type` and `Type|null`)
+
+In modern PHP, parameters frequently declare native nullable typehints:
+* **PHP 7.1+ nullable shorthand:** `?array $tags = null`
+* **PHP 8.0+ native union syntax:** `int|null $id = null` or `array|null $options = null`
+
+### The Inherent Syntax Limitation in Native PHP
+
+PHP's native type system cannot express inner collection or refinement types in method signatures. You cannot natively write `?string[] $tags = null` or `?positive-int $id = null` in PHP.
+
+Because of this language limitation, developers in major enterprise libraries (including **Symfony**, **Laravel**, and **Doctrine**) universally follow this convention:
+1. They declare the **outer nullability** natively in PHP: `?array $groups = null`
+2. They use the **DocBlock strictly to describe the inner elements**: `/** @param string[] $groups */`
+
+```php
+// Common pattern in Symfony and Laravel:
+/**
+ * @param string[] $groups // DocBlock omits |null because native PHP already allows null!
+ */
+public function configure(?array $groups = null): void
+{
+    // ...
+}
+```
+
+### How TypePHP Resolves Native Nullability (The Pragmatic Merge)
+
+By default (`'respect_native_nullability' => true`), TypePHP merges native parameter nullability with the DocBlock's inner type:
+
+> **Native `?array`** + **DocBlock `string[]`** $\rightarrow$ **Effective Contract: `?string[]` (`string[]|null`)**
+
+This provides complete type safety without breaking real-world code:
+
+This provides complete type safety without breaking real-world code:
+* **Passing `null` (or omitting default argument):** Accepted cleanly.
+* **Passing `['admin', 'editor']`:** Accepted, and every element is verified as a valid string.
+* **Passing `[12345]`:** Rejected with `TypeError: Argument $groups[0] must be of type string, int (12345) given`.
+* **Passing `'not_an_array'`:** Rejected with `TypeError: Argument $groups must be of type array, string given`.
+
+### Supported Native Nullability Syntaxes
+
+TypePHP automatically detects and respects all native PHP nullability declarations:
+
+| Native PHP Signature | DocBlock Annotation | Effective Evaluated Contract |
+| :--- | :--- | :--- |
+| `?array $tags = null` | `@param string[] $tags` | **`?string[]`** |
+| `int\|null $id = null` | `@param positive-int $id` | **`?positive-int`** |
+| `array\|null $opts = null` | `@param array{timeout: int} $opts` | **`array{timeout: int}\|null`** |
+| `?int $score = null` | `@param int<1, 100> $score` | **`int<1, 100>\|null`** |
+
+### Strict Pedantic Mode (`'respect_native_nullability' => false`)
+
+If your project requires 100% strict DocBlock auditing where DocBlocks are treated as the absolute literal law, set `'respect_native_nullability' => false` in `typephp.php`:
+
+```php
+// typephp.php
+return [
+    'respect_native_nullability' => false,
+];
+```
+
+In strict mode, if a native parameter is `?array $tags = null` but the DocBlock says `@param string[] $tags` (omitting `|null`), passing `null` will be strictly rejected with a `TypeError`.
+
+---
+
 ## Tooling Annotation Priority Hierarchy (`@phpstan-*` > `@psalm-*` > `@*`)
 
 Modern PHP packages and frameworks (such as **Doctrine Collections**, **Symfony**, and **Laravel**) frequently declare both broad IDE-fallback annotations and strict static analysis contracts on the exact same method signature:
