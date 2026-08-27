@@ -1,6 +1,6 @@
 # Reified Generics & State Management
 
-Unlike languages that erase types at compile-time (like Java, TypeScript, or standard Python), TypePHP provides **Reified Generics**—preserving generic parameters in memory per object instance throughout the entire application lifecycle.
+Unlike languages that erase types at compile-time (like Java, TypeScript, or standard Python), TypePHP provides **Reified Generics** and preserving generic parameters in memory per object instance throughout the entire application lifecycle.
 
 ---
 
