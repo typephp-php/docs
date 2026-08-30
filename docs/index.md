@@ -132,10 +132,10 @@ TypePHP solves this with **Zero Line-Drift Formatting**. Injected guard rails ar
 When a type contract fails, web exception handlers (**Laravel Ignition, Whoops, Symfony ErrorHandler**) and CLI test runners (**Pest, PHPUnit**) point **directly to the exact line number** where the invalid assignment or return value occurred in your application code:
 
 ### Web Framework Trace (Laravel Ignition)
-![Laravel Ignition Exception Trace](/laravel-error-screen.png)
+![Laravel Ignition Exception Trace](/screenshots/laravel-error-screen.png)
 
 ### Web Framework Trace (Symfony ErrorHandler)
-![Symfony Exception Trace](/symfony-error-screen.png)
+![Symfony Exception Trace](/screenshots/symfony-error-screen.png)
 
 ### CLI Test Runner Trace (Pest PHP)
-![Pest CLI Exception Trace](/pest-error-screen.png)
+![Pest CLI Exception Trace](/screenshots/pestpest-error-screen.png)

@@ -1,5 +1,14 @@
 [
   {
+    "title": "From Sluggish to Blazing Fast: How I Made TypePHP 90x Faster and Uncovered 400+ 'DocBlock Lies' on Shopware 6",
+    "url": "/docs/blog/from-sluggish-to-blazing-fast",
+    "date": "August 30, 2026",
+    "readTime": "9 min read",
+    "badge": "Case Study",
+    "badgeClass": "badge-guide",
+    "excerpt": "A deep-dive into how profiling TypePHP on Shopware 6 took my test execution from 3 hours 7 minutes down to 2 minutes 9 seconds, and how runtime checking exposed over 400 dynamic DocBlock lies that PHPStan Level MAX couldn't catch."
+  },
+  {
     "title": "How to Enforce Runtime Generics on Third-Party Collections Libraries (Doctrine, Ramsey, Laravel Collections) with TypePHP",
     "url": "/docs/blog/reifying-third-party-collections",
     "date": "August 18, 2026",
