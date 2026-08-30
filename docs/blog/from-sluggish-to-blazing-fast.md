@@ -175,29 +175,14 @@ There is a popular dogma in the PHP community:
 
 Static analysis tools (PHPStan, Psalm, Mago, Phan) are exceptional at linting syntax, catching typos, and verifying static call graphs. But static analyzers operate in an idealized compile-time world that **does not exist during live execution**:
 
-```
- ┌─────────────────────────────────────────────────────────────────────────────┐
- │                     WHAT STATIC ANALYSIS TOOLS CANNOT SEE                   │
- ├──────────────────────────────────────┬──────────────────────────────────────┤
- │ • Dynamic Dependency Injection       │ Compiled DI containers, synthetic    │
- │   Container Wiring                   │ services, and decorated factories    │
- ├──────────────────────────────────────┼──────────────────────────────────────┤
- │ • Un-sanitized External Payloads     │ JSON payloads, Stripe webhooks, and  │
- │                                      │ third-party HTTP API responses       │
- ├──────────────────────────────────────┼──────────────────────────────────────┤
- │ • Dynamic Database & Cache Records   │ Redis arrays, PDO associative rows,  │
- │                                      │ and serialized session state         │
- ├──────────────────────────────────────┼──────────────────────────────────────┤
- │ • Dynamic Runtime Configuration State│ Runtime system config loaders,       │
- │                                      │ feature flags, and environment vars  │
- ├──────────────────────────────────────┼──────────────────────────────────────┤
- │ • Dynamic Test Mocks & Doubles       │ Anonymous mock objects, and runtime  │
- │                                      │ proxy classes                        │
- ├──────────────────────────────────────┼──────────────────────────────────────┤
- │ • Runtime Generic Mutations          │ Objects pushed into collections      │
- │                                      │ downstream after type erasure        │
- └──────────────────────────────────────┴──────────────────────────────────────┘
-```
+| What Static Analysis Tools Cannot See | Real-World Failure Scenario |
+| :--- | :--- |
+| **Dynamic Dependency Injection** | Compiled DI containers, synthetic services, and decorated factories |
+| **Un-sanitized External Payloads** | JSON payloads, Stripe webhooks, and third-party HTTP API responses |
+| **Dynamic Database & Cache Records** | Redis arrays, PDO associative rows, and serialized session state |
+| **Dynamic Runtime Configuration State** | Runtime system config loaders, feature flags, and environment vars |
+| **Dynamic Test Mocks & Doubles** | Anonymous mock objects, and dynamic runtime proxy classes |
+| **Runtime Generic Mutations** | Objects pushed into collections downstream after type erasure |
 
 A DocBlock is a **wish**. Static analysis checks if your code is consistent with your wishes. **TypePHP verifies whether reality actually matches what you wished for.**
 
