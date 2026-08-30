@@ -194,11 +194,13 @@ I dare you to run TypePHP in your codebase, even if it already pases static anal
 
 ## PHP is Not Slow
 
-There is another misconception that running heavy AST inspection and runtime validation in pure PHP userland is inherently doomed to be slow.
+There is another common misconception that running AST inspection and runtime type validation in pure PHP userland is inherently doomed to be slow.
 
 > *"PHP is not slow. PHP is remarkably fast when you write and architect your code with respect to the Zend Engine, memory allocations, and static memoization."*
 
-TypePHP does not require custom C-extensions, Rust/C FFI bindings, or modified PHP binaries. It runs 100% in pure PHP userland, yet it easily sustains **over 460,000 type checks per second** in single-threaded execution when memory acess patterns and static blueprints are respected.
+TypePHP does not require custom C-extensions, Rust or C FFI bindings, or modified PHP binaries. It runs 100% in pure PHP userland, yet it easily sustains **over 460,000 type checks per second** in single-threaded execution when memory access patterns and static blueprints are respected.
+
+When paired with **OPcache** and PHP 8's **Tracing JIT**, performance scales even further. OPcache compiles transformed code directly into shared memory bytecode so AST transformations execute zero times on subsequent requests, while the Tracing JIT compiles hot type-checking loops into native CPU machine code. You get uncompromising runtime safety without sacrificing execution speed.
 
 ---
 
