@@ -37,13 +37,13 @@ Shopware's continuous integration workflow is divided across dozens of parallel 
 
 While these optimizations improved every batch across the entire workflow, I will focus specifically on `Core/Content` (1,680 integration tests on PHP 8.2 with MySQL 8.0) as the primary benchmark.
 
-### Before: 3 Hours 7 Minutes (PHPUnit Running for 2h 57m)
+### Before: 3 Hours+ (PHPUnit Running for 2h 57m)
 ![Shopware CI Before Optimization](/blog/from-sluggish-to-blazing-fast/shopware-ci-before.png)
 *Figure 1: Initial test run choking the CI runner, with PHPUnit taking 2 hours 57 minutes before timing out.*
 
 <br>
 
-### After: 6 Minutes Total (PHPUnit Running for 2m 36s)
+### After: 4 Minutes+ Total (PHPUnit Running for 2m 36s)
 ![Shopware CI After Optimization](/blog/from-sluggish-to-blazing-fast/shopware-ci-after.png)
 *Figure 2: The exact same test suite executing in just 2 minutes 36 seconds after static blueprint caching, zero-allocation hot paths, and trait call frame synchronization.*
 
