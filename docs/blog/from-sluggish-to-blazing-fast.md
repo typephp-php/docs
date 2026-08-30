@@ -1,6 +1,6 @@
 ---
 title: "From Sluggish to Blazing Fast: How I Made TypePHP 90x Faster and Uncovered 400+ 'DocBlock Lies' on Shopware 6"
-description: "A deep-dive into how profiling TypePHP on Shopware 6 took the integration test suite from 3 hours down to minutes, and how runtime checking exposed over 400 dynamic DocBlock lies that static analysis tools couldn't catch."
+description: "A deep-dive into how profiling TypePHP on Shopware 6 took the integration test suite from 3 hours down to minutes, and how runtime checking exposed over 1000+ dynamic DocBlock lies that static analysis tools couldn't catch."
 date: 2026-08-30
 author: Reymart Calicdan
 layout: doc
@@ -124,7 +124,7 @@ On high-frequency methods executed hundreds of thousands of times:
 
 ## Part 2: The Many Docblock lies Errors: When Reality Hits the "DocBlock Lie"
 
-Once TypePHP was running at full native speed, PHPUnit began executing the actual test assertions, and immediately surfaced **423 runtime contract failures**.
+Once TypePHP was running at full native speed, PHPUnit began executing the actual test assertions, and immediately surfaced **1000+ runtime contract failures**.
 
 Here are real snippets directly from the test run:
 
@@ -187,7 +187,7 @@ Static analysis tools (PHPStan, Psalm, Mago, Phan) are exceptional at linting sy
 A DocBlock is a **wish**. Static analysis checks if your code is consistent with your wishes. **TypePHP verifies whether reality actually matches what you wished for.**
 
 ::: tip A Direct Challenge
-I dare you to run TypePHP in your codebase, even if it already passes static analysis tools at maximum strictness. You will be surprised by how many hidden type errors and DocBlock lies surface the moment your code actually executes in real time.
+I dare you to run TypePHP in your codebase, even if it already pases static analysis tools at maximum strictness. You will be surprised by how many hidden type errors and DocBlock lies surface the moment your code actually executes in real time.
 :::
 
 ---
@@ -198,7 +198,7 @@ There is another misconception that running heavy AST inspection and runtime val
 
 > *"PHP is not slow. PHP is remarkably fast when you write and architect your code with respect to the Zend Engine, memory allocations, and static memoization."*
 
-TypePHP does not require custom C-extensions, Rust/C FFI bindings, or modified PHP binaries. It runs 100% in pure PHP userland, yet it easily sustains **over 460,000 type checks per second** in single-threaded execution when memory access patterns and static blueprints are respected.
+TypePHP does not require custom C-extensions, Rust/C FFI bindings, or modified PHP binaries. It runs 100% in pure PHP userland, yet it easily sustains **over 460,000 type checks per second** in single-threaded execution when memory acess patterns and static blueprints are respected.
 
 ---
 
