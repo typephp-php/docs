@@ -25,7 +25,7 @@ To discover where an engine truly breaks, and where PHP's static type system bre
 
 For TypePHP, that testing ground was **[Shopware 6](https://github.com/shopware/shopware)**, one of the largest, most sophisticated Symfony-based e-commerce architectures in the PHP ecosystem.
 
-*(And to clear up any naming confusion.. no, this is not that other project that transpiles PHP into C++ and forbids top-level code unless you write a `main()` entrypoint. This TypePHP is 100% pure PHP, built solely to elevate type safety and enforce contracts dynamically without changing how you write standard PHP).*
+*(And to clear up any naming confusion: no, this is not that other project that transpiles PHP into C++ and forbids top-level code unless you write a `main()` entrypoint. Is PHP really so busted that someone felt the need to pretend it is C++ instead of just improving the language itself? This TypePHP is 100% pure PHP, built solely to elevate type safety and enforce contracts dynamically without changing the way you write PHP).*
 
 The results? I took the CI test excecution times across the entire matrix from **hours down to just 4 to 6 minutes each (a ~90x speedup)**. Along the way, TypePHP caught **1,000+ runtime contract violations** in code that passed static analysis tools at maximum strictness with zero complaints and sometimes suppressed warnings.
 
