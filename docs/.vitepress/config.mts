@@ -26,6 +26,12 @@ export default defineConfig({
         ]
       },
       {
+        text: 'Testing & CI/CD',
+        items: [
+          { text: 'Pest & PHPUnit Integration', link: '/testing/pest-and-phpunit' },
+        ]
+      },
+      {
         text: 'Enforcement Boundaries',
         items: [
           { text: 'Function Contracts', link: '/core-concepts/function-contracts' },
