@@ -1,12 +1,12 @@
 # Arrays & Shapes
 
-TypePHP provides runtime enforcement for sequential lists, key-value generic maps, typed class arrays, positional tuples, sealed and unsealed array shapes, key/value extractions, offset access, and object shapes.
+TypePHP provides runtime enforcement for sequential lists, key-value generic maps, typed class arrays, positional tuples, sealed and unsealed array shapes, homogeneous/heterogeneous unions, variadic array wrapping, key/value extractions, offset access, and object shapes.
 
 ---
 
 ## Sequential Lists (`list<T>` & `non-empty-list<T>`)
 
-A `list<T>` represents a sequential, 0-indexed integer key array without gaps. TypePHP validates lists at runtime using PHP's native `array_is_list()` function:
+A `list<T>` represents a sequential, 0-indexed integer key array without gaps (`0, 1, 2, ...`). TypePHP validates lists at runtime using PHP's native `array_is_list()` function in C:
 
 ```php
 <?php
@@ -126,6 +126,191 @@ processTypedArrays(
 ```
 
 > **WeakMap Object Memoization:** When validating arrays of objects (such as `User[]`), TypePHP memoizes previously checked object instances in a `\WeakMap`. If the same object instance appears multiple times in a collection, its type is checked once and retrieved in $O(1)$ time on subsequent accesses.
+
+---
+
+## Homogeneous vs. Heterogeneous Collections
+
+TypePHP strictly differentiates between **homogeneous collections** (where every item must share the exact same type) and **heterogeneous collections** (where items may vary according to a union or wildcard):
+
+### 1. Homogeneous Arrays (`int[]`, `list<string>`, `array<string, User>`)
+Every item in the collection must strictly satisfy a single concrete type.
+
+```php
+/** @param list<string> $items */
+function processHomogeneous(array $items): void {}
+
+processHomogeneous(['a', 'b', 'c']); //  Valid
+processHomogeneous(['a', 10, 'c']);   // ❌ Throws TypeError: $items[1] must be of type string
+```
+
+### 2. Heterogeneous Arrays (`list<int|string>`, `(Dog|Cat)[]`, `array<string, mixed>`)
+Elements within the same array can freely mix types as long as each element satisfies the union:
+
+```php
+/**
+ * Heterogeneous collection: items can be an integer, string, or boolean
+ *
+ * @param list<int|string|bool> $mixedData
+ */
+function processHeterogeneous(array $mixedData): void {}
+
+processHeterogeneous([10, 'hello', true, 42, false]); //  Valid
+processHeterogeneous([10, 'hello', new stdClass()]);  // ❌ Throws TypeError: $mixedData[2] must be of type (int | string | bool)
+```
+
+---
+
+## The Union Precedence Pitfall: `A[] | B[]` vs `(A | B)[]`
+
+In formal type theory (PHPDoc, PHPStan, Psalm, TypeScript), the array bracket suffix `[]` has **higher operator precedence** than the union operator `|`.
+
+| Type Syntax | Formal Interpretation | Validation Behavior |
+| :--- | :--- | :--- |
+| **`TypeA[] \| TypeB[]`** | `(Array<TypeA>) \| (Array<TypeB>)`<br>*(Homogeneous Union)* | The array must be **100% `TypeA`** OR **100% `TypeB`**. Mixed arrays containing both types are **strictly rejected**. |
+| **`(TypeA \| TypeB)[]`**<br>or `array<TypeA \| TypeB>` | `Array<TypeA \| TypeB>`<br>*(Heterogeneous Array)* | The array may freely contain a **mix of `TypeA` and `TypeB`** elements. |
+
+### Example: The Precedence Mistake
+
+```php
+use App\Models\User;
+use App\Models\Admin;
+
+/**
+ * ❌ Homogeneous Union: Expects an array of ALL Users OR an array of ALL Admins
+ * @param User[]|Admin[] $accounts
+ */
+function processHomogeneousUnion(array $accounts): void {}
+
+/**
+ *  Heterogeneous Array: Expects an array that can mix Users and Admins
+ * @param (User|Admin)[] $accounts
+ */
+function processHeterogeneousArray(array $accounts): void {}
+
+$mixedAccounts = [new User('Alice'), new Admin('Bob')];
+
+// 1. Fails Homogeneous Union check (contains both Users and Admins):
+processHomogeneousUnion($mixedAccounts);
+// Throws: TypeError: Argument $accounts[1] must be of type User, Admin given
+
+// 2. Passes Heterogeneous Array check:
+processHeterogeneousArray($mixedAccounts); //  Valid
+```
+
+---
+
+## Variadic Parameters & Array Contracts (`...$items`)
+
+When PHP executes a variadic parameter (`function foo(Type ...$items)`), the Zend Engine collects all passed arguments into a sequential wrapper list (`$items = [0 => arg1, 1 => arg2, ...]`).
+
+TypePHP automatically wraps and unpacks variadic DocBlock contracts:
+
+### 1. Scalar & Object Variadics (`@param positive-int ...$ids`)
+
+```php
+/**
+ * @param positive-int ...$ids
+ */
+function sumIds(int ...$ids): int
+{
+    return array_sum($ids);
+}
+
+sumIds(10, 20, 30); //  Valid: [10, 20, 30]
+
+sumIds(10, -5, 30);
+// ❌ Throws: TypeError: Argument $ids[1] must be of type positive-int, negative int (-5) given
+```
+
+### 2. Variadic Generic Collections (`@param array<K, V> ...$arrays`)
+
+When a variadic parameter accepts arrays (e.g. array helper operations like `diffKeys` or `merge`), each passed argument is an array. Inside PHP, `$arrays` is an array of arrays (`list<array<K, V>>`):
+
+```php
+/**
+ * @template TKey of array-key
+ * @template TValue
+ *
+ * @param array<TKey, TValue> $array
+ * @param array<TKey, mixed> ...$arrays Each variadic argument is an array<TKey, mixed>
+ *
+ * @return array<TKey, TValue>
+ */
+function diffKeys(array $array, array ...$arrays): array
+{
+    return array_diff_key($array, ...$arrays);
+}
+
+$initial = ['first_name' => 'John', 'last_name' => 'Doe', 'age' => 42];
+
+//  Valid: Passed variadic arrays with matching TKey (string)
+diffKeys($initial, ['age' => 10], ['last_name' => true]);
+
+// ❌ Invalid: Variadic argument #2 has integer key 123 instead of string TKey
+diffKeys($initial, [123 => 'value']);
+// Throws: TypeError: Argument $arrays[0] key must be of type string, int (123) given
+```
+
+### 3. Homogeneous Variadic Templates (`@template T` with `@param T ...$items`)
+
+When a function declares an unbounded generic template `@template T` on a variadic parameter `@param T ...$items`, **all variadic arguments in that call must be of the same type `T`**:
+
+```php
+/**
+ * @template T
+ *
+ * @param T ...$items
+ *
+ * @return list<T>
+ */
+function collectSameType(mixed ...$items): array
+{
+    return array_values($items);
+}
+
+// 1. Valid: All variadic items are integers (T = int)
+collectSameType(10, 20, 30); //  Valid
+
+// 2. Invalid: Inconsistent types (Item 0 is int, Item 2 is string)
+collectSameType(10, 20, 'invalid');
+// ❌ Throws: TypeError: Argument $items[2] (template T = int) must be of type int, string 'invalid' given
+```
+
+> **Template Bound Widening:** If the template declares an upper bound (e.g. `@template T of int|float`), TypePHP dynamically widens `T` to accommodate all arguments that satisfy the bound:
+> ```php
+> /**
+>  * @template T of int|float
+>  * @param T ...$numbers
+>  * @return list<T>
+>  */
+> function sumAll(int|float ...$numbers): array {}
+> 
+> sumAll(1, 2.5, 3); //  Valid: T is widened to int|float because both satisfy the bound
+> ```
+
+### 4. Heterogeneous Variadics (`mixed ...$values`)
+
+If a function is designed to accept multiple arguments of **different types in the same call** (e.g. `append(1, 'b', ['a' => 'b'])`), declare the parameter as `mixed ...$values`:
+
+```php
+class Collection
+{
+    /**
+     * Accepts arbitrary heterogeneous values in a single call
+     *
+     * @param mixed ...$values
+     */
+    public function append(mixed ...$values): self
+    {
+        // ...
+        return $this;
+    }
+}
+
+$col = new Collection();
+$col->append(1, 'foo', ['nested' => 'array'], false); //  Valid
+```
 
 ---
 
@@ -325,7 +510,7 @@ function processBundle(array $bundle): void
     // ...
 }
 
-processBundle([[10, 20], 'bundle_tag']); // Valid
+processBundle([[10, 20], 'bundle_tag']); //  Valid
 ```
 
 ---
@@ -542,10 +727,10 @@ $std = new stdClass();
 $std->id = 42;
 $std->name = 'Alice';
 
-processObjectShape($std); // Valid
+processObjectShape($std); //  Valid
 
 class CustomUser { public int $id = 42; public string $name = 'Alice'; }
-processObjectShape(new CustomUser()); // Valid
+processObjectShape(new CustomUser()); //  Valid
 ```
 
 ### Strict `stdClass` Shapes (`stdClass{prop: type}`)
@@ -565,7 +750,7 @@ function processStrictStdClass(object $payload): void
 class CustomUser { public int $id = 42; public string $name = 'Alice'; }
 
 processStrictStdClass(new CustomUser());
-// Throws: TypeError: processStrictStdClass(): Argument $payload must be an instance of stdClass
+// ❌ Throws: TypeError: processStrictStdClass(): Argument $payload must be an instance of stdClass
 ```
 
 ### Reflection-Free Fast Path for `stdClass`
