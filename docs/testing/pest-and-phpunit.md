@@ -103,6 +103,78 @@ class UserServiceTest extends TestCase
 
 ---
 
+## Scaling Large Applications & Deep Inheritance Suites
+
+### Understanding TypePHP's Overhead in Massive Codebases
+
+TypePHP performs AST transformations, traverses class/interface/trait hierarchies for LSP contract inheritance, and maintains runtime reified generic state in `\WeakMap`. 
+
+In large monolithic applications with **deep nested inheritance chains (4+ levels of parent classes, traits, and interfaces)** or **thousands of tests**, running TypePHP on every single file across the entire repository simultaneously can increase test suite execution time.
+
+To maintain ultra-fast feedback loops in local development and CI/CD pipelines, use the following scaling strategies:
+
+---
+
+### Strategy 1: Targeted Domain & Directory Inclusion
+
+Rather than type-checking your entire codebase indiscriminately, configure `typephp.php` to target specific core domains, high-risk modules, or active development folders:
+
+```php
+// typephp.php
+return [
+    /*
+    | Strategically target mission-critical domains (e.g. Billing, Auth, Core API)
+    | while excluding low-risk legacy monolith directories.
+    */
+    'include' => [
+        'app/Domains/Billing/**',
+        'app/Domains/Authentication/**',
+        'app/Services/Payment/**',
+        'tests/Feature/Billing/**',
+    ],
+    'exclude' => [
+        'vendor/**',
+        'storage/**',
+        'app/Legacy/**', // Skip legacy monolith sections
+    ],
+];
+```
+
+---
+
+### Strategy 2: Native Pest Test Sharding (`--shard=x/N`, Pest v4+)
+
+If you are using **Pest v4 or higher (v4.0+, v5+)**, Pest includes **native out-of-the-box Test Sharding**. This allows you to split your test suite automatically across multiple CI runner machines without having to manually partition directories:
+
+```bash
+# Execute Shard 1 of 4 across your CI matrix
+./vendor/bin/pest --shard=1/4 --compact
+
+# Execute Shard 2 of 4
+./vendor/bin/pest --shard=2/4 --compact
+```
+
+*Pest automatically divides all test files evenly across the runner matrix. Each machine executes only $1/N^{\text{th}}$ of the total tests, slashing CI runtimes while maintaining 100% TypePHP runtime contract enforcement.*
+
+> **Pest v4.6+ Time-Balanced Sharding:** In Pest v4.6.0+ and Pest 5, you can run `pest --update-shards` to record execution timings (`tests/.pest/shards.json`). Pest will then balance shards by actual test duration rather than simple file counts, ensuring all CI matrix runners finish at roughly the same second.
+
+---
+
+### Strategy 3: Domain Partitioning in CI (Pest v2, v3, & PHPUnit)
+
+If you are using **Pest v2/v3** or standard **PHPUnit** (where native `--shard` is not built into core), split your test runs by domain or directory across separate parallel matrix jobs in your CI pipeline:
+
+```
+                                [ GitHub Actions CI Matrix ]
+                                             │
+         ┌───────────────────┬───────────────┴───────────────┬───────────────────┐
+         ▼                   ▼                               ▼                   ▼
+   [ Job: Auth ]      [ Job: Billing ]               [ Job: Orders ]      [ Job: Unit Tests ]
+  tests/Feature/Auth  tests/Feature/Billing          tests/Feature/Orders  tests/Unit
+```
+
+---
+
 ## Parallel Multi-Process Testing
 
 TypePHP provides full out-of-the-box support for multi-process parallel test runners, including:
@@ -123,22 +195,45 @@ TypePHP provides full out-of-the-box support for multi-process parallel test run
         │                   │                   │                   │
   TypePHP Boots       TypePHP Boots       TypePHP Boots       TypePHP Boots
   StreamWrapper ON    StreamWrapper ON    StreamWrapper ON    StreamWrapper ON
-  Cache: ..._w1       Cache: ..._w2       Cache: ..._w3       Cache: ..._w4
+        │                   │                   │                   │
+        └───────────────────┴─────────┬─────────┴───────────────────┘
+                                      ▼
+                   [ Unified Shared Cache Directory ]
+                     • Non-blocking concurrent reads
+                     • Atomic writes (temp file + rename)
+                     • Deterministic AST bytecode reuse
 ```
 
 ### Multi-Process Architecture Under the Hood
 
 1. **Orchestrator Non-Interference**: The parent test runner process coordinates child worker processes over OS communication pipes (`proc_open`, STDIN/STDOUT) without stream wrapper interception.
 2. **Automatic Worker Bootstrapping**: Each child worker process inherits an environment variable (`TEST_TOKEN=1`, `TEST_TOKEN=2`, etc.) and automatically boots TypePHP inside its own isolated process space.
-3. **Worker Cache Directory Isolation**: When disk caching is enabled, each worker writes to its own isolated cache folder (e.g. `/tmp/typephp-cache-..._w1`, `_w2`), completely eliminating multi-process lock contention and race conditions.
+3. **High-Performance Shared Cache Architecture**:
+   * **Concurrent Non-Blocking Reads**: Operating systems handle simultaneous reads to the same cached file natively without race conditions. All workers share the same warmed cache files simultaneously.
+   * **Atomic File Writes**: If multiple workers transform the same file at the exact same millisecond, TypePHP writes to unique temporary files (`.tmp_*`) and uses atomic OS renames.
+   * **Deterministic Idempotency**: Because AST transformations are completely deterministic and class/function structures do not mutate at runtime, all workers produce 100% identical cached bytecode.
 
 ---
 
 ## Parallel Performance Strategies: In-Memory vs. Disk Cache
 
-When configuring TypePHP for parallel test suites in `typephp.php`, you have two performance strategies:
+When configuring TypePHP for test suites in `typephp.php`, choose the optimal caching strategy:
 
-### Strategy A: In-Memory Mode (Recommended for Parallel Test Suites)
+### Strategy A: Pre-Warmed Shared Disk Cache (Fastest for CI & Local Parallel Runs)
+
+Keep `'cache' => true` and run `cache:warm` before executing tests:
+
+```bash
+# 1. Pre-warm the shared cache once in a single CLI process
+php vendor/bin/typephp cache:warm
+
+# 2. Parallel workers immediately read from the shared cache with O(1) speed
+./vendor/bin/pest --parallel --processes=4
+```
+
+*All parallel workers read from the exact same pre-warmed cache files with zero compilation overhead during test execution.*
+
+### Strategy B: Pure In-Memory Mode (`php://memory`)
 
 Set `'cache' => false` in `typephp.php`:
 
@@ -147,41 +242,119 @@ Set `'cache' => false` in `typephp.php`:
 return [
     /*
     | Runs AST transformations purely in RAM (php://memory) per worker.
-    | Completely eliminates disk I/O and multi-process file collisions.
+    | Completely eliminates disk writes.
     */
     'cache' => false,
-    
-    'include' => [
-        'src/**',
-        'tests/**',
-    ],
-    'exclude' => [
-        'vendor/**',
-    ],
 ];
 ```
 
-*Every worker process transforms files in its own isolated memory space (`php://memory`), providing maximum speed with zero disk I/O and zero file contention.*
-
-### Strategy B: Disk Caching with Worker Isolation
-
-If you prefer disk caching (`'cache' => true`):
-* Each worker process will automatically write to its own isolated worker cache folder on disk (`/tmp/typephp-cache-..._w1`, `_w2`, etc.).
-* Running `php vendor/bin/typephp cache:clear` automatically discovers and deletes all worker directories (`_w1`, `_w2`, etc.) along with the primary cache.
-
-> **Note on `cache:warm`:** The CLI command `php vendor/bin/typephp cache:warm` executes in a single parent CLI process and pre-warms the base cache directory. When running parallel multi-worker suites, using Strategy A (`'cache' => false`) is recommended for the fastest execution.
+*Every worker process transforms files in its own isolated memory space (`php://memory`), providing zero disk I/O.*
 
 ---
 
-## GitHub Actions CI Workflow Examples
-
-Below are production-ready GitHub Actions workflow configurations tailored for different test runners and concurrency setups.
+## Production CI Workflow Examples
 
 ---
 
-### 1. Pest PHP: Parallel Multi-Process Workflow
+### 1. Pest v4+ Native Test Sharding Workflow (Recommended for Large Suites)
 
-This workflow executes tests across 4 parallel processes per matrix runner using the in-memory strategy (`'cache' => false`):
+This workflow uses **Pest v4+ native sharding** with a pre-warmed shared cache across 4 parallel CI machines:
+
+```yaml
+name: Pest v4+ Test Sharding Suite
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-shards:
+    name: Shard ${{ matrix.shard }} of 4 (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.3', '8.4']
+        shard: [1, 2, 3, 4]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: dom, mbstring, zip, libxml, json, tokenizer, fileinfo
+          coverage: none
+
+      - name: Install Dependencies
+        uses: ramsey/composer-install@v3
+
+      # Pre-warm the shared cache once on the runner machine
+      - name: Warm Up TypePHP Cache
+        run: php vendor/bin/typephp cache:warm
+
+      # Executes exact shard fraction reading from the pre-warmed shared cache
+      - name: Run Pest Shard
+        run: ./vendor/bin/pest --shard=${{ matrix.shard }}/4 --compact
+```
+
+---
+
+### 2. Domain-Partitioned CI Matrix Workflow (Pest v2, v3, & PHPUnit)
+
+This workflow manually partitions your suite across separate domain directories:
+
+```yaml
+name: Domain-Partitioned Test Suite
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-domains:
+    name: Test Domain (${{ matrix.domain }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.3', '8.4']
+        domain:
+          - 'tests/Unit'
+          - 'tests/Feature/Auth'
+          - 'tests/Feature/Billing'
+          - 'tests/Feature/Orders'
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: dom, mbstring, zip, libxml, json, tokenizer, fileinfo
+          coverage: none
+
+      - name: Install Dependencies
+        uses: ramsey/composer-install@v3
+
+      # Executes tests strictly for the specific domain folder
+      - name: Run Domain Tests
+        run: ./vendor/bin/pest ${{ matrix.domain }} --parallel --processes=4 --compact
+```
+
+---
+
+### 3. Pest PHP: Standard Parallel Multi-Process Workflow
+
+This workflow executes tests across 4 parallel processes on a single runner using the pre-warmed shared cache:
 
 ```yaml
 name: Pest Parallel Tests
@@ -216,76 +389,18 @@ jobs:
       - name: Install Dependencies
         uses: ramsey/composer-install@v3
 
-      # Executes tests across 4 parallel workers with zero IPC interference
+      # Pre-warm shared disk cache for instant O(1) execution across all 4 workers
+      - name: Warm Up TypePHP Cache
+        run: php vendor/bin/typephp cache:warm
+
+      # Executes tests across 4 parallel workers sharing the same cache
       - name: Run Pest in Parallel
         run: ./vendor/bin/pest --parallel --processes=4 --compact
 ```
 
 ---
 
-### 2. Pest PHP: Sequential Workflow with Code Coverage
-
-This workflow runs tests sequentially, pre-warms the disk cache before test execution, and generates a Codecov coverage report on PHP 8.4:
-
-```yaml
-name: Pest Sequential Tests
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-jobs:
-  test:
-    name: PHP ${{ matrix.php }} on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        php: ['8.2', '8.3', '8.4', '8.5']
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: ${{ matrix.php }}
-          extensions: dom, mbstring, zip, libxml, json, tokenizer, fileinfo
-          coverage: ${{ matrix.os == 'ubuntu-latest' && matrix.php == '8.4' && 'pcov' || 'none' }}
-
-      - name: Install Dependencies
-        uses: ramsey/composer-install@v3
-
-      # Pre-warm disk cache for instant O(1) file execution
-      - name: Warm Up TypePHP Cache
-        run: php vendor/bin/typephp cache:warm
-
-      # Run with coverage on Ubuntu PHP 8.4
-      - name: Run Pest with Coverage
-        run: ./vendor/bin/pest --coverage-clover=clover.xml --compact
-        if: matrix.os == 'ubuntu-latest' && matrix.php == '8.4'
-
-      # Run without coverage on other matrix runners
-      - name: Run Pest
-        run: ./vendor/bin/pest --compact
-        if: "! (matrix.os == 'ubuntu-latest' && matrix.php == '8.4')"
-
-      - name: Upload Coverage to Codecov
-        uses: codecov/codecov-action@v5
-        if: matrix.os == 'ubuntu-latest' && matrix.php == '8.4'
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: clover.xml
-          fail_ci_if_error: false
-```
-
----
-
-### 3. PHPUnit: ParaTest Multi-Process Parallel Workflow
+### 4. PHPUnit: ParaTest Multi-Process Parallel Workflow
 
 This workflow uses `brianium/paratest` with `WrapperRunner` across 4 worker processes:
 
@@ -322,55 +437,11 @@ jobs:
       - name: Install Dependencies
         uses: ramsey/composer-install@v3
 
-      # Execute ParaTest with 4 parallel worker processes
-      - name: Execute ParaTest
-        run: ./vendor/bin/paratest -p 4 --runner WrapperRunner
-```
-
----
-
-### 4. PHPUnit: Standard Sequential Workflow
-
-This workflow executes standard single-process PHPUnit with pre-warmed disk caching:
-
-```yaml
-name: PHPUnit Sequential Suite
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-jobs:
-  test:
-    name: PHP ${{ matrix.php }} on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        php: ['8.2', '8.3', '8.4', '8.5']
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: ${{ matrix.php }}
-          extensions: dom, mbstring, zip, libxml, json, tokenizer, fileinfo
-          coverage: none
-
-      - name: Install Dependencies
-        uses: ramsey/composer-install@v3
-
       # Pre-warm disk cache for instant O(1) file execution
       - name: Warm Up TypePHP Cache
         run: php vendor/bin/typephp cache:warm
 
-      # Run standard sequential PHPUnit
-      - name: Run PHPUnit
-        run: ./vendor/bin/phpunit --display-deprecations --display-errors --display-warnings
+      # Execute ParaTest with 4 parallel worker processes
+      - name: Execute ParaTest
+        run: ./vendor/bin/paratest -p 4 --runner WrapperRunner
 ```
