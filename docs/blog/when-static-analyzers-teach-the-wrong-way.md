@@ -29,7 +29,7 @@ To make the linter happy, you find yourself degrading clean types, inventing thr
 
 In other words, the tool designed to make your code safer just bullied you into making your code worse.
 
-Recently, in a lively discussion around Beartype (the fast runtime type checker for Python), its creator Cecil Curry penned a brutally honest, deeply funny critique of this exact phenomenon. 
+Recently, I stubmbled upon in a lively [discussion](https://github.com/beartype/beartype/discussions/601) on GitHub around Beartype (the fast runtime type checker for Python), its creator Cecil Curry penned a brutally honest, deeply funny critique of this exact phenomenon. 
 
 Let us look at why static analyzers sometimes get trapped in theoretical purity, how this problem quietly bites PHP developers, and how runtime type checking offers a pragmatic way forward.
 
@@ -171,7 +171,7 @@ As Cecil Curry pointed out, developers end up feeling forced to tell the tool to
 
 This exact situation is not unique to PHP. It recently surfaced in the Python ecosystem within Beartype's community discussions.
 
-A developer asked why Python's primary static analyzer, Mypy, threw a fit when they tried to pass an abstract class or protocol into a function accepting `proto: type[T]` (tracked under issue mypy#4717). Mypy banned it because abstract classes cannot be instantiated, ignoring the fact that the developer never wanted to instantiate it; they only wanted to pass the class token to run an `issubclass()` check.
+A developer asked why Python's primary static analyzer, Mypy, threw a fit when they tried to pass an abstract class or protocol into a function accepting `proto: type[T]` (tracked under issue [mypy#4717](https://github.com/python/mypy/issues/4717)). Mypy banned it because abstract classes cannot be instantiated, ignoring the fact that the developer never wanted to instantiate it; they only wanted to pass the class token to run an `issubclass()` check.
 
 Cecil Curry, the creator of Beartype, gave a delightfully candid answer:
 
