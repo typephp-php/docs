@@ -36,6 +36,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Strict Generic Return Invariance (PHPStan / Psalm Parity)
+    |--------------------------------------------------------------------------
+    | When true (default / strict), generic return types enforce invariance
+    | matching PHPStan Level MAX. Returning Collection<Dog> when Collection<Animal>
+    | is promised will be rejected unless the class declares '@template-covariant'
+    | or the return type specifies use-site covariance '<covariant Animal>'.
+    |
+    | Set to false (pragmatic mode) when integrating with frameworks like Shopware,
+    | Laravel, or legacy codebases where collection classes omit '@template-covariant'.
+    */
+    'strict_return_generic_invariance' => true,
+
+    /*
+    |--------------------------------------------------------------------------
     | Respect Ignore Docblock Tags
     |--------------------------------------------------------------------------
     | Set to false in CI/CD runs to force type-checking on @typephp-ignore methods.
@@ -76,7 +90,7 @@ return [
     |             Guarantees 100% single-item error detection on any array size.
     |
     | - 'hybrid' : (Beartype O(1) Mode) Fast boundary + random sampling on
-    |             arrays > 64 items. Ideal for massive production datasets.
+    |             arrays > 128 items. Ideal for massive production datasets.
     */
     'array_validation' => 'full',
 
@@ -170,11 +184,12 @@ return [
 | **`'enabled'`** | `true` | Global master switch for runtime type enforcement. |
 | **`'params'`** | `true` | Enforces parameter `@param` contracts on functions and methods. |
 | **`'returns'`** | `true` | Enforces return `@return` contracts on functions and methods. |
+| **`'strict_return_generic_invariance'`** | `true` | Enforces strict generic return invariance matching PHPStan Level MAX (e.g. returning `Collection<Dog>` where `Collection<Animal>` is expected is rejected unless `@template-covariant` or `<covariant Animal>` is specified). Set to `false` (pragmatic mode) for frameworks (Laravel, Shopware) where collection classes omit covariance annotations. |
 | **`'respect_ignore_tags'`** | `true` | Respects `@typephp-ignore` and `@typephp-ignore-file` tags. Set to `false` in CI/CD to force audit checks. |
 | **`'respect_native_nullability'`** | `true` | When `true` (default), permits `null` if native PHP explicitly declares nullable syntax (`?Type` or `Type\|null = null`) even if omitted in the DocBlock. Set to `false` for strict pedantic enforcement. |
 | **`'magic_properties'`** | `true` | Enforces class-level `@property`, `@property-read`, and `@property-write` annotations on dynamic writes (`__set`). |
 | **`'magic_methods'`** | `true` | Enforces class-level `@method` annotations on dynamic method calls (`__call` / `__callStatic`). |
-| **`'array_validation'`** | `'full'` | Validation strategy for collections: `'full'` (exhaustive $O(n)$) or `'hybrid'` (Beartype $O(1)$ sampling for $> 64$ items). |
+| **`'array_validation'`** | `'full'` | Validation strategy for collections: `'full'` (exhaustive $O(n)$) or `'hybrid'` (Beartype $O(1)$ sampling for $> 128$ items). |
 | **`'cache'`** | `true` | Pre-transforms and caches PHP files on disk. Set to `false` to transform files purely in memory (`php://memory`). |
 | **`'cache_dir'`** | `null` | Custom path to store cached files. Defaults to system temporary directory (`sys_get_temp_dir() . '/typephp-cache/'`). |
 | **`'extensions'`** | `[]` | Explicit list of third-party extension classes implementing `ExtensionInterface`. |
