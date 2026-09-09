@@ -1,5 +1,14 @@
 [
   {
+    "title": "When Static Analyzers Teach You the Wrong Way: The Dogma of Variance and the Pursuit of Working QA",
+    "url": "/docs/blog/when-static-analyzers-teach-the-wrong-way",
+    "date": "September 9, 2026",
+    "readTime": "9 min read",
+    "badge": "Deep Dive",
+    "badgeClass": "badge-guide",
+    "excerpt": "An exploration of why static analyzers sometimes force developers into anti-patterns to satisfy theoretical purity, Cecil Curry's insight from Beartype, and how runtime type checking restores sanity."
+  },
+  {
     "title": "From Sluggish to Blazing Fast: How I Made TypePHP 90x Faster and Uncovered 400+ 'DocBlock Lies' on Shopware 6",
     "url": "/docs/blog/from-sluggish-to-blazing-fast",
     "date": "August 30, 2026",
