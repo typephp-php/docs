@@ -299,6 +299,6 @@ In pragmatic mode, your existing framework repositories can return specialized g
 | **Return Covariance** | Invariant by default. Rejects child collections. | Configurable to match native PHP covariant returns. |
 | **Developer Remedy** | Downgrade to `mixed`, split classes, or add ignore tags. | Write clean, self-documenting code and let runtime guards protect memory. |
 
-Static analysers are fantastic tools, but they are linters, not religious doctrine. When an analyzer demands that you delete your types or build bloated abstractions just to satisfy an abstract formula, remember Cecil Curry's observation: typing purity is the enemy of working QA.
+Static analysers are fantastic tools, but they are code quality tools, not religious doctrine. When an analyzer demands that you delete your types or build bloated abstractions just to satisfy an abstract formula, remember Cecil Curry's observation: typing purity is the enemy of working QA.
 
 Use static analysis to catch syntax bugs early, but let TypePHP protect your actual runtime data: keeping your code clean, strict, and grounded in the real world.
