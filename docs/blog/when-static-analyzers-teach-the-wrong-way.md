@@ -19,17 +19,17 @@ next: false
   <span>9 min read</span>
 </div>
 
-We genuinely love static analysis. Tools like PHPStan, Psalm, Mago and etc. have fundamentally transformed modern software development. They catch typos before you save, find dead code paths, detect static type errors, and save us from countless embarrassing bugs before code ever reaches a pull request.
+We genuinely love static analysis. Tools like PHPStan, Psalm, and Python's Mypy have fundamentally transformed modern software development. They catch typos before you save, find dead code paths, and save us from countless embarrassing bugs before code ever reaches a pull request.
 
 Yet there is an uncomfortable situation that almost every developer runs into sooner or later.
 
-You are sitting at your desk on a Friday afternoon, writing clean, elegant code. You run your static analyzer, expecting green text, only to be greeted by a bright red wall of theoretical jargon. The tool insists that your completely safe, twenty-line class is commiting architectural crimes against category theory.
+You are sitting at your desk on a Friday afternoon, writing clean, elegant code. You run your static analyzer, expecting green text, only to be greeted by a bright red wall of theoretical jargon. The tool insists that your completely safe, twenty-line class is committing architectural crimes against category theory.
 
 To make the linter happy, you find yourself degrading clean types, inventing three useless interfaces, or turning strict types into `mixed`. 
 
 In other words, the tool designed to make your code safer just bullied you into making your code worse.
 
-Recently, I just stubmled in a lively [discussion](https://github.com/beartype/beartype/discussions/601) around Beartype (the fast runtime type checker for Python), its creator Cecil Curry penned a brutally honest, deeply funny critique of this exact phenomenon. 
+Recently, in a lively discussion around Beartype (the fast runtime type checker for Python), its creator Cecil Curry penned a brutally honest, deeply funny critique of this exact phenomenon. 
 
 Let us look at why static analyzers sometimes get trapped in theoretical purity, how this problem quietly bites PHP developers, and how runtime type checking offers a pragmatic way forward.
 
@@ -47,6 +47,10 @@ You also decide to add two simple, everyday lookup methods: `contains()` and `in
 <?php
 
 declare(strict_types=1);
+
+class Animal {}
+class Dog extends Animal {}
+class Piano {}
 
 /**
  * A read-only collection of items
@@ -78,7 +82,7 @@ class ReadOnlyCollection
 }
 ```
 
-Now, run this harmless, clean, read-only code through PHPStan at level 2 above.
+Now, run this harmless, clean, read-only code through PHPStan at maximum strictness.
 
 ### The PHPStan Error Report
 
@@ -86,9 +90,9 @@ Now, run this harmless, clean, read-only code through PHPStan at level 2 above.
  ------ -------------------------------------------------------------------------------------------------------------------------------------------- 
   Line   index.php                                                                                                                                   
  ------ -------------------------------------------------------------------------------------------------------------------------------------------- 
-  :20    Template type T is declared as covariant, but occurs in contravariant position in parameter item of method ReadOnlyCollection::contains().  
+  :23    Template type T is declared as covariant, but occurs in contravariant position in parameter item of method ReadOnlyCollection::contains().  
          [Rule: generics.variance]
-  :28    Template type T is declared as covariant, but occurs in contravariant position in parameter item of method ReadOnlyCollection::indexOf().   
+  :31    Template type T is declared as covariant, but occurs in contravariant position in parameter item of method ReadOnlyCollection::indexOf().   
          [Rule: generics.variance]
  ------ -------------------------------------------------------------------------------------------------------------------------------------------- 
 ```
@@ -102,7 +106,7 @@ Yet PHPStan halts your build and screams `generics.variance` because of an infle
 $$\text{Parameter Position} = \text{Contravariant Position}$$
 $$\text{Covariant Template } T + \text{Contravariant Position} = \mathbf{FATAL\ ERROR}$$
 
-This is the software equivalent of a building inspector fining you for holding a fire extinguisher because, technically, you are carrying pressurized gas. The tool has zero awarenes of what the method actually does. It sees an open parenthesis, spots `T` inside it, and rejects the entire class.
+This is the software equivalent of a building inspector fining you for holding a fire extinguisher because, technically, you are carrying pressurized gas. The tool has zero awareness of what the method actually does. It sees an open parenthesis, spots `T` inside it, and rejects the entire class.
 
 ---
 
@@ -133,7 +137,7 @@ public function contains(mixed $item): bool
 ```
 Or you split a twenty-line class into three separate files: `ReadableCollection`, `SearchableCollection`, and `CollectionInterface`. You have now tripled your codebase to solve a problem that exists only inside the linter.
 
-### 4. The Duct-Tape Ignore: Inline Comments or Global Config Suppression
+### 4. The Duct-Tape Ignore: Inline Comments, Global Config, or Baseline Files
 You either slap an inline ignore comment right above every single inspection method:
 ```php
 // @phpstan-ignore generics.variance
@@ -148,9 +152,16 @@ parameters:
         # Or the classic raw regex:
         # - '#Template type .* is declared as covariant, but occurs in contravariant position#'
 ```
-The consequence: it feels like defeat. 
+Or perhaps you take the modern route and generate a baseline file:
+```bash
+vendor/bin/phpstan analyse --generate-baseline
+```
 
-Inline comments make your pristine domain classes look like a messy collection of hacks during code reviews. Meanwhile, suppressing the error globally in your configuration file turns `phpstan.neon` into a graveyard of silenced warnings, blinding the analyzer to actual, accidental bugs elsewhere across your codebase.
+The consequence: it still feels completely broken and wrong.
+
+Inline comments make your pristine domain classes look like a messy collection of hacks during code reviews. Suppressing the error globally turns your configuration file into a graveyard of silenced warnings, blinding the analyzer to actual, unintended type bugs elsewhere across your codebase.
+
+Worst of all, if you are authoring an open-source package or a shared internal library, generating a `phpstan-baseline.neon` only hides the problem on your own repository. Your baseline file does not travel with your package when installed via Composer. The moment a downstream application installs your package and runs PHPStan on their project, the analyzer inspects your vendor class definitions and explodes with the exact same `generics.variance` errors in their CI pipeline.
 
 As Cecil Curry pointed out, developers end up feeling forced to tell the tool to simply shut up already, purely because the static analyzer cannot tell the difference between harmless read-only inspection and catastrophic memory corruption.
 
@@ -158,9 +169,9 @@ As Cecil Curry pointed out, developers end up feeling forced to tell the tool to
 
 ## Act III: Cecil Curry's Epiphany on Static Dogma
 
-This exact situation is not unique to PHP. It also surfaced in the Python ecosystem within Beartype's community discussions.
+This exact situation is not unique to PHP. It recently surfaced in the Python ecosystem within Beartype's community discussions.
 
-A developer asked why Python's primary static analyzer, Mypy, threw a fit when they tried to pass an abstract class or protocol into a function accepting `proto: type[T]` (tracked under issue [mypy#4717](https://github.com/python/mypy/issues/4717)). Mypy banned it because abstract classes cannot be instantiated, ignoring the fact that the developer never wanted to instantiate it; they only wanted to pass the class token to run an `issubclass()` check.
+A developer asked why Python's primary static analyzer, Mypy, threw a fit when they tried to pass an abstract class or protocol into a function accepting `proto: type[T]` (tracked under issue mypy#4717). Mypy banned it because abstract classes cannot be instantiated, ignoring the fact that the developer never wanted to instantiate it; they only wanted to pass the class token to run an `issubclass()` check.
 
 Cecil Curry, the creator of Beartype, gave a delightfully candid answer:
 
@@ -178,17 +189,17 @@ Cecil pointed directly at the core problem: static analyzers are ideological bec
 
 ## Act IV: To Be Fair to Static Analyzers
 
-Let us take a step back and be completely fair to static analysers. Their authors are brilliant engineers, and their paranoia comes from an honest engineering challenge.
+Let us take a step back and be completely fair to PHPStan, Psalm, and Mypy. Their authors are brilliant engineers, and their paranoia comes from an honest engineering challenge.
 
-Static analysers do not execute your application. They have no access to PHP's/Python's call stack, no access to system memory, and no way of knowing which database records will be loaded into an array on line 42.
+Static analyzers do not execute your application. They have no access to PHP's call stack, no access to system memory, and no way of knowing which database records will be loaded into an array on line 42.
 
 They are trying to solve an impossible problem: mathematically proving that an interpreted, dynamic program will never crash, without ever running the program.
 
-Because static analysers are blind at runtime, they must assume the absolute worst-case scenario at all times. From the perspective of pure type theory, if a class declares a generic parameter as covariant, allowing `T` in a parameter creates a theoretical hole where a developer *could* write bad data. 
+Because static analyzers are blind at runtime, they must assume the absolute worst-case scenario at all times. From the perspective of pure type theory, if a class declares a generic parameter as covariant, allowing `T` in a parameter creates a theoretical hole where a developer *could* write bad data. 
 
-Since a static linter cannot follow the object through memory to see whether it actually mutates, its only option is total prohibition and ban the syntax entirely.
+Since a static linter cannot follow the object through memory to see whether it actually mutates, its only option is total prohibition: ban the syntax entirely.
 
-Their rigidity is not malicious so it is simply the only tool a compile-time analyzer has. But when theoretical proofs collide with practical application architecture, developers are the ones who suffer the headache.
+Their rigidity is not malicious; it is simply the only tool a compile-time analyzer has. But when theoretical proofs collide with practical application architecture, developers are the ones who suffer the headache.
 
 ---
 
@@ -299,6 +310,7 @@ In pragmatic mode, your existing framework repositories can return specialized g
 | **Return Covariance** | Invariant by default. Rejects child collections. | Configurable to match native PHP covariant returns. |
 | **Developer Remedy** | Downgrade to `mixed`, split classes, or add ignore tags. | Write clean, self-documenting code and let runtime guards protect memory. |
 
-Static analysers are fantastic tools, but they are code quality tools, not religious doctrine. When an analyzer demands that you delete your types or build bloated abstractions just to satisfy an abstract formula, remember Cecil Curry's observation: typing purity is the enemy of working QA.
+Static analyzers are fantastic tools, but they are linters, not religious doctrine. When an analyzer demands that you delete your types or build bloated abstractions just to satisfy an abstract formula, remember Cecil Curry's observation: typing purity is the enemy of working QA.
 
 Use static analysis to catch syntax bugs early, but let TypePHP protect your actual runtime data: keeping your code clean, strict, and grounded in the real world.
+```
