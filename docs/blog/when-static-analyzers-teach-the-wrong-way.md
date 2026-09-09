@@ -82,7 +82,7 @@ class ReadOnlyCollection
 }
 ```
 
-Now, run this harmless, clean, read-only code through PHPStan at maximum strictness.
+Now, run this harmless, clean, read-only code through PHPStan at level 2 or above.
 
 ### The PHPStan Error Report
 
