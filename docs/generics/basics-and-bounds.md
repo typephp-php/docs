@@ -38,6 +38,68 @@ TypePHP manages generic templates at two distinct execution levels:
 
 ---
 
+## Deep Enforcement vs. Boundary Enforcement (Included vs. Excluded Classes)
+
+It is crucial to understand **when** TypePHP intercepts a generic type violation. This depends entirely on whether the generic class (e.g., `Collection`) is **included** or **excluded** in your `typephp.php` configuration.
+
+### 1. Included Classes (Deep Enforcement)
+If you want TypePHP to throw an error the exact millisecond you call an internal method like `$collection->add(new Product())` or `new Collection([1, 'invalid'])`, **the generic class itself must be whitelisted in your `typephp.php` `include` array.**
+
+When a class is included, TypePHP intercepts every method call and constructor inside it.
+
+```php
+// 1. You explicitly included your custom collection:
+// 'include' => ['app/Support/MyCollection.php']
+
+/** @var MyCollection<int, User> $users */
+$users = new MyCollection();
+
+// Throws TypeError IMMEDIATELY inside MyCollection::add()
+// "Argument $item (template TValue) must be of type User, Product given"
+$users->add(new Product()); 
+```
+
+### 2. Excluded Classes (Boundary Enforcement)
+Most third-party generic containers (like Laravel's `Illuminate\Support\Collection` or Doctrine's `ArrayCollection`) live in `vendor/**`, which is usually **excluded** for maximum framework performance.
+
+When a generic class is excluded, TypePHP **does not intercept its internal constructors or methods, and does not inspect its internal properties**. Instead, it tracks the object's generic "badge" in memory and strictly enforces the contract **by comparing badges** when the object crosses into an included function or method.
+
+```php
+// 1. Laravel Collections are excluded:
+// 'exclude' => ['vendor/**']
+
+// 2. You label the collection in your app/ code:
+/** @var Illuminate\Support\Collection<int, string> $strings */
+$strings = new Collection(['valid_string', 12345]); 
+
+// NO ERROR THROWN YET!
+// Because Collection.php is excluded, TypePHP does not intercept the constructor 
+// to check the raw array contents. It simply attaches the `string` badge to the object.
+
+// 3. BOUNDARY GATEKEEPER CATCHES TYPE CONFLICTS
+class NumberService {
+    /** @param Collection<int, int> $numbers */
+    public function process(Collection $numbers) {}
+}
+
+$service = new NumberService();
+
+// 💥 Throws TypeError at the function boundary!
+// "Argument $numbers expects Collection<covariant int>, but Collection<string> was given"
+$service->process($strings); 
+```
+
+**Why this happens:** TypePHP doesn't open the sealed "Vendor Box" to look at the `12345` or `'valid_string'` inside it. Instead, the `NumberService` acts as a gatekeeper:
+* *"I require a box labeled `int`."*
+* *"You handed me a box labeled `string`."*
+* **Access Denied.**
+
+### Which should you choose?
+* **Exclude generic framework classes (`vendor/**`)** to keep the framework booting at 100% native C-speed. TypePHP will still perfectly guard your application code (`app/**`) by ensuring no generic containers with conflicting type badges ever cross into your services or controllers.
+* **Include specific generic classes** if you own them (e.g. `app/Data/Result.php`), or if you specifically want deep, immediate validation on every single method call and constructor argument within that container.
+
+---
+
 ## PHP Limitation: No Native `instanceof` on Generics
 
 In PHP, writing generic syntax directly in executable statements (such as `if ($obj instanceof Collection<User>)`) is a syntax error. 
@@ -192,35 +254,35 @@ Generic parameters (`T`) in TypePHP are not limited to object classes. You can b
 ### Generic Collections of Refined Scalars (`Collection<positive-int>`)
 
 ```php
-/** @var Collection<positive-int> $scores */
-$scores = new Collection();
+/** @var MyCollection<positive-int> $scores */
+$scores = new MyCollection();
 
 $scores->add(100); // Valid
 
 $scores->add(-50); 
-// Throws: TypeError: Collection::add(): Argument $item (template T = positive-int) must be of type positive-int
+// Throws: TypeError: MyCollection::add(): Argument $item (template T = positive-int) must be of type positive-int
 ```
 
 ### Generic Collections of Array Shapes (`Collection<array{...}>`)
 
 ```php
-/** @var Collection<array{id: positive-int, name: non-empty-string}> $userShapes */
-$userShapes = new Collection();
+/** @var MyCollection<array{id: positive-int, name: non-empty-string}> $userShapes */
+$userShapes = new MyCollection();
 
 $userShapes->add(['id' => 1, 'name' => 'Alice']); // Valid
 
 $userShapes->add(['id' => -5, 'name' => 'Alice']); 
-// Throws: TypeError: Collection::add(): Argument $item['id'] must be of type positive-int
+// Throws: TypeError: MyCollection::add(): Argument $item['id'] must be of type positive-int
 ```
 
 ---
 
 ## First-Use Type Inference (Unannotated Generic Instances)
 
-If you instantiate a generic class without an inline `@var` prebinding annotation:
+If you instantiate an **included** generic class without an inline `@var` prebinding annotation:
 
 ```php
-$collection = new Collection(); // No @var Collection<User> annotation!
+$collection = new MyCollection(); // No @var MyCollection<User> annotation!
 ```
 
 TypePHP automatically infers the template parameter `T` from the **first method call** executed on that object instance and locks `T` to that type in `WeakMap` memory for all subsequent calls:
@@ -234,14 +296,14 @@ $collection->add(new User('Bob'));
 
 // 3. Subsequent call fails because T was locked to User on first use!
 $collection->add(new Product('SKU-100'));
-// Throws: TypeError: Collection::add(): Argument $item (template T = User) must be of type User, Product given
+// Throws: TypeError: MyCollection::add(): Argument $item (template T = User) must be of type User, Product given
 ```
 
 ---
 
 ## Simultaneous First-Use Multi-Template Inference
 
-If you instantiate a multi-template class without an inline `@var` annotation:
+If you instantiate an **included** multi-template class without an inline `@var` annotation:
 
 ```php
 /**
@@ -283,4 +345,3 @@ $bag->set(12345, 30);
 $bag->set('timeout', 'thirty');
 // Throws: TypeError: MultiTemplateBag::set(): Argument $val (template V = int) must be of type int
 ```
-
