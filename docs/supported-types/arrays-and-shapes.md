@@ -1,6 +1,6 @@
 # Arrays & Shapes
 
-TypePHP provides runtime enforcement for sequential lists, key-value generic maps, typed class arrays, positional tuples, sealed and unsealed array shapes, homogeneous/heterogeneous unions, variadic array wrapping, key/value extractions, offset access, and object shapes.
+TypePHP provides runtime enforcement for sequential lists, key-value generic maps, typed class arrays, positional tuples, sealed and unsealed array shapes, shape composition, homogeneous/heterogeneous unions, variadic array wrapping, key/value extractions, offset access, and object shapes.
 
 ---
 
@@ -27,11 +27,11 @@ processList(['php', 'pest', 'typephp'], [10, 20, 30]);
 
 // 2. Invalid Call (Associative array passed where list was expected)
 processList(['tag1' => 'php'], [10, 20]);
-// Throws: TypeError: processList(): Argument $tags must be a list
+// Throws: TypeError: processList(): Argument $tags must be a list, associative array (key 'tag1') given
 
 // 3. Invalid Call (Empty array passed where non-empty-list was expected)
 processList(['php'], []);
-// Throws: TypeError: processList(): Argument $scores must be a non-empty list
+// Throws: TypeError: processList(): Argument $scores must be a non-empty list, empty array ([]) given
 ```
 
 ---
@@ -82,11 +82,11 @@ recordScores(['alice' => 100, 'bob' => 95]);
 
 // 2. Invalid Call (Key 0 is integer instead of string)
 recordScores([0 => 100]);
-// Throws: TypeError: recordScores(): Argument $userScores key must be of type string
+// Throws: TypeError: recordScores(): Argument $userScores key must be of type string, int (0) given
 
 // 3. Invalid Call (Value -5 violates positive-int)
 recordScores(['alice' => -5]);
-// Throws: TypeError: recordScores(): Argument $userScores['alice'] must be of type positive-int
+// Throws: TypeError: recordScores(): Argument $userScores['alice'] must be of type positive-int, negative int (-5) given
 ```
 
 > **Associative Hybrid Validation:** In hybrid mode, associative arrays validate both the key and the value on the first pair, the last pair, and 3 random internal pairs in O(1) time.
@@ -140,8 +140,8 @@ Every item in the collection must strictly satisfy a single concrete type.
 /** @param list<string> $items */
 function processHomogeneous(array $items): void {}
 
-processHomogeneous(['a', 'b', 'c']); //  Valid
-processHomogeneous(['a', 10, 'c']);   // ❌ Throws TypeError: $items[1] must be of type string
+processHomogeneous(['a', 'b', 'c']); // Valid
+processHomogeneous(['a', 10, 'c']);   // Throws: TypeError: Argument $items[1] must be of type string, int (10) given
 ```
 
 ### 2. Heterogeneous Arrays (`list<int|string>`, `(Dog|Cat)[]`, `array<string, mixed>`)
@@ -155,8 +155,8 @@ Elements within the same array can freely mix types as long as each element sati
  */
 function processHeterogeneous(array $mixedData): void {}
 
-processHeterogeneous([10, 'hello', true, 42, false]); //  Valid
-processHeterogeneous([10, 'hello', new stdClass()]);  // ❌ Throws TypeError: $mixedData[2] must be of type (int | string | bool)
+processHeterogeneous([10, 'hello', true, 42, false]); // Valid
+processHeterogeneous([10, 'hello', new stdClass()]);  // Throws: TypeError: Argument $mixedData[2] must be of type (int | string | bool), stdClass given
 ```
 
 ---
@@ -177,13 +177,15 @@ use App\Models\User;
 use App\Models\Admin;
 
 /**
- * ❌ Homogeneous Union: Expects an array of ALL Users OR an array of ALL Admins
+ * Homogeneous Union: Expects an array of ALL Users OR an array of ALL Admins
+ *
  * @param User[]|Admin[] $accounts
  */
 function processHomogeneousUnion(array $accounts): void {}
 
 /**
- *  Heterogeneous Array: Expects an array that can mix Users and Admins
+ * Heterogeneous Array: Expects an array that can mix Users and Admins
+ *
  * @param (User|Admin)[] $accounts
  */
 function processHeterogeneousArray(array $accounts): void {}
@@ -195,7 +197,7 @@ processHomogeneousUnion($mixedAccounts);
 // Throws: TypeError: Argument $accounts[1] must be of type User, Admin given
 
 // 2. Passes Heterogeneous Array check:
-processHeterogeneousArray($mixedAccounts); //  Valid
+processHeterogeneousArray($mixedAccounts); // Valid
 ```
 
 ---
@@ -217,10 +219,10 @@ function sumIds(int ...$ids): int
     return array_sum($ids);
 }
 
-sumIds(10, 20, 30); //  Valid: [10, 20, 30]
+sumIds(10, 20, 30); // Valid: [10, 20, 30]
 
 sumIds(10, -5, 30);
-// ❌ Throws: TypeError: Argument $ids[1] must be of type positive-int, negative int (-5) given
+// Throws: TypeError: Argument $ids[1] must be of type positive-int, negative int (-5) given
 ```
 
 ### 2. Variadic Generic Collections (`@param array<K, V> ...$arrays`)
@@ -244,10 +246,10 @@ function diffKeys(array $array, array ...$arrays): array
 
 $initial = ['first_name' => 'John', 'last_name' => 'Doe', 'age' => 42];
 
-//  Valid: Passed variadic arrays with matching TKey (string)
+// Valid: Passed variadic arrays with matching TKey (string)
 diffKeys($initial, ['age' => 10], ['last_name' => true]);
 
-// ❌ Invalid: Variadic argument #2 has integer key 123 instead of string TKey
+// Invalid: Variadic argument #2 has integer key 123 instead of string TKey
 diffKeys($initial, [123 => 'value']);
 // Throws: TypeError: Argument $arrays[0] key must be of type string, int (123) given
 ```
@@ -270,11 +272,11 @@ function collectSameType(mixed ...$items): array
 }
 
 // 1. Valid: All variadic items are integers (T = int)
-collectSameType(10, 20, 30); //  Valid
+collectSameType(10, 20, 30); // Valid
 
 // 2. Invalid: Inconsistent types (Item 0 is int, Item 2 is string)
 collectSameType(10, 20, 'invalid');
-// ❌ Throws: TypeError: Argument $items[2] (template T = int) must be of type int, string 'invalid' given
+// Throws: TypeError: Argument $items[2] (template T = int) must be of type int, string 'invalid' given
 ```
 
 > **Template Bound Widening:** If the template declares an upper bound (e.g. `@template T of int|float`), TypePHP dynamically widens `T` to accommodate all arguments that satisfy the bound:
@@ -286,7 +288,7 @@ collectSameType(10, 20, 'invalid');
 >  */
 > function sumAll(int|float ...$numbers): array {}
 > 
-> sumAll(1, 2.5, 3); //  Valid: T is widened to int|float because both satisfy the bound
+> sumAll(1, 2.5, 3); // Valid: T is widened to int|float because both satisfy the bound
 > ```
 
 ### 4. Heterogeneous Variadics (`mixed ...$values`)
@@ -309,7 +311,7 @@ class Collection
 }
 
 $col = new Collection();
-$col->append(1, 'foo', ['nested' => 'array'], false); //  Valid
+$col->append(1, 'foo', ['nested' => 'array'], false); // Valid
 ```
 
 ---
@@ -337,47 +339,7 @@ processMatrix([
 processMatrix([
     'math' => [100, -50],
 ]);
-// Throws: TypeError: processMatrix(): Argument $matrix['math'][1] must be of type positive-int
-```
-
-### Multi-Level Random Walk in Hybrid Mode
-
-In hybrid mode, nested structures compose into a multi-level random walk down the type tree. For example, a $10,000 \times 10,000$ matrix ($100,000,000$ total elements) validates in **25 element checks (0.005 ms)** rather than evaluating 100 million items in userland loops.
-
----
-
-## Generics inside Typed Arrays & Shapes (`list<Producer<T>>`)
-
-TypePHP validates generic container objects nested inside arrays or array shapes:
-
-> **Deep Dive Guide:** For comprehensive details on generic collections and variance modifiers (`covariant`/`contravariant`), see the [Generics Basics & Bounds](/generics/basics-and-bounds) documentation.
-
-```php
-use App\Generics\Producer;
-use App\Models\Dog;
-use App\Models\Car;
-
-/**
- * @param list<Producer<Dog>> $producers
- * @param array{items: list<Producer<covariant Animal>>, count: positive-int} $payload
- */
-function processGenericList(array $producers, array $payload): void
-{
-    // ...
-}
-
-// 1. Valid Call
-processGenericList(
-    [new Producer(new Dog()), new Producer(new Dog())],
-    ['items' => [new Producer(new Dog())], 'count' => 1]
-);
-
-// 2. Invalid Call (Producer holds Car instead of Dog)
-processGenericList(
-    [new Producer(new Dog()), new Producer(new Car())],
-    ['items' => [new Producer(new Dog())], 'count' => 1]
-);
-// Throws: TypeError: processGenericList(): Argument $producers[1] must be an instance of Producer<Dog>
+// Throws: TypeError: processMatrix(): Argument $matrix['math'][1] must be of type positive-int, negative int (-50) given
 ```
 
 ---
@@ -432,41 +394,66 @@ processUnsealedOptions(['id' => 10, 'category' => 'admin']);
 
 // 2. Invalid Call (Extra key 'code' has integer value 999 instead of string)
 processUnsealedOptions(['id' => 10, 'code' => 999]);
-// Throws: TypeError: processUnsealedOptions(): Argument $options['code'] must be of type string
+// Throws: TypeError: processUnsealedOptions(): Argument $options['code'] must be of type string, int (999) given
 ```
 
-### Memory Optimization for Sealed Shapes
+### Array Shape Composition via Intersections (`ShapeA & ShapeB`)
 
-`ArrayShapeValidator` uses an O(1) key count check (`$valueCount === $matchedKeysCount`) to verify sealed shapes without allocating `array_diff_key()` arrays in memory, sustaining throughput over **130,000 operations per second**.
-
-### Unsealed Shapes with Complex Nested Types (`...<string, list<T>>` or `...<string, array{...}>`)
-
-Wildcard extra keys in unsealed shapes can be constrained to complex nested structures like lists or sub-shapes:
+TypePHP supports composing sealed and unsealed array shapes using intersection (`&`) operators. When shapes intersect, declared fields are merged into a single composite schema while preserving strict boundaries against unexpected keys:
 
 ```php
 /**
- * Unsealed shape requiring 'id', but permitting extra keys holding list<positive-int>
+ * @phpstan-type Identifiable array{id: positive-int, created_at: non-empty-string}
+ * @phpstan-type Taggable     array{tags: list<non-empty-string>}
+ * @phpstan-type ArticleShape Identifiable & Taggable
  *
- * @param array{id: positive-int, ...<string, list<positive-int>>} $payload
+ * @param ArticleShape $article
  */
-function processBatchOptions(array $payload): void
+function publishArticle(array $article): bool
+{
+    return true;
+}
+
+// 1. Valid Call (Contains all required fields from both schemas)
+publishArticle([
+    'id' => 101,
+    'created_at' => '2026-09-14',
+    'tags' => ['php', 'typephp'],
+]);
+
+// 2. Invalid Call (Missing required key from Taggable schema)
+publishArticle([
+    'id' => 101,
+    'created_at' => '2026-09-14',
+]);
+// Throws: TypeError: publishArticle(): Argument $article is missing required key 'tags'
+
+// 3. Invalid Call (Contains unexpected key not declared in either schema)
+publishArticle([
+    'id' => 101,
+    'created_at' => '2026-09-14',
+    'tags' => ['php'],
+    'unregistered_key' => true,
+]);
+// Throws: TypeError: publishArticle(): Argument $article contains unsealed unexpected key 'unregistered_key'
+```
+
+#### Overlapping Key Refinement
+When intersected shapes declare the same key with different constraints, TypePHP unifies them into an intersected constraint (e.g., `score: int` and `score: positive-int` unifies to `score: int & positive-int`):
+
+```php
+/**
+ * @param array{score: int, label: string} & array{score: positive-int} $payload
+ */
+function recordScore(array $payload): void
 {
     // ...
 }
 
-// 1. Valid Call
-processBatchOptions([
-    'id' => 10,
-    'even_scores' => [2, 4, 6],
-    'odd_scores' => [1, 3, 5],
-]);
+recordScore(['score' => 50, 'label' => 'good']); // Valid
 
-// 2. Invalid Call (-3 violates positive-int in nested extra list)
-processBatchOptions([
-    'id' => 10,
-    'odd_scores' => [1, -3, 5],
-]);
-// Throws: TypeError: Argument $payload['odd_scores'][1] must be of type positive-int
+recordScore(['score' => -10, 'label' => 'bad']);
+// Throws: TypeError: Argument $payload['score'] must be of type (int & positive-int), negative int (-10) given
 ```
 
 ---
@@ -494,7 +481,7 @@ processTuple([100, 'success', true]);
 
 // 3. Invalid Call (Index 0 is negative integer)
 processTuple([-5, 'success']);
-// Throws: TypeError: processTuple(): Argument $tuple['0'] must be of type positive-int
+// Throws: TypeError: processTuple(): Argument $tuple['0'] must be of type positive-int, negative int (-5) given
 ```
 
 ### Implicit Keyless Tuple Syntax (`array{T1, T2}`)
@@ -510,7 +497,7 @@ function processBundle(array $bundle): void
     // ...
 }
 
-processBundle([[10, 20], 'bundle_tag']); //  Valid
+processBundle([[10, 20], 'bundle_tag']); // Valid
 ```
 
 ---
@@ -529,8 +516,6 @@ TypePHP supports dynamically restricting function parameters, return types, prop
 ---
 
 ### 1. Extracting from Class Constants
-
-Extract allowed keys or values directly from `public`, `protected`, or `private` class constant arrays:
 
 ```php
 namespace App\Database;
@@ -563,7 +548,7 @@ $manager->connect('pdo_pgsql', 'PDO\MySQL\Driver');
 
 // Invalid Driver Class Value
 $manager->connect('pdo_mysql', 'PDO\PgSQL\Driver');
-// Throws: TypeError: Argument $driverClass must be a value of App\Database\DriverManager::DRIVER_MAP
+// Throws: TypeError: Argument $driverClass must be a value of App\Database\DriverManager::DRIVER_MAP, string 'PDO\PgSQL\Driver' given
 ```
 
 ---
@@ -605,51 +590,12 @@ configureStatus('Hearts', 'Active', 'active');
 
 // 2. Invalid Case Name (Passing lowercase 'active' where case name 'Active' was expected)
 configureStatus('Hearts', 'active', 'active');
-// Throws: TypeError: Argument $caseName must be a key of enum StatusEnum
+// Throws: TypeError: Argument $caseName must be a key of enum StatusEnum, string 'active' given
 
 // 3. Invalid UnitEnum value-of usage (UnitEnums have no backing values)
 function testBadUnitEnumValue(mixed $val): void {}
 /** @param value-of<Suit> $val */
 // Throws: TypeError: Argument $val must be a value of enum Suit
-```
-
----
-
-### 3. Inline Array Shapes & Type Aliases (`@phpstan-type`)
-
-`key-of<T>` and `value-of<T>` can be used directly on inline array shapes or nested inside `@phpstan-type` / `@psalm-type` aliases:
-
-```php
-namespace App\Services;
-
-use App\Database\DriverManager;
-
-/**
- * @phpstan-type ConnectionParams array{
- *     driver: key-of<DriverManager::DRIVER_MAP>,
- *     driverClass?: value-of<DriverManager::DRIVER_MAP>
- * }
- */
-class ConnectionService
-{
-    /**
-     * @param ConnectionParams $params
-     * @param key-of<array{id: int, name: string}> $shapeKey
-     */
-    public function configure(array $params, string $shapeKey): void
-    {
-        // ...
-    }
-}
-
-$service = new ConnectionService();
-
-// Valid Call
-$service->configure(['driver' => 'pdo_mysql'], 'id');
-
-// Invalid Nested Driver Key inside Type Alias
-$service->configure(['driver' => 'pdo_pgsql'], 'id');
-// Throws: TypeError: Argument $params['driver'] must be a key of App\Database\DriverManager::DRIVER_MAP
 ```
 
 ---
@@ -697,11 +643,11 @@ $service->configure(3306, 'PDO\MySQL\Driver');
 
 // 2. Invalid Port (70000 exceeds int<1, 65535> extracted from nested offset)
 $service->configure(70000, 'PDO\MySQL\Driver');
-// Throws: TypeError: Argument $port must be <= 65535, 70000 given
+// Throws: TypeError: Argument $port must be <= 65535, int (70000) given
 
 // 3. Invalid Driver Class ('PDO\PgSQL\Driver' violates literal 'PDO\MySQL\Driver')
 $service->configure(3306, 'PDO\PgSQL\Driver');
-// Throws: TypeError: Argument $driverClass must be literal 'PDO\MySQL\Driver'
+// Throws: TypeError: Argument $driverClass must be literal 'PDO\MySQL\Driver', string 'PDO\PgSQL\Driver' given
 ```
 
 ---
@@ -727,10 +673,10 @@ $std = new stdClass();
 $std->id = 42;
 $std->name = 'Alice';
 
-processObjectShape($std); //  Valid
+processObjectShape($std); // Valid
 
 class CustomUser { public int $id = 42; public string $name = 'Alice'; }
-processObjectShape(new CustomUser()); //  Valid
+processObjectShape(new CustomUser()); // Valid
 ```
 
 ### Strict `stdClass` Shapes (`stdClass{prop: type}`)
@@ -746,17 +692,75 @@ function processStrictStdClass(object $payload): void
     // ...
 }
 
-// Rejects custom class instances even if they possess 'id' and 'name' properties!
 class CustomUser { public int $id = 42; public string $name = 'Alice'; }
 
 processStrictStdClass(new CustomUser());
-// ❌ Throws: TypeError: processStrictStdClass(): Argument $payload must be an instance of stdClass
+// Throws: TypeError: processStrictStdClass(): Argument $payload must be an instance of stdClass, CustomUser given
 ```
 
-### Reflection-Free Fast Path for `stdClass`
+### Deep Property Chains & Diagnostic Breadcrumbs (3+ Levels Deep)
 
-`ObjectShapeValidator` executes dynamic property validation on `stdClass` directly through native PHP property lookups, bypassing `\ReflectionObject` instantiation entirely to sustain throughput over **130,000 operations per second**.
+TypePHP recursively evaluates deeply nested object and array shapes down to any depth, constructing accurate diagnostic breadcrumbs:
+
+```php
+/**
+ * 4-level deep object shape
+ *
+ * @param object{company: object{department: object{lead: object{name: non-empty-string}}}} $user
+ */
+function assignLead(object $user): void
+{
+    // ...
+}
+
+// 1. Deep Field Error (Preserves complete property path)
+$user = (object)[
+    'company' => (object)[
+        'department' => (object)[
+            'lead' => (object)[
+                'name' => '', // Fails non-empty-string!
+            ],
+        ],
+    ],
+];
+
+assignLead($user);
+// Throws: TypeError: assignLead(): Argument $user->company->department->lead->name must be of type non-empty-string, empty string ('') given
+
+// 2. Deep Missing Property (Accurately identifies parent object)
+$userMissingLead = (object)[
+    'company' => (object)[
+        'department' => (object)[
+            // 'lead' is missing
+        ],
+    ],
+];
+
+assignLead($userMissingLead);
+// Throws: TypeError: assignLead(): Argument $user->company->department is missing required property 'lead'
+
+// 3. Deep Hybrid Object-Array Chains
+/**
+ * @param object{branches: list<object{manager: object{email: non-empty-string}}>} $org
+ */
+function notifyManagers(object $org): void { ... }
+
+// Throws: TypeError: notifyManagers(): Argument $org->branches[1]->manager->email must be of type non-empty-string, empty string ('') given
+```
 
 ### Safe Inspection of Uninitialized Readonly Properties
 
-If an object instance contains uninitialized PHP 8.1+ `readonly` properties, TypePHP's `ObjectShapeValidator` safely inspects property initialization states using Reflection before attempting reads, throwing a clean `TypeError: property 'id' is uninitialized` without triggering PHP engine fatal crashes.
+If an object instance contains uninitialized PHP 8.1+ `readonly` properties, TypePHP's `ObjectShapeValidator` safely inspects property initialization states using Reflection before attempting reads:
+
+```php
+class UserContainer
+{
+    public readonly int $id; // Uninitialized
+}
+
+/** @param object{id: positive-int} $obj */
+function verifyContainer(object $obj): void { ... }
+
+verifyContainer(new UserContainer());
+// Throws: TypeError: verifyContainer(): Argument $obj property 'id' is uninitialized
+```
