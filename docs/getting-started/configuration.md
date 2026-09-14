@@ -50,6 +50,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Vendor Boundary Only Enforcement
+    |--------------------------------------------------------------------------
+    | When true (default), whitelisted vendor packages (e.g. Illuminate\Collections)
+    | only enforce type contracts on calls originating from application code (included paths).
+    | Internal vendor-to-vendor or vendor-self calls bypass strict enforcement.
+    | Set to false for strict pedantic enforcement across all vendor internals.
+    */
+    'vendor_boundary_only' => true,
+
+    /*
+    |--------------------------------------------------------------------------
     | Respect Ignore Docblock Tags
     |--------------------------------------------------------------------------
     | Set to false in CI/CD runs to force type-checking on @typephp-ignore methods.
@@ -185,6 +196,7 @@ return [
 | **`'params'`** | `true` | Enforces parameter `@param` contracts on functions and methods. |
 | **`'returns'`** | `true` | Enforces return `@return` contracts on functions and methods. |
 | **`'strict_return_generic_invariance'`** | `true` | Enforces strict generic return invariance matching PHPStan Level MAX (e.g. returning `Collection<Dog>` where `Collection<Animal>` is expected is rejected unless `@template-covariant` or `<covariant Animal>` is specified). Set to `false` (pragmatic mode) for frameworks (Laravel, Shopware) where collection classes omit covariance annotations. |
+| **`'vendor_boundary_only'`** | `true` | When `true` (default), whitelisted vendor classes (e.g. `Illuminate\Support\Collection`) only enforce type contracts when called from application code (`app/**`, `src/**`, `tests/**`). Calls originating from excluded vendor files or internal self-calls bypass strict checking. Set to `false` for strict pedantic auditing across all vendor code. |
 | **`'respect_ignore_tags'`** | `true` | Respects `@typephp-ignore` and `@typephp-ignore-file` tags. Set to `false` in CI/CD to force audit checks. |
 | **`'respect_native_nullability'`** | `true` | When `true` (default), permits `null` if native PHP explicitly declares nullable syntax (`?Type` or `Type\|null = null`) even if omitted in the DocBlock. Set to `false` for strict pedantic enforcement. |
 | **`'magic_properties'`** | `true` | Enforces class-level `@property`, `@property-read`, and `@property-write` annotations on dynamic writes (`__set`). |
@@ -197,6 +209,34 @@ return [
 | **`'inline_vars'`** | `[...]` | Fine-grained configuration for local `@var` variable validations. |
 | **`'include'`** | `[...]` | Path globs to intercept and type-check. |
 | **`'exclude'`** | `[...]` | Path globs to ignore and leave untouched. |
+
+---
+
+## Vendor Boundary Isolation (`vendor_boundary_only`)
+
+When you whitelist a third-party vendor class (such as `Illuminate\Support\Collection` or a Symfony component), that class is often called thousands of times by the framework's own internal subsystems (e.g. routing, service containers, template compilers, or other third-party packages).
+
+Frameworks often rely on dynamic PHP engine features and loose typing internally (e.g. passing temporary array lists, loose keys, or untyped closures), which can cause false-positive type errors during application boot or test setup.
+
+### How Boundary Isolation Works
+
+TypePHP solves this by acting as an **Application Boundary Airlock**:
+
+```
+[Your Application Code] ──calls──► [Vendor Class] ──► TypePHP STRICTLY ENFORCES types!
+[Vendor / Framework]    ──calls──► [Vendor Class] ──► TypePHP BYPASSES (Native execution speed)
+[Vendor Internal Self]  ──calls──► [Vendor Class] ──► TypePHP BYPASSES (Internal implementation detail)
+```
+
+1. **Calls from Application Code:** When your code in `app/`, `src/`, or `tests/` calls a method on a whitelisted vendor class (e.g. `$collection->add(4)` on a `Collection<int, string>`), TypePHP **strictly validates all parameters and returns**.
+2. **Calls from Vendor Code:** When an excluded vendor package or framework internal (e.g. Spatie, Inertia, or Laravel's Application Kernel) calls that same method, TypePHP **instantly short-circuits** with zero overhead, allowing the framework to operate with native speed and flexibility.
+3. **Happy-Path Zero Overhead:** TypePHP resolves caller origins in sub-microseconds with $O(1)$ path memoization, ensuring your test suite and local environment run at near-native speeds.
+
+To force TypePHP to enforce strict types across all vendor internals (pedantic mode for package authors or audits), set:
+
+```php
+'vendor_boundary_only' => false,
+```
 
 ---
 

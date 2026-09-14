@@ -1,6 +1,6 @@
 # Inline Variables (`@var`)
 
-While parameter and return contracts protect function boundaries, inline `@var` annotations enforce type safety on local variable assignments, reassignments, and direct return statements inside function bodies or PHP scripts.
+While parameter and return contracts protect function boundaries, inline `@var` annotations enforce type safety on local variable assignments, reassignments, compound operations, and direct return statements inside function bodies or PHP scripts.
 
 ---
 
@@ -27,6 +27,45 @@ TypePHP validates all supported type categories on inline variable assignments:
 * **Unions & Intersections:** `positive-int|non-empty-string`, `\Countable&\ArrayAccess`
 * **Generics:** `/** @var Collection<User> $users */`
 * **Callables:** `/** @var callable(positive-int): non-empty-string $formatter */`
+
+---
+
+## Compound Assignments & Increment/Decrement Support
+
+TypePHP automatically tracks and validates inline `@var` types when variables or object properties are modified using compound assignment operators (`*=`, `+=`, `-=`, `/=`, `%=`, `.=`, `**=`, etc.) or increment/decrement operators (`++`, `--`):
+
+```php
+<?php
+
+/** @var positive-int $score */
+$score = 10;
+
+$score += 5; // Valid (15)
+
+$score *= -2; 
+// Throws: TypeError: Variable $score must be of type positive-int, negative int (-30) given
+
+/** @var int<1, 5> $count */
+$count = 5;
+
+$count++; 
+// Throws: TypeError: Variable $count must be of type int<1, 5>, int (6) given
+```
+
+This applies identically to class properties and static properties:
+```php
+class GameSession
+{
+    /** @var positive-int */
+    public int $score = 10;
+
+    public function penalty(): void
+    {
+        $this->score *= -1;
+        // Throws: TypeError: Property GameSession::$score must be of type positive-int
+    }
+}
+```
 
 ---
 
