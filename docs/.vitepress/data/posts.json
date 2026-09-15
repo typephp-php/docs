@@ -1,5 +1,14 @@
 [
   {
+    "title": "TypePHP v0.8.0: Schema Composition, Conditional Parameters, and Smart Diagnostics",
+    "url": "/docs/blog/celebrating-v0.8.0-schema-composition-and-smart-diagnostics",
+    "date": "September 15, 2026",
+    "readTime": "6 min read",
+    "badge": "Release",
+    "badgeClass": "badge-announcement",
+    "excerpt": "Celebrating the release of v0.8.0! This release brings array shape composition, discriminator-aware union diagnostics, conditional parameters, and a zero-I/O production mode to the PHP ecosystem."
+  },
+  {
     "title": "When Static Analyzers Teach You the Wrong Way: The Dogma of Variance and the Pursuit of Working QA",
     "url": "/docs/blog/when-static-analyzers-teach-the-wrong-way",
     "date": "September 9, 2026",
