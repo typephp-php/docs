@@ -1,6 +1,6 @@
 # Unions, Intersections, Variadics, and Conditionals
 
-TypePHP provides rich runtime enforcement for complex type algebra, including Union (`|`) types, Intersection (`&`) types, Schema Composition, Variadic (`...$items`) parameters, and Conditional Return Types.
+TypePHP provides rich runtime enforcement for complex type algebra, including Union (`|`) types, Intersection (`&`) types, Schema Composition, Variadic (`...$items`) parameters, and Conditional Types.
 
 ---
 
@@ -240,13 +240,70 @@ processUsers(
 
 ---
 
-## Conditional Return Types
+## Conditional Types
 
-Conditional return types dynamically select a function's return contract based on incoming parameter values or bound template types.
+Conditional types allow you to dynamically alter parameter and return contracts based on the value of incoming parameters or bound generic templates.
 
-### Parameter-Based Conditional Return Types
+### Conditional Parameters
 
-Use `@return ($param is TargetType ? ReturnA : ReturnB)` to evaluate return contracts based on a parameter's value:
+Use `@param ($condition ? TypeA : TypeB)` to enforce that a parameter's expected type depends on the value of an earlier parameter. This is extremely useful for format discriminators and flag-based structures.
+
+#### Parameter-Based Conditional Parameters
+```php
+/**
+ * @param 'json'|'xml' $format
+ * @param ($format is 'json' ? array<string, mixed> : string) $payload
+ */
+function sendPayload(string $format, mixed $payload): void
+{
+    // ...
+}
+
+// Evaluates $payload contract as array<string, mixed>
+sendPayload('json', ['status' => 'ok']); // Valid
+
+sendPayload('json', '<xml></xml>');
+// Throws: TypeError: sendPayload(): Argument $payload must be of type array, string '<xml></xml>' given
+
+// Evaluates $payload contract as string
+sendPayload('xml', '<xml></xml>'); // Valid
+```
+
+#### Template-Based Conditional Parameters
+You can also build parameter conditions based on the runtime inferred type of a generic template `T`:
+
+```php
+/**
+ * @template T of Animal
+ *
+ * @param T $animal
+ * @param (T is Dog ? list<T> : T) $output
+ */
+function processAnimal(Animal $animal, mixed $output): void
+{
+    // ...
+}
+
+$dog = new Dog();
+$cat = new Cat();
+
+// T is inferred as Dog -> $output must be list<Dog>
+processAnimal($dog, [$dog, new Dog()]); // Valid
+
+processAnimal($dog, $dog); 
+// Throws: TypeError: processAnimal(): Argument $output must be a list, TypePHP\Tests\Fixtures\Domain\Dog given
+
+// T is inferred as Cat -> $output must be Cat
+processAnimal($cat, $cat); // Valid
+```
+
+---
+
+### Conditional Return Types
+
+Just like parameters, return types can conditionally resolve based on incoming values or generics using `@return ($condition ? ReturnA : ReturnB)`.
+
+#### Parameter-Based Conditional Returns
 
 ```php
 /**
@@ -272,9 +329,7 @@ formatValue(false, '');
 // Throws: TypeError: formatValue(): Return value must be of type non-empty-string, empty string ('') returned
 ```
 
-### Template-Based Conditional Return Types
-
-Use `@return (T is TargetType ? ReturnA : ReturnB)` to evaluate return contracts based on an inferred template parameter `T`:
+#### Template-Based Conditional Returns
 
 ```php
 /**

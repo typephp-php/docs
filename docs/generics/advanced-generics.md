@@ -139,9 +139,40 @@ $gen->send('invalid'); // Invalid: string violates T = int!
 
 ---
 
-## Conditional Return Types with Generics (`(T is Dog ? A : B)`)
+## Conditional Types with Generics (`(T is Target ? A : B)`)
 
-TypePHP dynamically evaluates conditional return types based on generic templates:
+TypePHP dynamically evaluates conditional contracts based on inferred generic templates. This applies to **both Return Types and Parameters**.
+
+### Conditional Parameters
+
+You can enforce that one parameter's contract depends on the inferred runtime generic type `T` of another parameter:
+
+```php
+/**
+ * @template T of Animal
+ *
+ * @param T $animal
+ * @param (T is Dog ? list<T> : T) $output
+ */
+function processAnimal(Animal $animal, mixed $output): void
+{
+    // ...
+}
+
+$dog = new Dog();
+$cat = new Cat();
+
+// T is inferred as Dog -> $output parameter contract evaluates to list<Dog>
+processAnimal($dog, [$dog, new Dog()]); // Valid
+
+processAnimal($dog, clone $dog); 
+// Throws: TypeError: processAnimal(): Argument $output must be a list, TypePHP\Tests\Fixtures\Domain\Dog given
+
+// T is inferred as Cat -> $output parameter contract evaluates to Cat
+processAnimal($cat, clone $cat); // Valid
+```
+
+### Conditional Return Types
 
 ```php
 /**
@@ -164,10 +195,12 @@ processInput(new Dog(), 100); // Valid
 processInput(new Cat(), 'valid_string'); // Valid
 
 processInput(new Cat(), ''); // Invalid: empty string violates non-empty-string
-// Throws: TypeError: processInput(): Return value must be of type non-empty-string
+// Throws: TypeError: processInput(): Return value must be of type non-empty-string, empty string ('') returned
 ```
 
-### Negated Generic Conditionals (`(T is not Dog ? A : B)`)
+### Negated Generic Conditionals (`(T is not Target ? A : B)`)
+
+Negated conditions (`is not`) are also fully supported for both parameters and return types:
 
 ```php
 /**
@@ -191,7 +224,36 @@ processNegated(new Dog(), 42);           // Valid (Dog is Dog -> positive-int)
 
 ## Generics with Unions and Intersections
 
-TypePHP fully supports combining generic structures with Union (`|`) and Intersection (`&`) types:
+TypePHP fully supports combining generic structures with Union (`|`) and Intersection (`&`) types, both as item types and as **upper bounds**.
+
+### Unions and Intersections as Template Upper Bounds
+
+You can strictly constrain a generic template `T` to be a member of a union or an object satisfying multiple interfaces via an intersection:
+
+```php
+/**
+ * Template constrained by a Union Bound
+ *
+ * @template T of Dog|Cat
+ * @param T $pet
+ */
+function processPet(object $pet): void { ... }
+
+processPet(new Dog()); // Valid
+processPet(new Cat()); // Valid
+processPet(new Car()); // Throws: TypeError: Argument $pet does not satisfy upper bound (Dog | Cat)
+
+/**
+ * Template constrained by an Intersection Bound
+ *
+ * @template T of Countable&ArrayAccess
+ * @param class-string<T> $class
+ */
+function registerCollection(string $class): void { ... }
+
+registerCollection(ArrayObject::class); // Valid (Implements both)
+registerCollection(stdClass::class);    // Throws: TypeError: Argument $class must be a class-string of (Countable & ArrayAccess)
+```
 
 ### Generic Containers Holding Unions (`Collection<Dog|Cat>`)
 
@@ -221,7 +283,7 @@ handleAnimalProducer(new Producer(new Dog())); // Valid
 handleAnimalProducer(new Producer(new Cat())); // Valid
 
 handleAnimalProducer(new Producer(new Car())); // Invalid
-// Throws: TypeError: Argument $producer must be of type Producer<Dog>|Producer<Cat>
+// Throws: TypeError: Argument $producer must be of type (Producer<Dog> | Producer<Cat>)
 ```
 
 ### Generic Containers Holding Intersections (`Collection<Countable & ArrayAccess>`)
@@ -235,12 +297,12 @@ $collections = new Collection();
 $collections->add(new CountableArrayAccess()); // Valid (Implements both)
 
 $collections->add(new CountableOnly()); // Invalid (Fails ArrayAccess interface)
-// Throws: TypeError: Argument $item must be of type Countable&ArrayAccess
+// Throws: TypeError: Argument $item must be of type (Countable & ArrayAccess)
 ```
 
 ### Complex Unions of Intersections in Generics
 
-You can combine parenthesized unions and intersections inside generic parameters:
+You can combine parenthesized unions and intersections inside generic parameters (Disjunctive Normal Form):
 
 ```php
 /** @var Collection<(Countable&ArrayAccess)|(Iterator&Countable)> $payload */

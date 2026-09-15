@@ -11,7 +11,7 @@ This document outlines the stability status of TypePHP, production deployment st
 > **Do NOT use TypePHP in high-stakes, mission-critical production applications yet.** 
 > 
 > TypePHP is currently recommended for:
-> * Local development environments (require-dev)
+> * Local development environments (`require-dev`)
 > * Pest / PHPUnit test suites
 > * CI/CD build pipelines
 > * Staging and QA testing servers
@@ -51,24 +51,27 @@ return [
 
 ## Production Performance Optimization
 
-When running TypePHP in live or staging environments, apply these three performance optimizations:
+When running TypePHP in live or staging environments, apply these three critical performance optimizations to ensure maximum throughput:
 
-### 1. Enable Disk Caching (`cache => true`)
+### 1. Disable File Modification Monitoring (Zero-I/O Mode)
 
-Ensure disk caching is enabled in `typephp.php`:
+By default, TypePHP checks file modification times (`@filemtime`) on every file inclusion to automatically rebuild the cache when a file changes. In production, code is immutable. Checking hundreds of timestamps per request degrades performance.
+
+Set `cache_check_mtime` to `false` in `typephp.php`:
 
 ```php
 'cache' => true,
+'cache_check_mtime' => false, // Eliminates disk I/O checks for maximum performance
 ```
 
-When caching is enabled, TypePHP transforms each PHP file once and saves the pre-compiled output to disk (`typephp-cache/`). PHP's **OPCache** loads the transformed bytecode directly into RAM, meaning AST parsing runs **0 times** on subsequent HTTP requests.
+When disabled, TypePHP generates a static hash based purely on the file path, loading the cached AST instantly from memory via PHP's OPCache.
 
 ### 2. Pre-Warm Cache During Deployment (`cache:warm`)
 
-Run `cache:warm` (or `cache:rebuild`) in your deployment scripts before opening web traffic:
+If you disable file modification monitoring (as recommended above), you **must** clear and rebuild the cache manually during your deployment pipeline before opening web traffic:
 
 ```bash
-# In your deployment pipeline:
+# In your CI/CD deployment script:
 vendor/bin/typephp cache:rebuild
 ```
 
@@ -91,10 +94,6 @@ In live environments, you can disable local internal variable assignment checks 
     'objects'    => true,
 ],
 ```
-
----
-
-Here is the updated **Emergency Kill-Switches** section for `docs/production/production-readiness.md` with the callout note explaining the difference between the environment approach and config approach:
 
 ---
 
