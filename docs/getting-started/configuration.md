@@ -27,12 +27,14 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Function Boundary Contracts (@param & @return)
+    | Function Boundary Contracts (@param, @return, @param-out)
     |--------------------------------------------------------------------------
-    | Enforces function and method parameter and return type contracts uniformly.
+    | Enforces function and method parameter, return, and by-reference
+    | out-parameter contracts uniformly.
     */
-    'params' => true,
-    'returns' => true,
+    'params'     => true,
+    'returns'    => true,
+    'params_out' => true,
 
     /*
     |--------------------------------------------------------------------------
@@ -115,9 +117,13 @@ return [
     | it uses your system's temp directory. You can change this to a path
     | inside your project (e.g., __DIR__ . '/storage/framework/typephp').
     | TypePHP automatically protects this directory from being double-transformed.
+    |
+    | 'cache_check_mtime' controls file modification checks. Keep true in dev.
+    | Set to false in production to eliminate all disk stat() calls.
     */
-    'cache' => true,
-    'cache_dir' => null,
+    'cache'             => true,
+    'cache_dir'         => null,
+    'cache_check_mtime' => true,
 
     /*
     |--------------------------------------------------------------------------
@@ -195,6 +201,7 @@ return [
 | **`'enabled'`** | `true` | Global master switch for runtime type enforcement. |
 | **`'params'`** | `true` | Enforces parameter `@param` contracts on functions and methods. |
 | **`'returns'`** | `true` | Enforces return `@return` contracts on functions and methods. |
+| **`'params_out'`** | `true` | Enforces by-reference out-parameter `@param-out` post-conditions on function and method exits. |
 | **`'strict_return_generic_invariance'`** | `true` | Enforces strict generic return invariance matching PHPStan Level MAX (e.g. returning `Collection<Dog>` where `Collection<Animal>` is expected is rejected unless `@template-covariant` or `<covariant Animal>` is specified). Set to `false` (pragmatic mode) for frameworks (Laravel, Shopware) where collection classes omit covariance annotations. |
 | **`'vendor_boundary_only'`** | `true` | When `true` (default), whitelisted vendor classes (e.g. `Illuminate\Support\Collection`) only enforce type contracts when called from application code (`app/**`, `src/**`, `tests/**`). Calls originating from excluded vendor files or internal self-calls bypass strict checking. Set to `false` for strict pedantic auditing across all vendor code. |
 | **`'respect_ignore_tags'`** | `true` | Respects `@typephp-ignore` and `@typephp-ignore-file` tags. Set to `false` in CI/CD to force audit checks. |
@@ -204,6 +211,7 @@ return [
 | **`'array_validation'`** | `'full'` | Validation strategy for collections: `'full'` (exhaustive $O(n)$) or `'hybrid'` (Beartype $O(1)$ sampling for $> 128$ items). |
 | **`'cache'`** | `true` | Pre-transforms and caches PHP files on disk. Set to `false` to transform files purely in memory (`php://memory`). |
 | **`'cache_dir'`** | `null` | Custom path to store cached files. Defaults to system temporary directory (`sys_get_temp_dir() . '/typephp-cache/'`). |
+| **`'cache_check_mtime'`** | `true` | When `true` (default), checks `@filemtime` on file load to automatically rebuild the cache when source files change. Set to `false` in production to eliminate all disk `stat()` calls for maximum throughput via OPcache. |
 | **`'extensions'`** | `[]` | Explicit list of third-party extension classes implementing `ExtensionInterface`. |
 | **`'stubs'`** | `[]` | Path globs pointing to `.stub` files that override third-party vendor DocBlocks. |
 | **`'inline_vars'`** | `[...]` | Fine-grained configuration for local `@var` variable validations. |

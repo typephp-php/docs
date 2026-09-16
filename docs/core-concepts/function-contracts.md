@@ -1,6 +1,6 @@
 # Function Contracts
 
-Functions and methods form the public boundaries of your software modules. TypePHP enforces `@param` and `@return` annotations directly at function entry and exit points.
+Functions and methods form the public boundaries of your software modules. TypePHP enforces `@param`, `@param-out`, and `@return` annotations directly at function entry and exit points.
 
 ---
 
@@ -69,8 +69,6 @@ By default (`'respect_native_nullability' => true`), TypePHP merges native param
 > **Native `?array`** + **DocBlock `string[]`** $\rightarrow$ **Effective Contract: `?string[]` (`string[]|null`)**
 
 This provides complete type safety without breaking real-world code:
-
-This provides complete type safety without breaking real-world code:
 * **Passing `null` (or omitting default argument):** Accepted cleanly.
 * **Passing `['admin', 'editor']`:** Accepted, and every element is verified as a valid string.
 * **Passing `[12345]`:** Rejected with `TypeError: Argument $groups[0] must be of type string, int (12345) given`.
@@ -123,14 +121,15 @@ $$\text{1. } \mathbf{@phpstan\text{-}*} \quad \longrightarrow \quad \text{2. } \
 
 ### Why Priority Matters in Real-World Codebases
 
-1. **Refined Contracts Take Precedence:** Tool-specific annotations (`@phpstan-param`, `@psalm-return`) contain specific type constraints (such as generic templates, array shapes, or integer bounds) that standard `@param mixed` omits. TypePHP always enforces the tighter, intended contract.
+1. **Refined Contracts Take Precedence:** Tool-specific annotations (`@phpstan-param`, `@phpstan-param-out`, `@psalm-return`) contain specific type constraints (such as generic templates, array shapes, or integer bounds) that standard `@param mixed` omits. TypePHP always enforces the tighter, intended contract.
 2. **Third-Party Framework Compatibility:** Libraries like Doctrine Collections declare `@phpstan-param T $element` on `Collection::add` alongside native `mixed $element`. TypePHP automatically prioritizes `@phpstan-param`, making generic collections enforce types at runtime without manual wrapper code.
 
 ### Tooling Priority Matrix Across Boundary Contracts
 
 | Boundary Type | Priority 1 (Highest) | Priority 2 | Priority 3 (Fallback) |
 | :--- | :--- | :--- | :--- |
-| **Parameters** | `@phpstan-param` | `@psalm-param` | `@param` |
+| **Parameters (Input)** | `@phpstan-param` | `@psalm-param` | `@param` |
+| **Out-Parameters (Exit)** | `@phpstan-param-out` | `@psalm-param-out` | `@param-out` |
 | **Return Values** | `@phpstan-return` | `@psalm-return` | `@return` |
 
 ---
@@ -168,11 +167,11 @@ registerUser(age: 25, username: 'Alice', id: -5);
 
 TypePHP natively supports PHP's by-reference parameter semantics (`function update(int &$value)`).
 
-### How By-Reference Validation Works
+### How By-Reference Input Validation Works (`@param`)
 
 1. **Entry Guard Rails:** TypePHP inspects and validates the variable's value *on function entry* before the function body executes.
 2. **In-Place Caller Scope Mutation:** If the argument passes validation, the function body executes normally, and any modifications to the variable mutate the caller's variable in the caller's scope.
-3. **Safety Guarantee on Failure:** If an invalid value is passed into a by-reference parameter, a `TypeError` is thrown *before* any code in the function body runs, ensuring the caller's variable remains **100% un-mutated and un-corrupted**.
+3. **Safety Guarantee on Failure:** If an invalid value is passed into a by-reference parameter on entry, a `TypeError` is thrown *before* any code in the function body runs, ensuring the caller's variable remains **100% un-mutated and un-corrupted**.
 
 ```php
 <?php
@@ -227,88 +226,73 @@ function incrementCount(int &$count): void { $count++; }
 function incrementCount(int &$count): void { $count++; }
 ```
 
-### By-Reference Arrays & Shapes
+---
 
-Mutating collections or array shapes in-place preserves caller scope bindings:
+## By-Reference Out-Parameter Contracts (`@param-out`)
 
-```php
-/**
- * @param list<positive-int> &$scores
- */
-function appendReward(array &$scores): void
-{
-    $scores[] = 500; // Mutates array in caller scope
-}
+While `@param` enforces pre-conditions on function entry, **`@param-out`** (and `@phpstan-param-out` / `@psalm-param-out`) enforces **post-conditions on function exit**.
 
-$myScores = [10, 20, 30];
-appendReward($myScores);
-
-print_r($myScores); // [10, 20, 30, 500]
-```
-
-### Variadic By-Reference Parameters (`&...$params`)
-
-When accepting a variable number of by-reference arguments (`int &...$numbers`), TypePHP validates every individual argument on entry and preserves in-place mutations across all variadic arguments:
+When a function mutates a by-reference variable, TypePHP validates the variable's value right before the function returns or exits.
 
 ```php
 /**
- * @param positive-int &...$numbers
+ * On entry: $value can be anything (mixed)
+ * On exit:  $value is guaranteed to be a positive integer
+ *
+ * @param mixed &$value
+ * @param-out positive-int $value
  */
-function doubleAll(int &...$numbers): void
+function initializeIdentifier(mixed &$value): void
 {
-    foreach ($numbers as &$num) {
-        $num *= 2;
-    }
+    $value = 42; // Valid mutation
 }
 
-$a = 5;
-$b = 10;
-$c = 15;
+$id = null;
+initializeIdentifier($id);
+echo $id; // Output: 42
 
-doubleAll($a, $b, $c);
+/**
+ * Failing Out-Parameter Example
+ *
+ * @param mixed &$value
+ * @param-out positive-int $value
+ */
+function badInitialize(mixed &$value): void
+{
+    $value = -50; // Invalid: Violates positive-int!
+}
 
-echo "$a, $b, $c"; // Output: 10, 20, 30
+$code = 'init';
+badInitialize($code);
+// Throws: TypeError: badInitialize(): Argument &$value (param-out) must be of type positive-int, negative int (-50) given
 ```
 
-### OOP & Interface Inheritance for By-Reference Parameters
+### Full Type Algebra Support in `@param-out`
 
-When a child class implements an interface or overrides a parent method with by-reference parameters, the type contract and reference semantics are inherited automatically (even when child methods rename parameters):
+`@param-out` supports all advanced types available in TypePHP:
+* **Refinements:** `@param-out non-empty-string $token`
+* **Array Shapes:** `@param-out array{id: positive-int, token: non-empty-string} $payload`
+* **Unions & Intersections:** `@param-out ('active'|'pending') $status`, `@param-out (Countable&ArrayAccess) $collection`
+* **Generic Templates:** `@param-out T $output`
+
+### Disabling Out-Parameter Checks Independently
+
+You can independently enable or disable `@param-out` enforcement using the `'params_out'` configuration key in `typephp.php`:
 
 ```php
-interface StatusUpdaterInterface
-{
-    /**
-     * @param non-empty-string &$status
-     * @param positive-int &$code
-     */
-    public function update(string &$status, int &$code): void;
-}
-
-class StatusUpdater implements StatusUpdaterInterface
-{
-    // Inherits contracts and by-reference semantics seamlessly
-    public function update(string &$status, int &$statusCode): void
-    {
-        $status = strtoupper($status);
-        $statusCode += 100;
-    }
-}
-
-$updater = new StatusUpdater();
-$currentStatus = 'pending';
-$currentCode = 200;
-
-$updater->update($currentStatus, $currentCode);
-
-echo $currentStatus; // 'PENDING'
-echo $currentCode;   // 300
+// typephp.php
+return [
+    'params'     => true, // Enforces @param on entry
+    'returns'    => true, // Enforces @return
+    'params_out' => true, // Set to false to disable @param-out exit validation
+];
 ```
 
 ---
 
 ## Class Methods (Instance & Static)
 
-All parameter and return contract rules apply identically to **instance methods** (`public`, `protected`, `private`) and **static methods**:
+All parameter, return, and out-parameter contract rules apply identically to **instance methods** (`public`, `protected`, `private`) and **static methods**:
 
 ```php
 class UserService
