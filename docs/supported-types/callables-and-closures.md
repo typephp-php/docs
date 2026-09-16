@@ -1,6 +1,6 @@
 # Callables & Closures
 
-TypePHP provides lazy runtime interception for callbacks, Closures, invokable objects (`__invoke`), array callables, PHP 8.1+ first-class callables, and PHPStan static-closure specifications.
+TypePHP provides lazy runtime interception for callbacks, Closures, invokable objects (`__invoke`), array callables, PHP 8.1+ first-class callables, by-reference callback mutations, and PHPStan static-closure specifications.
 
 ---
 
@@ -11,7 +11,8 @@ When a function parameter, return value, or local variable is annotated with a c
 1. **Lazy Execution:** TypePHP does not execute the callback immediately when passed as an argument.
 2. **Input Validation:** When the wrapped callback is invoked, TypePHP validates the arguments passed into the callback against the declared parameter types.
 3. **Output Validation:** When the callback returns, TypePHP validates the returned value against the callback's declared return contract.
-4. **Zero Overhead on Uncalled Callbacks:** If a callback is passed to a function but never invoked in that specific execution branch, zero validation overhead occurs.
+4. **Reference Preservation:** If the callback takes arguments by reference (`callable(Type &$ref)`), TypePHP preserves in-place mutations on the caller's variable.
+5. **Zero Overhead on Uncalled Callbacks:** If a callback is passed to a function but never invoked in that specific execution branch, zero validation overhead occurs.
 
 ---
 
@@ -49,6 +50,87 @@ function badInvoker(callable $callback): bool
     return $callback(-5, 'Alice');
 }
 // Throws: TypeError: Callback $callback $id must be of type positive-int, negative int (-5) given
+```
+
+---
+
+## By-Reference Callback Parameters (`callable(Type &$ref): void`)
+
+When a callback accepts arguments by reference (e.g. `callable(positive-int &$val): void`), TypePHP uses **Signature-Aware Reference Dispatching** to preserve caller references in real memory:
+
+1. **In-Place Mutation:** Modifications performed inside the callback mutate the caller's variable in the caller's scope.
+2. **Input Validation on Entry:** Incoming by-reference variables are validated before the callback body executes.
+3. **Post-Mutation Validation on Exit:** When the callback finishes, TypePHP verifies that the mutated value still satisfies the declared type contract before returning control.
+
+```php
+/**
+ * @param callable(positive-int &$num): void $mutator
+ */
+function applyBonus(callable $mutator, int &$score): void
+{
+    $mutator($score);
+}
+
+$userScore = 10;
+
+// 1. Valid In-Place Mutation
+applyBonus(function (int &$num): void {
+    $num += 50;
+}, $userScore);
+
+echo $userScore; // Output: 60 (Mutated in place!)
+
+// 2. Invalid Post-Mutation (Callback sets score to -999 violating positive-int)
+applyBonus(function (int &$num): void {
+    $num = -999;
+}, $userScore);
+// Throws: TypeError: Callback $mutator $num must be of type positive-int, negative int (-999) given
+```
+
+### Native `array_walk()` Integration
+
+TypePHP matches mixed by-reference and by-value signatures (such as `array_walk` where the array value is passed by reference and the key is passed by value) with zero PHP reference warnings:
+
+```php
+/**
+ * @param callable(positive-int &$item, array-key $key): void $callback
+ * @param list<positive-int> &$items
+ */
+function doubleList(callable $callback, array &$items): void
+{
+    array_walk($items, $callback);
+}
+
+$numbers = [1, 2, 3, 4];
+
+doubleList(function (int &$item, mixed $key): void {
+    $item *= 10;
+}, $numbers);
+
+print_r($numbers); // [10, 20, 30, 40]
+```
+
+### Variadic By-Reference Callables (`callable(Type &...$args): void`)
+
+```php
+/**
+ * @param callable(positive-int &...$numbers): void $cb
+ */
+function applyBatch(callable $cb, int &$a, int &$b): void
+{
+    $cb($a, $b);
+}
+
+$x = 10;
+$y = 20;
+
+applyBatch(function (int &...$numbers): void {
+    foreach ($numbers as &$n) {
+        $n += 5;
+    }
+}, $x, $y);
+
+echo "$x, $y"; // Output: 15, 25
 ```
 
 ---
