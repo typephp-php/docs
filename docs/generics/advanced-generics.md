@@ -1,6 +1,6 @@
 # Advanced Types & Callables
 
-TypePHP allows combining generic templates (`T`, `K`, `V`) with high-level type algebra, including Higher-Order Callables, Lazy Iterables, Generators, Conditionals, Unions, Intersections, Typestates, and Deeply Nested Containers.
+TypePHP allows combining generic templates (`T`, `K`, `V`) with high-level type algebra, including Higher-Order Callables, Lazy Iterables, Generators, Conditionals, Unions, Intersections, Typestates, Wildcard Placeholders, Instantiation Guards, and Deeply Nested Containers.
 
 ---
 
@@ -412,6 +412,210 @@ You can inspect the current generic state of any `@self-out` instance at runtime
 
 ```php
 $type = TypePHP::getGenericType($instance);
+```
+
+---
+
+## Generic Template Upper Bound Enforcement on Instantiation & Assignment
+
+TypePHP actively validates template upper bounds (`@template T of UpperBound`) **directly at the moment of object assignment and instantiation via inline `@var` annotations**.
+
+An object instance cannot be annotated with an invalid generic type argument without TypePHP intercepting it and halting execution:
+
+```php
+class Animal {}
+class Dog extends Animal {}
+class Cat extends Animal {}
+class Car {}
+
+/**
+ * @template T of Animal
+ */
+class Shelter
+{
+    public function __construct(public Animal $resident) {}
+}
+
+// 1. Valid Assignment: Dog satisfies the upper bound 'Animal'
+/** @var Shelter<Dog> $validShelter */
+$validShelter = new Shelter(new Dog()); // Valid!
+
+// 2. Invalid Assignment: Car violates the upper bound 'Animal'
+/** @var Shelter<Car> $badShelter */
+$badShelter = new Shelter(new Dog());
+// Throws: TypeError: Variable $badShelter: Generic type argument Car does not satisfy upper bound Animal of template T in Shelter
+
+// 3. Invalid Assignment: Shelter is not an Animal!
+/** @var Shelter<Shelter> $nestedBadShelter */
+$nestedBadShelter = new Shelter(new Dog());
+// Throws: TypeError: Variable $nestedBadShelter: Generic type argument Shelter does not satisfy upper bound Animal of template T in Shelter
+```
+
+### Scalar & Refinement Upper Bounds on Generic Classes
+
+This enforcement applies equally to scalar upper bounds, int ranges, and string refinements:
+
+```php
+/**
+ * @template T of positive-int
+ */
+class PositiveScoreBox
+{
+    public function __construct(public int $score) {}
+}
+
+/** @var PositiveScoreBox<string> $badBox */
+$badBox = new PositiveScoreBox(10);
+// Throws: TypeError: Variable $badBox: Generic type argument string does not satisfy upper bound positive-int of template T in PositiveScoreBox
+```
+
+---
+
+## Wildcard Generic Arguments (`<*>`)
+
+When a function accepts a generic container but **does not care about the specific generic type parameter**, or when working with **circular / self-referential generic interfaces**, you can use the asterisk wildcard placeholder (`<*>`):
+
+```php
+/**
+ * Accepts any Collection regardless of what type it holds
+ *
+ * @param Collection<*> $collection
+ */
+function inspectCollection(Collection $collection): int
+{
+    return $collection->count();
+}
+```
+
+### 1. Single-Template Wildcards (`Interface<*>`)
+
+A wildcard matches **any concrete type that satisfies the template's declared upper bound**:
+
+```php
+interface EntityIdInterface {}
+
+class OrderId implements EntityIdInterface {}
+class UserId implements EntityIdInterface {}
+
+/**
+ * Accepts any Repository whose generic argument implements EntityIdInterface
+ *
+ * @param Repository<EntityIdInterface<*>> $repo
+ */
+function auditRepository(Repository $repo): void
+{
+    // ...
+}
+
+auditRepository(new Repository(new OrderId())); // Valid
+auditRepository(new Repository(new UserId()));  // Valid
+auditRepository(new Repository(new stdClass())); // Throws: TypeError (Does not satisfy bound)
+```
+
+### 2. Solving Circular & Self-Referential Generics
+
+Frameworks often define self-referencing generic contracts (e.g., an Entity whose ID knows its Entity, and an ID whose Entity knows its ID). In standard invariant generics, this causes an infinite recursive type-checking loop.
+
+Wildcards (`<*>`) act as an existential boundary that breaks the recursion cleanly:
+
+```php
+/**
+ * @template TId of CircularIdInterface<*>
+ */
+interface CircularEntityInterface {}
+
+/**
+ * @template TEntity of CircularEntityInterface<*>
+ */
+interface CircularIdInterface {}
+
+class Order implements CircularEntityInterface {}
+
+/**
+ * @implements CircularIdInterface<Order>
+ */
+class OrderId implements CircularIdInterface {}
+
+/**
+ * Accepts any ID implementing the circular generic contract
+ *
+ * @param CircularIdInterface<*> $id
+ */
+function processId(CircularIdInterface $id): void
+{
+    // TypePHP verifies the contract without entering an infinite recursion loop!
+}
+
+processId(new OrderId()); // Valid!
+```
+
+### 3. Partial Multi-Template Wildcards (`Dictionary<string, *>`)
+
+For multi-template classes (like `Dictionary<K, V>`), you can lock one template while leaving the other as a wildcard:
+
+```php
+/**
+ * @template K of array-key
+ * @template V of object
+ */
+class Dictionary
+{
+    public array $items = [];
+    public function put(mixed $key, mixed $val): void { $this->items[$key] = $val; }
+}
+
+/**
+ * Strictly requires string keys, but accepts ANY object value!
+ *
+ * @param Dictionary<string, *> $dict
+ */
+function processStringDictionary(Dictionary $dict): int
+{
+    return count($dict->items);
+}
+
+/** @var Dictionary<string, User> $userDict */
+$userDict = new Dictionary();
+processStringDictionary($userDict); // Valid!
+
+/** @var Dictionary<int, User> $intDict */
+$intDict = new Dictionary();
+processStringDictionary($intDict); 
+// Throws: TypeError: expected Dictionary<string, *> but Dictionary<int, User> given
+```
+
+### 4. Critical Distinction: `SomeClass<*>` vs. `SomeClass<mixed>`
+
+In TypePHP's runtime engine, both `<*>` and `<mixed>` act as universal top-type catch-alls that accept any generic instance (`Shelter<Dog>`, `Shelter<Cat>`, etc.). 
+
+However, **`<*>` is the recommended and idiomatic standard** across modern PHP for two key reasons:
+
+1. **Upper Bound Compliance in Static Analyzers:** If a class declares `@template T of Animal`, strict static analysis flags `Shelter<mixed>` because `mixed` is broader than `Animal`. Using `Shelter<*>` automatically adopts the class's upper bound (`? extends Animal`), passing static analysis cleanly.
+2. **Circular Generics:** For self-referencing interfaces (`Entity<Id<*>>`), `<*>` is the formal placeholder that prevents infinite recursion loops.
+
+```php
+/**
+ * @template T of Animal
+ */
+class Shelter
+{
+    public function __construct(public Animal $resident) {}
+}
+
+/** @var Shelter<Dog> $dogShelter */
+$dogShelter = new Shelter(new Dog());
+
+// 1. Using <*> (Idiomatic Wildcard Standard):
+/** @param Shelter<*> $shelter */
+function processAnyShelter(Shelter $shelter) { ... }
+
+processAnyShelter($dogShelter); // Valid!
+
+// 2. Using <mixed> (Also permitted at runtime via Top-Type matching):
+/** @param Shelter<mixed> $shelter */
+function processMixedShelter(Shelter $shelter) { ... }
+
+processMixedShelter($dogShelter); // Valid at runtime!
 ```
 
 ---
