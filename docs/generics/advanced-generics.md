@@ -1,6 +1,6 @@
 # Advanced Types & Callables
 
-TypePHP allows combining generic templates (`T`, `K`, `V`) with high-level type algebra, including Higher-Order Callables, Lazy Iterables, Generators, Conditionals, Unions, Intersections, and Deeply Nested Containers.
+TypePHP allows combining generic templates (`T`, `K`, `V`) with high-level type algebra, including Higher-Order Callables, Lazy Iterables, Generators, Conditionals, Unions, Intersections, Typestates, and Deeply Nested Containers.
 
 ---
 
@@ -218,6 +218,200 @@ function processNegated(mixed $input, mixed $result): mixed
 
 processNegated(new Cat(), 'valid_text'); // Valid (Cat is not Dog -> non-empty-string)
 processNegated(new Dog(), 42);           // Valid (Dog is Dog -> positive-int)
+```
+
+---
+
+## Generic State Transitions & Typestates (`@self-out` & `@this-out`)
+
+TypePHP supports **Typestates** via `@self-out` (and its aliases `@this-out`, `@phpstan-self-out`, `@psalm-self-out`). 
+
+Normally, an object's generic type is locked upon instantiation. `@self-out` allows a method to **re-type the generic state of the existing object instance in memory (`\WeakMap`) upon method completion**, enabling verifiable finite state machines (FSMs), progressive fluent builders, and dynamic generic accumulation.
+
+### 1. In-Place Finite State Machines (FSMs)
+
+Model strict operational workflows (like authentication, payment processing, or order fulfillment) where methods are only callable when the object is in a specific generic state:
+
+```php
+/**
+ * @template TState of 'unauthenticated'|'authenticated'
+ */
+class Session
+{
+    /**
+     * Transitions session state to 'authenticated'
+     *
+     * @self-out self<'authenticated'>
+     */
+    public function login(): void
+    {
+        // Internal authentication logic...
+    }
+
+    /**
+     * Transitions session state back to 'unauthenticated'
+     *
+     * @self-out self<'unauthenticated'>
+     */
+    public function logout(): void
+    {
+        // Internal cleanup logic...
+    }
+}
+
+/**
+ * Function strictly demanding an authenticated session
+ *
+ * @param Session<'authenticated'> $session
+ */
+function accessSecureDashboard(Session $session): void
+{
+    // Access granted...
+}
+
+// 1. Initial State: 'unauthenticated'
+/** @var Session<'unauthenticated'> $session */
+$session = new Session();
+
+accessSecureDashboard($session);
+// Throws: TypeError: accessSecureDashboard(): Argument $session expects Session<invariant 'authenticated'>, but Session<'unauthenticated'> was given
+
+// 2. Perform state transition
+$session->login();
+
+// 3. The exact same instance is now re-typed to 'authenticated' in memory!
+accessSecureDashboard($session); // Valid!
+
+// 4. Logout transitions the state back
+$session->logout();
+accessSecureDashboard($session);
+// Throws: TypeError: accessSecureDashboard(): Argument $session expects Session<invariant 'authenticated'>, but Session<'unauthenticated'> was given
+```
+
+### 2. Dynamic Template Accumulation (`self<T|TNew>`)
+
+Mutable collection classes can use `@self-out` to accumulate and widen generic union types dynamically as items of different types are added:
+
+```php
+/**
+ * @template T
+ */
+class MutableCollection
+{
+    /** @var array<int, T> */
+    public array $items = [];
+
+    /**
+     * Accumulates new type TNew into the instance's generic template T
+     *
+     * @template TNew
+     *
+     * @param TNew $item
+     *
+     * @self-out self<T|TNew>
+     */
+    public function push(mixed $item): void
+    {
+        $this->items[] = $item;
+    }
+}
+
+/** @var MutableCollection<Dog> $col */
+$col = new MutableCollection();
+TypePHP::getGenericType($col); // Returns: "App\Models\Dog"
+
+// Pushing a Cat widens the instance's generic binding to (Dog | Cat)
+$col->push(new Cat());
+
+TypePHP::getGenericType($col); // Returns: "(App\Models\Dog | App\Models\Cat)"
+```
+
+### 3. Conditional State Transitions
+
+You can branch generic state mutations based on method arguments:
+
+```php
+/**
+ * @template TRole of 'guest'|'admin'
+ */
+class UserAccount
+{
+    /**
+     * @param bool $asAdmin
+     *
+     * @self-out ($asAdmin is true ? self<'admin'> : self<'guest'>)
+     */
+    public function switchRole(bool $asAdmin): void
+    {
+        // Role switching logic...
+    }
+}
+
+/** @var UserAccount<'guest'> $account */
+$account = new UserAccount();
+
+// 1. Conditional transition to 'admin'
+$account->switchRole(asAdmin: true);
+TypePHP::getGenericType($account); // Returns: "'admin'"
+
+// 2. Conditional transition back to 'guest'
+$account->switchRole(asAdmin: false);
+TypePHP::getGenericType($account); // Returns: "'guest'"
+```
+
+### 4. Progressive Fluent Builders (`@this-out`)
+
+Enforce that mandatory setup steps must be executed before a builder can be consumed:
+
+```php
+/**
+ * @template TStep of 'init'|'configured'|'ready'
+ */
+class QueryBuilder
+{
+    /**
+     * @this-out self<'configured'>
+     */
+    public function configure(string $table): self
+    {
+        return $this;
+    }
+
+    /**
+     * @this-out self<'ready'>
+     */
+    public function prepare(): self
+    {
+        return $this;
+    }
+}
+
+/**
+ * Requires builder to have completed both configure() and prepare()
+ *
+ * @param QueryBuilder<'ready'> $builder
+ */
+function executeQuery(QueryBuilder $builder): void
+{
+    // ...
+}
+
+$builder = new QueryBuilder();
+
+// Incomplete chain
+executeQuery($builder->configure('users'));
+// Throws: TypeError: executeQuery(): Argument $builder expects QueryBuilder<invariant 'ready'>, but QueryBuilder<'configured'> was given
+
+// Fully prepared chain
+executeQuery($builder->configure('users')->prepare()); // Valid!
+```
+
+### 5. Runtime Inspection API
+
+You can inspect the current generic state of any `@self-out` instance at runtime using TypePHP's facade:
+
+```php
+$type = TypePHP::getGenericType($instance);
 ```
 
 ---
