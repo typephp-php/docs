@@ -55,11 +55,24 @@ This ensures that invoking `$container->factory(...)` enforces runtime parameter
 
 ## Discarded Returns in `void` Callback Contracts (`callable(): void`)
 
-In native PHP functions and methods, a `: void` return typehint strictly forbids returning any value, throwing a `TypeError` if a value is returned.
+It is important to distinguish between **native PHP `: void` typehint syntax** and **PHPDoc `@return void` contracts**:
 
-However, for **callables and closures annotated with `callable(): void` or `Closure(): void`**, TypePHP **discards the return value rather than throwing a `TypeError`**.
+### Native PHP `: void` Syntax (PHP Language Level)
 
-This behavior ensures seamless compatibility with PHP short arrow functions (`fn() => $expr`), which always implicitly return the evaluated result of their expression:
+When a function or closure explicitly declares native PHP `: void` return syntax (`function(): void`), PHP's Zend Engine strictly forbids returning any value at the language level. Attempting to return a value results in a native PHP compile error:
+
+```php
+// Native PHP ': void' syntax
+$func = function (int $a): void {
+    return $a; // Native PHP Fatal Error: A void function must not return a value
+};
+```
+
+### PHPDoc `@return void` Contracts (TypePHP Level)
+
+For callbacks and closures annotated with **PHPDoc `@return void`** (e.g. `callable(): void` or `Closure(): void`), TypePHP **discards the return value rather than throwing a `TypeError`**.
+
+This design behavior ensures full compatibility with PHP short arrow functions (`fn() => $expr`), which always implicitly return the evaluated result of their expression:
 
 ```php
 class User
