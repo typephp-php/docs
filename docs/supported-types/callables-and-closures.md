@@ -16,6 +16,79 @@ When a function parameter, return value, or local variable is annotated with a c
 
 ---
 
+## Closure Identity & Proxy Wrapping (`===` Comparisons)
+
+When TypePHP intercepts a `callable` or `Closure` parameter, it wraps the instance in a proxy closure (`CallableWrapper`) to enforce parameter types, return contracts, and by-reference mutations dynamically at invocation time.
+
+Because a property or variable holds the TypePHP proxy wrapper rather than the raw, unwrapped closure, **strict object reference equality (`===`) between the stored property and the original closure instance evaluates to `false`**:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+final class ClosureContainer
+{
+    /**
+     * @param Closure(positive-int): non-empty-string $factory
+     */
+    public function __construct(public Closure $factory) {}
+}
+
+$originalClosure = static fn (int $id): string => "user_{$id}";
+$container = new ClosureContainer($originalClosure);
+
+// 1. Invocation is fully protected and type-checked at runtime:
+($container->factory)(42); // Valid, returns 'user_42'
+
+// 2. Strict object identity comparison evaluates to false:
+$isSame = ($container->factory === $originalClosure); // false (holds TypePHP proxy)
+```
+
+### Consistency Across Property Syntaxes
+
+Both standard parameter assignments (`$this->factory = $factory`) and Constructor Property Promotion (`public Closure $factory`) consistently receive the TypePHP proxy wrapper. 
+
+This ensures that invoking `$container->factory(...)` enforces runtime parameter and return contracts identically regardless of which property declaration syntax is used.
+
+---
+
+## Discarded Returns in `void` Callback Contracts (`callable(): void`)
+
+In native PHP functions and methods, a `: void` return typehint strictly forbids returning any value, throwing a `TypeError` if a value is returned.
+
+However, for **callables and closures annotated with `callable(): void` or `Closure(): void`**, TypePHP **discards the return value rather than throwing a `TypeError`**.
+
+This behavior ensures seamless compatibility with PHP short arrow functions (`fn() => $expr`), which always implicitly return the evaluated result of their expression:
+
+```php
+class User
+{
+    public function save(): bool
+    {
+        return true; // Returns boolean
+    }
+}
+
+/**
+ * @param callable(User): void $callback
+ */
+function tapUser(User $user, callable $callback): User
+{
+    $callback($user);
+
+    return $user;
+}
+
+$user = new User();
+
+// Short arrow function implicitly returns boolean true from $u->save()
+// TypePHP discards the boolean return value rather than throwing a TypeError
+tapUser($user, fn (User $u) => $u->save());
+```
+
+---
+
 ## Basic Callable Contracts (`callable(T1, T2): R`)
 
 Declare argument and return types for callbacks using `callable(Type1, Type2): ReturnType` syntax:
@@ -139,8 +212,6 @@ echo "$x, $y"; // Output: 15, 25
 
 When a function uses generic template parameters (`@template T`), TypePHP dynamically substitutes `T` into the callable's parameter and return types based on the bound generic type:
 
-> **Deep Dive Guide:** For full details on generic templates, reified type inspection, and class bounds, see the dedicated [Generics Basics & Bounds](/generics/basics-and-bounds) guide.
-
 ```php
 /**
  * Generic transformer function
@@ -228,8 +299,6 @@ executeComplexCallback(function (Producer $producer, array $ids): array {
 });
 // Throws: TypeError: Callback $processor return value['count'] must be of type positive-int, negative int (-5) given
 ```
-
-> **Generics & Variance in Callables:** Need to enforce covariance (`Producer<covariant Animal>`) or contravariance (`Consumer<contravariant Dog>`) within callback arguments? See [Demystifying Variance in Generics](/generics/variance).
 
 ---
 
