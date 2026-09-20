@@ -84,7 +84,7 @@ class NumberService {
 
 $service = new NumberService();
 
-// 💥 Throws TypeError at the function boundary!
+// Throws TypeError at the function boundary!
 // "Argument $numbers expects Collection<covariant int>, but Collection<string> was given"
 $service->process($strings); 
 ```

@@ -27,14 +27,15 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Function Boundary Contracts (@param, @return, @param-out)
+    | Function Boundary Contracts (@param, @return, @param-out, @self-out)
     |--------------------------------------------------------------------------
-    | Enforces function and method parameter, return, and by-reference
-    | out-parameter contracts uniformly.
+    | Enforces function and method parameter, return, by-reference
+    | out-parameter, and self-out state transition contracts uniformly.
     */
     'params'     => true,
     'returns'    => true,
     'params_out' => true,
+    'self_out'   => true,
 
     /*
     |--------------------------------------------------------------------------
@@ -63,11 +64,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Respect Ignore Docblock Tags
+    | Respect Ignore Docblock Tags & Trace Depth
     |--------------------------------------------------------------------------
-    | Set to false in CI/CD runs to force type-checking on @typephp-ignore methods.
+    | When true (default), @typephp-ignore and @typephp-ignore-file docblock tags
+    | skip type-checking on specific methods/files. Set to false in CI/CD or
+    | audit runs to force type-checking on all ignored methods.
+    |
+    | 'ignore_trace_depth' determines how many call frames above a failing check
+    | TypePHP will inspect to find an enclosing @typephp-ignore or @typephp-disable tag.
+    | Default is 25 frames. Increase this for deep pipelines or middlewares.
     */
     'respect_ignore_tags' => true,
+    'ignore_trace_depth'  => 25,
 
     /*
     |--------------------------------------------------------------------------
@@ -202,21 +210,71 @@ return [
 | **`'params'`** | `true` | Enforces parameter `@param` contracts on functions and methods. |
 | **`'returns'`** | `true` | Enforces return `@return` contracts on functions and methods. |
 | **`'params_out'`** | `true` | Enforces by-reference out-parameter `@param-out` post-conditions on function and method exits. |
+| **`'self_out'`** | `true` | Enforces generic state transitions on `$this` (`@self-out` / `@this-out`) upon method exit. |
 | **`'strict_return_generic_invariance'`** | `true` | Enforces strict generic return invariance matching PHPStan Level MAX (e.g. returning `Collection<Dog>` where `Collection<Animal>` is expected is rejected unless `@template-covariant` or `<covariant Animal>` is specified). Set to `false` (pragmatic mode) for frameworks (Laravel, Shopware) where collection classes omit covariance annotations. |
 | **`'vendor_boundary_only'`** | `true` | When `true` (default), whitelisted vendor classes (e.g. `Illuminate\Support\Collection`) only enforce type contracts when called from application code (`app/**`, `src/**`, `tests/**`). Calls originating from excluded vendor files or internal self-calls bypass strict checking. Set to `false` for strict pedantic auditing across all vendor code. |
 | **`'respect_ignore_tags'`** | `true` | Respects `@typephp-ignore` and `@typephp-ignore-file` tags. Set to `false` in CI/CD to force audit checks. |
+| **`'ignore_trace_depth'`** | `25` | Maximum number of stack frames above a failing type check TypePHP will inspect to find an enclosing `@typephp-ignore` or `@typephp-disable` tag. Increase this if your architecture uses deep pipelines, command buses, serializer layers, or recursive callers. |
 | **`'respect_native_nullability'`** | `true` | When `true` (default), permits `null` if native PHP explicitly declares nullable syntax (`?Type` or `Type\|null = null`) even if omitted in the DocBlock. Set to `false` for strict pedantic enforcement. |
 | **`'magic_properties'`** | `true` | Enforces class-level `@property`, `@property-read`, and `@property-write` annotations on dynamic writes (`__set`). |
 | **`'magic_methods'`** | `true` | Enforces class-level `@method` annotations on dynamic method calls (`__call` / `__callStatic`). |
 | **`'array_validation'`** | `'full'` | Validation strategy for collections: `'full'` (exhaustive $O(n)$) or `'hybrid'` (Beartype $O(1)$ sampling for $> 128$ items). |
 | **`'cache'`** | `true` | Pre-transforms and caches PHP files on disk. Set to `false` to transform files purely in memory (`php://memory`). |
-| **`'cache_dir'`** | `null` | Custom path to store cached files. Defaults to system temporary directory (`sys_get_temp_dir() . '/typephp-cache/'`). |
+| **`'cache_dir'`** | `null` | Custom path to store cached files. Defaults to system temporary directory (`sys_get_temp_dir() . '/typephp-cache-' . $userHash`). |
 | **`'cache_check_mtime'`** | `true` | When `true` (default), checks `@filemtime` on file load to automatically rebuild the cache when source files change. Set to `false` in production to eliminate all disk `stat()` calls for maximum throughput via OPcache. |
 | **`'extensions'`** | `[]` | Explicit list of third-party extension classes implementing `ExtensionInterface`. |
 | **`'stubs'`** | `[]` | Path globs pointing to `.stub` files that override third-party vendor DocBlocks. |
 | **`'inline_vars'`** | `[...]` | Fine-grained configuration for local `@var` variable validations. |
 | **`'include'`** | `[...]` | Path globs to intercept and type-check. |
 | **`'exclude'`** | `[...]` | Path globs to ignore and leave untouched. |
+
+---
+
+## Ignore Tag Stack Trace Resolution (`ignore_trace_depth`)
+
+When an application or test deliberately passes invalid data through a subsystem (for example, negative-testing a serializer, testing command validation, or exercising edge-case error pipelines), you can annotate the caller or test method with `@typephp-ignore` or `@typephp-disable`.
+
+However, modern PHP frameworks frequently decouple callers from the execution point through layers of abstraction:
+
+```
+[Your Test or Controller Method] (Annotated with @typephp-ignore)
+       │  Frame 20
+       ▼
+[Command Bus / Pipeline Dispatcher]
+       │  Frame 15
+       ▼
+[Middleware Stack / Interceptor Pipeline]
+       │  Frame 10
+       ▼
+[Serializer / Normalizer Dispatcher]
+       │  Frame 5
+       ▼
+[Target Service / Entity Method] ──► Fails strict type contract!
+```
+
+### How Frame Inspection Works
+
+1. **Failure-Only Activation (Zero Happy-Path Overhead):** TypePHP **never** inspects the call stack during successful executions. The call stack is only traversed when a type contract violation is detected.
+2. **Upward Frame Scanning:** TypePHP inspects up to `ignore_trace_depth` frames (default: `25`) above the point of failure. If any enclosing class or method in that execution chain declares `@typephp-ignore` or `@typephp-disable`, the error is suppressed.
+3. **$O(1)$ Decision Caching:** Inspected methods and callers are memoized in memory. Repeated calls through the same stack frames resolve in sub-microseconds.
+
+### Customizing Trace Depth
+
+If your application architecture uses exceptionally deep pipelines or recursive handlers, expand the frame search window in `typephp.php`:
+
+```php
+// typephp.php
+return [
+    // Inspect up to 50 frames above the failing check
+    'ignore_trace_depth' => 50,
+];
+```
+
+You can also override this at runtime in specific tests:
+
+```php
+TypePHP::setConfig(['ignore_trace_depth' => 40]);
+```
 
 ---
 
