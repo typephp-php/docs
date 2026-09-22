@@ -37,6 +37,60 @@ registerUser(-5, 'Alice', 'admin');
 
 ---
 
+## Sensitive Parameter Value Masking (PHP 8.2+ `#[SensitiveParameter]`)
+
+PHP 8.2 introduced the native `#[SensitiveParameter]` attribute to protect sensitive values (such as passwords, API keys, secret PINs, and bearer tokens) from leaking into stack traces and error monitoring logs (e.g. Sentry, Datadog, log aggregators).
+
+TypePHP natively detects `#[SensitiveParameter]` on functions, class methods, constructors, promoted properties, and inherited interface contracts.
+
+### Why Value Masking Matters
+
+For standard parameters, TypePHP provides rich value inspection (such as `negative int (-5) given` or `empty string ('') given`). However, for sensitive parameters, printing the raw value would risk exposing credentials in exception messages and log files:
+
+```php
+use SensitiveParameter;
+
+/**
+ * @param non-empty-string $username
+ * @param 'correct_secret' $password
+ */
+function login(
+    string $username,
+    #[SensitiveParameter]
+    string $password
+): bool {
+    return true;
+}
+
+// 1. Normal parameter fails -> Full diagnostic visibility
+login('', 'correct_secret');
+// Throws: TypeError: login(): Argument $username must be of type non-empty-string, empty string ('') given
+
+// 2. Sensitive parameter fails -> Value is safely masked to native type!
+login('admin', 'my_super_secret_password_123');
+// Throws: TypeError: login(): Argument $password must be literal 'correct_secret', string given
+```
+
+### Native PHP Parity (No Information Disclosure)
+
+Rather than injecting explicit redaction markers like `[redacted]` (which can broadcast to attackers or log scrapers that a specific parameter is a secret), TypePHP achieves **100% exact parity with native PHP's `TypeError` behavior**:
+* **`string` parameter:** Formatted as `string given` (raw string value is never printed).
+* **`int` parameter:** Formatted as `int given` (raw number or sign is never printed).
+* **`array` shape parameter:** Formatted as `string given` / `array given` without dumping sensitive payload keys or structure.
+
+### Supported Sensitive Parameter Scopes
+
+TypePHP enforces sensitive value masking across all declaration styles:
+
+| Declaration Scope | Example | Behavior |
+| :--- | :--- | :--- |
+| **Standalone Functions** | `function login(#[SensitiveParameter] string $key)` | Value masked on failure |
+| **Class Methods** | `public function auth(#[SensitiveParameter] string $token)` | Value masked on failure |
+| **Promoted Properties** | `public function __construct(#[SensitiveParameter] public string $secret)` | Value masked on instantiation |
+| **Inherited Interfaces** | `interface Auth { public function verify(#[SensitiveParameter] string $pin); }` | Inherited by implementing classes |
+
+---
+
 ## Native Parameter Nullability & DocBlock Refinement (`?Type` and `Type|null`)
 
 In modern PHP, parameters frequently declare native nullable typehints:
@@ -566,7 +620,7 @@ formatValue(true, 'not_an_int');
 
 ## PHP 8.0+ Attributes Coexistence
 
-TypePHP seamlessly coexists with native PHP 8.0+ Attributes (`#[Route]`, `#[Inject]`, `#[Validate]`). 
+TypePHP seamlessly coexists with native PHP 8.0+ Attributes (`#[Route]`, `#[Inject]`, `#[Validate]`, `#[SensitiveParameter]`). 
 
 You can place your PHPDoc annotations **either above or below** native PHP attributes on properties, methods, or functions. TypePHP's AST engine and PHP's Reflection API process both metadata channels independently without any syntax conflicts:
 
