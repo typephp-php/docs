@@ -1,6 +1,24 @@
 # CLI Commands Reference
 
-TypePHP provides a CLI runner binary (`vendor/bin/typephp`) with colon-style commands (`cache:clear`, `cache:warm`, `cache:rebuild`, `config:init`) for managing AST transformation caches and configuration.
+TypePHP provides a CLI runner binary (`vendor/bin/typephp`) for executing standalone PHP scripts with on-the-fly type checking, alongside colon-style commands (`config:init`, `cache:clear`, `cache:warm`, `cache:rebuild`) for managing AST transformation caches and configuration.
+
+---
+
+## Executing Standalone Scripts (`<script.php>`)
+
+Execute and type-check any standalone PHP script directly from the command line:
+
+```bash
+vendor/bin/typephp script.php
+# or with a nested path:
+vendor/bin/typephp scripts/benchmarks/benchmark.php
+```
+
+### Automatic Path Whitelisting
+
+When you pass a target script directly to the CLI binary, TypePHP automatically includes and type-checks that file so **even if it is not registered in `typephp.php` or falls outside your configured `include` paths**.
+
+Any secondary files required or included by the target script will continue to respect your project's configured `include` and `exclude` paths.
 
 ---
 
@@ -136,4 +154,5 @@ vendor/bin/typephp help
     vendor/bin/typephp config:init
     vendor/bin/typephp index.php
     vendor/bin/typephp cache:rebuild
+```
 ```

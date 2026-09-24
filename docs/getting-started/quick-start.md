@@ -46,13 +46,21 @@ TypePHP is **not a replacement** for static analysis tools like PHPStan, Psalm, 
 
 ## Execution & Framework Entry Points
 
-Because TypePHP automatically integrates with Composer's autoloader (`vendor/autoload.php`), you don't always need to use the custom CLI runner.
+Because TypePHP integrates directly with Composer's autoloader (`vendor/autoload.php`), you don't always need to run code through the custom CLI binary.
 
-If your application executes through an explicit, standard entry point like a web framework's **`public/index.php`**, Laravel's **`artisan`** console, or test runners like **`vendor/bin/pest`** and **`phpunit`**, TypePHP boots naturally out of the box. 
+### 1. Frameworks, Consoles & Test Runners
+If your application executes through a standard entry point—such as a web framework's **`public/index.php`**, Laravel's **`artisan`** console, or test runners like **`pest`** and **`phpunit`**—TypePHP boots automatically out of the box.
 
-Once booted, TypePHP transparently intercepts, transforms, and enforces types on any PHP file that is whitelisted in your `typephp.php` configuration file (`include` paths).
+In this mode, TypePHP transparently intercepts, transforms, and enforces types on any PHP file matching the `include` paths defined in your `typephp.php` configuration file.
 
-*(For standalone single-file scripts without an autoloader, you can still use `vendor/bin/typephp index.php` to run them with type checking enabled).*
+### 2. Standalone Scripts (`vendor/bin/typephp <script.php>`)
+For standalone scripts, benchmarks, or one-off files executed directly from the terminal, run them using the TypePHP CLI binary:
+
+```bash
+vendor/bin/typephp script.php
+```
+
+When invoked this way, the CLI runner automatically type-checks the specified file so **even if it is not registered in `typephp.php` or falls outside your configured `include` paths**. Any secondary dependencies required or included by the script will continue to respect your project's configured `include` and `exclude` paths.
 
 ---
 
