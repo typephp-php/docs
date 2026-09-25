@@ -4,14 +4,33 @@ export default defineConfig({
   title: "TypePHP",
   description: "Transparent Runtime Type Enforcement for PHP.",
   base: '/docs/',
+  
+  head: [
+    ['script', { src: '/docs/coi-serviceworker.js' }]
+  ],
+
   markdown: {
     math: true
   },
+
+  vite: {
+    worker: {
+      format: 'es',
+    },
+    optimizeDeps: {
+      exclude: ['@php-wasm/universal', '@php-wasm/web-8-5', '@php-wasm/web']
+    },
+    build: {
+      target: 'esnext'
+    }
+  },
+
   themeConfig: {
     siteTitle: "TypePHP",
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Documentation', link: '/getting-started/installation' },
+      { text: 'Playground', link: '/playground' },
       { text: 'Generics', link: '/generics/basics-and-bounds' },
       { text: 'Blog', link: '/blog/' },
     ],
