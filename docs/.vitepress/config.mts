@@ -4,7 +4,7 @@ export default defineConfig({
   title: "TypePHP",
   description: "Transparent Runtime Type Enforcement for PHP.",
   base: '/docs/',
-  
+
   head: [
     ['script', { src: '/docs/coi-serviceworker.js' }]
   ],
@@ -14,11 +14,20 @@ export default defineConfig({
   },
 
   vite: {
+    assetsInclude: [/\.dat$/, /\.wasm$/, /\.so$/],
     worker: {
       format: 'es',
     },
     optimizeDeps: {
-      exclude: ['@php-wasm/universal', '@php-wasm/web-8-5', '@php-wasm/web']
+      esbuildOptions: {
+        loader: {
+          '.dat': 'file',
+          '.so': 'file',
+          '.wasm': 'file',
+        },
+      },
+  
+      exclude: ['@php-wasm/web-7-4', '@php-wasm/web-8-0', '@php-wasm/web-8-1', '@php-wasm/web-8-2', '@php-wasm/web-8-3', '@php-wasm/web-8-4']
     },
     build: {
       target: 'esnext'

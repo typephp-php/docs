@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": false,
+    "allowJs": true,
+    "skipLibCheck": true,
+    "noImplicitAny": false,
+    "types": ["vite/client"]
+  },
+  "include": [
+    "docs/**/*",
+    "docs/.vitepress/**/*",
+    "*.d.ts"
+  ]
+}

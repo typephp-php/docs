@@ -1,10 +1,6 @@
-declare module '@php-wasm/web-8-5' {
-  export function getPHPLoaderModule(): Promise<any>;
-}
+/// <reference types="vite/client" />
 
-declare module '*?worker' {
-  const workerConstructor: {
-    new (): Worker;
-  };
-  export default workerConstructor;
+declare module '@php-wasm/web-8-5' {
+  export function getPHPLoaderModule(asyncMode?: 'asyncify' | 'jspi'): Promise<any>;
+  export function getIntlExtensionPath(asyncMode?: 'asyncify' | 'jspi'): Promise<string>;
 }
