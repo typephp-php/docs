@@ -1,5 +1,14 @@
 [
   {
+    "title": "The 'No More DocBlocks' Illusion: Why Native Generics Would Never Kill the Comment Tax in PHP",
+    "url": "/docs/blog/the-no-more-docblocks-illusion",
+    "date": "September 26, 2026",
+    "readTime": "8 min read",
+    "badge": "Deep Dive",
+    "badgeClass": "badge-guide",
+    "excerpt": "Why the dream of native generics eliminating DocBlock comments in PHP is an illusion, the fundamental disconnect between generic classes and untyped arrays, and why the comment tax is here to stay."
+  },
+  {
     "title": "TypePHP v0.8.0: Schema Composition, Conditional Parameters, and Smart Diagnostics",
     "url": "/docs/blog/celebrating-v0.8.0-schema-composition-and-smart-diagnostics",
     "date": "September 15, 2026",
