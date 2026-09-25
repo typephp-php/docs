@@ -1,6 +1,13 @@
 import { PHP, loadPHPRuntime } from '@php-wasm/universal';
 import { getPHPLoaderModule } from '@php-wasm/web-8-5';
 
+self.addEventListener('error', (event) => {
+  console.error('[Worker Error Detail]', event.message, event.filename, event.lineno, event.error);
+});
+self.addEventListener('unhandledrejection', (event) => {
+  console.error('[Worker Rejection Detail]', event.reason);
+});
+
 let php: PHP | null = null;
 let isReady = false;
 
@@ -10,6 +17,13 @@ declare(strict_types=1);
 ini_set('html_errors', '0');
 ini_set('display_errors', '0');
 error_reporting(E_ALL);
+
+if (!defined('STDERR')) {
+    define('STDERR', fopen('php://stderr', 'wb'));
+}
+if (!defined('STDOUT')) {
+    define('STDOUT', fopen('php://stdout', 'wb'));
+}
 
 require_once '/typephp/vendor/autoload.php';
 
@@ -101,7 +115,6 @@ if ($source === false || trim($source) === '') {
     exit(0);
 }
 
-// Automatically prepend <?php if omitted in the playground editor
 if (!str_starts_with(trim($source), '<?php')) {
     $source = "<?php\\n" . $source;
 }
@@ -112,17 +125,17 @@ try {
 } catch (\\PhpParser\\Error $e) {
     $line = $e->getStartLine();
     $rawMsg = $e->getRawMessage();
-    fwrite(STDERR, "Parse error: syntax error, {$rawMsg} in playground.php on line {$line}\\n");
+    file_put_contents('php://stderr', "Parse error: syntax error, {$rawMsg} in playground.php on line {$line}\\n");
     exit(255);
 } catch (\\Throwable $e) {
-    fwrite(STDERR, formatExceptionTrace($e));
+    file_put_contents('php://stderr', formatExceptionTrace($e));
     exit(255);
 }
 
 try {
     require '/workspace/transformed.php';
 } catch (\\Throwable $e) {
-    fwrite(STDERR, formatExceptionTrace($e));
+    file_put_contents('php://stderr', formatExceptionTrace($e));
     exit(255);
 }
 `;
@@ -169,7 +182,7 @@ async function initRuntime(baseUrl: string) {
   try {
     self.postMessage({ type: 'STATUS', message: 'Loading PHP 8.5 WebAssembly engine...' });
 
-    const loaderModule = await getPHPLoaderModule();
+    const loaderModule = await getPHPLoaderModule('asyncify');
     const runtimeId = await loadPHPRuntime(loaderModule);
     php = new PHP(runtimeId);
 
@@ -233,16 +246,20 @@ async function runCode(code: string) {
     const runResult = await php.runStream({
       scriptPath: '/workspace/runner.php',
     });
-    const duration = (performance.now() - startTime).toFixed(1);
 
-    const stdout = await runResult.stdoutText;
-    const stderr = await runResult.stderrText;
+    const [stdout, stderr, exitCode] = await Promise.all([
+      runResult.stdoutText,
+      runResult.stderrText,
+      runResult.exitCode,
+    ]);
+
+    const duration = (performance.now() - startTime).toFixed(1);
 
     self.postMessage({
       type: 'RUN_RESULT',
       stdout,
       stderr,
-      exitCode: runResult.exitCode,
+      exitCode,
       duration,
     });
   } catch (error: any) {

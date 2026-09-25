@@ -15,15 +15,19 @@ if (typeof window === 'undefined') {
                     return response;
                 }
 
+                const hasNoBody = [101, 204, 205, 304].includes(response.status) || response.body === null;
+
                 const newHeaders = new Headers(response.headers);
                 newHeaders.set("Cross-Origin-Embedder-Policy", coepCredentialless ? "credentialless" : "require-corp");
                 newHeaders.set("Cross-Origin-Opener-Policy", "same-origin");
 
-                return new Response(response.body, {
+                return new Response(hasNoBody ? null : response.body, {
                     status: response.status,
                     statusText: response.statusText,
                     headers: newHeaders,
                 });
+            }).catch((err) => {
+                throw err;
             })
         );
     });
