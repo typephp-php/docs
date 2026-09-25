@@ -73,7 +73,7 @@ Let’s pretend native generics already exist and look at something closer to re
 class Collection<TKey : array-key, TValue> implements ArrayAccess, Countable, IteratorAggregate
 {
     /**
-     * Fuck, Still required, because native PHP arrays cannot be typed as array<TKey, TValue>.
+     * Still required, because native PHP arrays cannot be typed as array<TKey, TValue>.
      *
      * @var array<TKey, TValue>
      */
@@ -90,7 +90,7 @@ class Collection<TKey : array-key, TValue> implements ArrayAccess, Countable, It
     }
 
     /**
-     * Fuck this.. Still required, because native PHP has no syntax for typing closure parameters or returns.
+     * Still required, because native PHP has no syntax for typing closure parameters or returns.
      *
      * @template TMapValue
      * @param Closure(TValue, TKey): TMapValue $callback
@@ -102,7 +102,7 @@ class Collection<TKey : array-key, TValue> implements ArrayAccess, Countable, It
     }
 
     /**
-     * Shit,, Still required, because callable predicates cannot declare parameter types natively.
+     * Still required, because callable predicates cannot declare parameter types natively.
      *
      * @param callable(TValue): bool $predicate
      * @return static<TKey, TValue>
