@@ -189,8 +189,8 @@ async function initRuntime(baseUrl: string) {
     self.postMessage({ type: 'STATUS', message: 'Mounting TypePHP virtual filesystem...' });
 
     const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/';
-    const bundleUrl = `${cleanBaseUrl}wasm/typephp-runtime.json`;
-    const response = await fetch(bundleUrl);
+    const bundleUrl = `${cleanBaseUrl}wasm/typephp-runtime.json?t=${Date.now()}`;
+    const response = await fetch(bundleUrl, { cache: 'no-cache' });
 
     if (!response.ok) {
       throw new Error(`Failed to load runtime bundle: ${response.statusText} (${bundleUrl})`);
