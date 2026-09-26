@@ -46,6 +46,10 @@ const baseTheme = EditorView.theme({
   '.cm-phpdoc-generic-type, .cm-phpdoc-generic-type *': { color: '#56b6c2 !important', fontStyle: 'italic !important', fontWeight: '600 !important' },
   '.cm-phpdoc-variance, .cm-phpdoc-variance *': { color: '#d19a66 !important', fontStyle: 'italic !important' },
   '.cm-phpdoc-var, .cm-phpdoc-var *': { color: '#61afef !important', fontWeight: '600 !important', fontStyle: 'normal !important' },
+  '.cm-phpdoc-shape-key, .cm-phpdoc-shape-key *': { color: '#e5c07b !important' },
+  '.cm-php-class, .cm-php-class *': { color: '#e5c07b !important', fontWeight: '600 !important' },
+  '.cm-php-method, .cm-php-method *': { color: '#61afef !important' },
+  '.cm-php-func, .cm-php-func *': { color: '#61afef !important' },
 });
 
 onMounted(() => {
@@ -190,6 +194,18 @@ onUnmounted(() => {
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-var),
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-var) * {
   color: #2563eb !important;
+}
+
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-php-class),
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-php-class) * {
+  color: #b45309 !important;
+}
+
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-php-method),
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-php-method) *,
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-php-func),
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-php-func) * {
+  color: #0284c7 !important;
 }
 
 @media (max-width: 768px) {

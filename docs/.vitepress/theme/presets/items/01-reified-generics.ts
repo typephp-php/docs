@@ -2,9 +2,9 @@ import type { PlaygroundPreset } from '../types';
 
 export default {
   id: 'reified-generics',
-  name: 'Runtime Reified Generics (\\WeakMap State)',
+  name: 'Runtime Reified Generics',
   badge: 'Generics',
-  order: 2,
+  order: 1,
   code: `<?php
 
 declare(strict_types=1);
@@ -20,7 +20,6 @@ class Product {
 }
 
 /**
- * Generic container class
  * @template T
  */
 class Collection {
@@ -35,19 +34,16 @@ class Collection {
     }
 }
 
-// 1. Prebind template T = User to this specific instance in memory
 /** @var Collection<User> $users */
 $users = new Collection();
 
-// 2. Adding a User succeeds
+// 1. Valid addition
 $users->add(new User('Alice'));
-echo "Successfully added User: {$users->items[0]->name}\\n";
+echo "✓ Added User: {$users->items[0]->name}\\n";
+echo "✓ Reified Memory Type: " . TypePHP::getGenericType($users) . "\\n\\n";
 
-// 3. Inspect reified generic type in live memory via TypePHP API!
-echo "Reified Generic Type: " . TypePHP::getGenericType($users) . "\\n\\n";
-
-// 4. Adding a Product throws TypeError at runtime!
-echo "Attempting to add a Product into Collection<User>...\\n";
+// 2. Runtime violation: Product violates Collection<User>
+echo "Attempting to add Product into Collection<User>...\\n";
 $users->add(new Product('SKU-100'));
 `
 } satisfies PlaygroundPreset;

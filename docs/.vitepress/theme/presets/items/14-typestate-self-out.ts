@@ -4,7 +4,7 @@ export default {
   id: 'typestate-self-out',
   name: 'State Machines with Typestates (@self-out)',
   badge: 'Typestates',
-  order: 7,
+  order: 14,
   code: `<?php
 
 declare(strict_types=1);
@@ -12,29 +12,25 @@ declare(strict_types=1);
 use TypePHP\\TypePHP;
 
 /**
- * Finite State Machine tracking authentication state
  * @template TState of 'unauthenticated'|'authenticated'
  */
 class Session {
     /**
-     * Mutates generic state to 'authenticated' in memory!
      * @self-out self<'authenticated'>
      */
     public function login(): void {}
 
     /**
-     * Mutates generic state back to 'unauthenticated'
      * @self-out self<'unauthenticated'>
      */
     public function logout(): void {}
 }
 
 /**
- * Function strictly requiring an authenticated session
  * @param Session<'authenticated'> $session
  */
 function viewSecretDashboard(Session $session): void {
-    echo "Access GRANTED to secret dashboard!\\n";
+    echo "✓ Access GRANTED to secret dashboard!\\n";
 }
 
 /** @var Session<'unauthenticated'> $session */
@@ -45,7 +41,7 @@ echo "Initial State: " . TypePHP::getGenericType($session) . "\\n";
 $session->login();
 echo "State after login(): " . TypePHP::getGenericType($session) . "\\n";
 
-// 2. Now allowed!
+// 2. Now permitted
 viewSecretDashboard($session);
 
 // 3. Logout transitions state back

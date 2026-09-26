@@ -8,6 +8,9 @@ const bracketDeco = Decoration.mark({ class: 'cm-phpdoc-generic-bracket' });
 const varianceDeco = Decoration.mark({ class: 'cm-phpdoc-variance' });
 const varDeco = Decoration.mark({ class: 'cm-phpdoc-var' });
 const shapeKeyDeco = Decoration.mark({ class: 'cm-phpdoc-shape-key' });
+const classDeco = Decoration.mark({ class: 'cm-php-class' });
+const methodDeco = Decoration.mark({ class: 'cm-php-method' });
+const funcDeco = Decoration.mark({ class: 'cm-php-func' });
 
 interface LineToken {
   from: number;
@@ -18,6 +21,133 @@ interface LineToken {
 const TYPE_WORDS_REGEX = /\b(int|string|bool|boolean|float|double|positive-int|negative-int|non-positive-int|non-negative-int|non-zero-int|unsigned-int|positive-float|negative-float|non-empty-string|numeric-string|lowercase-string|uppercase-string|non-empty-uppercase-string|class-string|interface-string|trait-string|enum-string|callable-string|literal-string|truthy-string|array-key|array|list|non-empty-array|non-empty-list|object|callable|pure-callable|iterable|resource|null|true|false|mixed|void|never|self|static|\$this|[A-Z][a-zA-Z0-9_]*)\b/g;
 
 const TAG_REGEX = /@(phpstan-|psalm-)?(param(?:-out)?|return|var|template(?:-covariant|-contravariant)?|self-out|this-out|property(?:-read|-write)?|method|extends|implements|use|type|import-type|throws)\b/;
+
+const PHP_KEYWORDS = new Set([
+  'if', 'elseif', 'else', 'while', 'for', 'foreach', 'as', 'switch', 'case', 'break',
+  'continue', 'return', 'throw', 'try', 'catch', 'finally', 'declare', 'function', 'fn',
+  'class', 'interface', 'trait', 'enum', 'extends', 'implements', 'use', 'new', 'clone',
+  'echo', 'print', 'include', 'include_once', 'require', 'require_once', 'isset', 'empty',
+  'unset', 'eval', 'exit', 'die', 'match', 'yield', 'array', 'list'
+]);
+
+function getIgnoredCodeRanges(text: string): Array<{ from: number; to: number }> {
+  const ranges: Array<{ from: number; to: number }> = [];
+  let i = 0;
+  const len = text.length;
+
+  while (i < len) {
+    const ch = text[i];
+    const next = text[i + 1];
+
+    if ((ch === '/' && next === '/') || ch === '#') {
+      ranges.push({ from: i, to: len });
+      break;
+    }
+
+    if (ch === "'" || ch === '"') {
+      const quote = ch;
+      const start = i;
+      i++;
+      while (i < len) {
+        if (text[i] === '\\') {
+          i += 2;
+          continue;
+        }
+        if (text[i] === quote) {
+          i++;
+          break;
+        }
+        i++;
+      }
+      ranges.push({ from: start, to: i });
+      continue;
+    }
+
+    i++;
+  }
+
+  return ranges;
+}
+
+function isInsideIgnored(from: number, to: number, ranges: Array<{ from: number; to: number }>): boolean {
+  return ranges.some((r) => from >= r.from && to <= r.to);
+}
+
+function tokenizePhpCode(lineFrom: number, text: string, lineTokens: LineToken[]) {
+  const ignored = getIgnoredCodeRanges(text);
+
+  const methodCallRegex = /(?:->|\?->)\s*([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)\s*(?=\(|\.\.\.)/g;
+  let match: RegExpExecArray | null;
+  while ((match = methodCallRegex.exec(text)) !== null) {
+    const name = match[1];
+    const from = lineFrom + match.index + match[0].indexOf(name);
+    const to = from + name.length;
+    if (!isInsideIgnored(from - lineFrom, to - lineFrom, ignored)) {
+      lineTokens.push({ from, to, deco: methodDeco });
+    }
+  }
+
+  const staticMethodRegex = /::\s*([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)\s*(?=\(|\.\.\.)/g;
+  while ((match = staticMethodRegex.exec(text)) !== null) {
+    const name = match[1];
+    const from = lineFrom + match.index + match[0].indexOf(name);
+    const to = from + name.length;
+    if (!isInsideIgnored(from - lineFrom, to - lineFrom, ignored)) {
+      lineTokens.push({ from, to, deco: methodDeco });
+    }
+  }
+
+  const classRegex = /\b([A-Z][a-zA-Z0-9_]*|stdClass)\b/g;
+  while ((match = classRegex.exec(text)) !== null) {
+    const word = match[1];
+    const startPos = match.index;
+    const from = lineFrom + startPos;
+    const to = from + word.length;
+
+    if (isInsideIgnored(startPos, startPos + word.length, ignored)) {
+      continue;
+    }
+
+    if (word.length > 1 && word === word.toUpperCase() && word.includes('_')) {
+      continue;
+    }
+
+    const prevChar = startPos > 0 ? text[startPos - 1] : '';
+    const twoCharsBefore = startPos > 1 ? text.slice(startPos - 2, startPos) : '';
+    if (twoCharsBefore === '->' || twoCharsBefore === '::' || prevChar === '$') {
+      continue;
+    }
+
+    lineTokens.push({ from, to, deco: classDeco });
+  }
+
+  const funcCallRegex = /\b([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)\s*(?=\(|\.\.\.)/g;
+  while ((match = funcCallRegex.exec(text)) !== null) {
+    const fnName = match[1];
+    const startPos = match.index;
+    const from = lineFrom + startPos;
+    const to = from + fnName.length;
+
+    if (isInsideIgnored(startPos, startPos + fnName.length, ignored)) {
+      continue;
+    }
+
+    if (PHP_KEYWORDS.has(fnName)) {
+      continue;
+    }
+
+    const twoCharsBefore = startPos > 1 ? text.slice(startPos - 2, startPos) : '';
+    const threeCharsBefore = startPos > 2 ? text.slice(startPos - 3, startPos) : '';
+    if (twoCharsBefore === '->' || twoCharsBefore === '::' || threeCharsBefore === '?->') {
+      continue;
+    }
+
+    const isAlreadyClass = lineTokens.some((t) => t.from === from && t.to === to && t.deco === classDeco);
+    if (!isAlreadyClass) {
+      lineTokens.push({ from, to, deco: funcDeco });
+    }
+  }
+}
 
 function tokenizeTypeZone(startOffset: number, typeText: string, lineTokens: LineToken[]) {
   const genericRegex = /<([^>]+)>/g;
@@ -30,7 +160,6 @@ function tokenizeTypeZone(startOffset: number, typeText: string, lineTokens: Lin
     const inner = match[1];
 
     genericRanges.push({ from: openPos, to: closePos + 1 });
-
     lineTokens.push({ from: openPos, to: openPos + 1, deco: bracketDeco });
     lineTokens.push({ from: closePos, to: closePos + 1, deco: bracketDeco });
 
@@ -75,17 +204,12 @@ function tokenizeTypeZone(startOffset: number, typeText: string, lineTokens: Lin
 
     const isInsideGeneric = genericRanges.some((r) => matchFrom >= r.from && matchTo <= r.to);
     if (!isInsideGeneric) {
-      lineTokens.push({
-        from: matchFrom,
-        to: matchTo,
-        deco: typeDeco,
-      });
+      lineTokens.push({ from: matchFrom, to: matchTo, deco: typeDeco });
     }
   }
 }
 
-function processLine(lineFrom: number, text: string, builder: RangeSetBuilder<Decoration>, state: { bracketDepth: number }) {
-  const lineTokens: LineToken[] = [];
+function processDocblockLine(lineFrom: number, text: string, lineTokens: LineToken[], state: { bracketDepth: number }) {
   const tagMatch = TAG_REGEX.exec(text);
 
   if (tagMatch) {
@@ -135,16 +259,6 @@ function processLine(lineFrom: number, text: string, builder: RangeSetBuilder<De
     if (ch === '{' || ch === '<') state.bracketDepth++;
     if (ch === '}' || ch === '>') state.bracketDepth = Math.max(0, state.bracketDepth - 1);
   }
-
-  lineTokens.sort((a, b) => a.from - b.from || a.to - b.to);
-
-  let lastTo = 0;
-  for (const token of lineTokens) {
-    if (token.from >= lastTo && token.to > token.from) {
-      builder.add(token.from, token.to, token.deco);
-      lastTo = token.to;
-    }
-  }
 }
 
 function buildDecorations(view: EditorView): DecorationSet {
@@ -157,18 +271,31 @@ function buildDecorations(view: EditorView): DecorationSet {
     const line = doc.line(i);
     const text = line.text;
     const trimmed = text.trim();
+    const lineTokens: LineToken[] = [];
 
     if (trimmed.startsWith('/**')) {
       inDocblock = true;
     }
 
     if (inDocblock || trimmed.startsWith('*') || text.includes('@')) {
-      processLine(line.from, text, builder, state);
+      processDocblockLine(line.from, text, lineTokens, state);
+    } else {
+      tokenizePhpCode(line.from, text, lineTokens);
     }
 
     if (trimmed.includes('*/')) {
       inDocblock = false;
       state.bracketDepth = 0;
+    }
+
+    lineTokens.sort((a, b) => a.from - b.from || a.to - b.to);
+
+    let lastTo = 0;
+    for (const token of lineTokens) {
+      if (token.from >= lastTo && token.to > token.from) {
+        builder.add(token.from, token.to, token.deco);
+        lastTo = token.to;
+      }
     }
   }
 

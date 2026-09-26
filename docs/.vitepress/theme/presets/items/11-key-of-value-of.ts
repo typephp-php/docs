@@ -4,7 +4,7 @@ export default {
   id: 'key-of-value-of',
   name: 'key-of and value-of Extractions',
   badge: 'Types',
-  order: 6,
+  order: 11,
   code: `<?php
 
 declare(strict_types=1);
@@ -23,18 +23,18 @@ class DatabaseMap {
 }
 
 /**
- * @param key-of<TransactionStatus> $statusName     Requires enum case name
- * @param value-of<TransactionStatus> $statusValue Requires enum backing value
- * @param key-of<DatabaseMap::DRIVERS> $driverKey  Requires constant array key
+ * @param key-of<TransactionStatus> $statusName
+ * @param value-of<TransactionStatus> $statusValue
+ * @param key-of<DatabaseMap::DRIVERS> $driverKey
  */
 function configurePayment(string $statusName, string $statusValue, string $driverKey): void {
-    echo "Valid config: Status={$statusName} ({$statusValue}), Driver={$driverKey}\\n";
+    echo "✓ Configured: Status={$statusName} ({$statusValue}), Driver={$driverKey}\\n";
 }
 
-// Valid call
+// 1. Valid call
 configurePayment('COMPLETED', 'completed', 'mysql');
 
-// Passing invalid driver key triggers TypeError!
+// 2. Passing invalid driver key triggers TypeError
 echo "\\nPassing invalid driver key 'sqlite'...\\n";
 configurePayment('COMPLETED', 'completed', 'sqlite');
 `
