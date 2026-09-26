@@ -59,7 +59,6 @@ function formatExceptionTrace(\\Throwable $e): string {
         $frameFile = isset($frame['file']) ? sanitizePath($frame['file']) : '';
         $frameLine = isset($frame['line']) ? "({$frame['line']})" : '';
 
-        // Exclude internal runner and TypePHP engine files
         if (
             $frameFile === '' ||
             str_contains($frameFile, 'runner.php') ||
@@ -102,12 +101,26 @@ function formatExceptionTrace(\\Throwable $e): string {
     return $output;
 }
 
+$userConfig = [];
+if (file_exists('/workspace/config.json')) {
+    $raw = file_get_contents('/workspace/config.json');
+    if ($raw !== false) {
+        $decoded = json_decode($raw, true);
+        if (is_array($decoded)) {
+            $userConfig = $decoded;
+        }
+    }
+}
+
 \\TypePHP\\Internal\\Util\\Config::set([
     'cache' => false,
     'include' => ['/workspace/playground.php', '/workspace/transformed.php'],
     'exclude' => ['/typephp/**'],
-    'strict_return_generic_invariance' => true,
     'vendor_boundary_only' => false,
+    'array_validation' => $userConfig['arrayValidation'] ?? 'full',
+    'strict_return_generic_invariance' => (bool) ($userConfig['strictReturnGenericInvariance'] ?? true),
+    'respect_native_nullability' => (bool) ($userConfig['respectNativeNullability'] ?? true),
+    'respect_ignore_tags' => (bool) ($userConfig['respectIgnoreTags'] ?? true),
 ]);
 
 $source = file_get_contents('/workspace/playground.php');
@@ -148,6 +161,22 @@ ini_set('display_errors', '0');
 
 require_once '/typephp/vendor/autoload.php';
 
+$userConfig = [];
+if (file_exists('/workspace/config.json')) {
+    $raw = file_get_contents('/workspace/config.json');
+    if ($raw !== false) {
+        $decoded = json_decode($raw, true);
+        if (is_array($decoded)) {
+            $userConfig = $decoded;
+        }
+    }
+}
+
+\\TypePHP\\Internal\\Util\\Config::set([
+    'cache' => false,
+    'respect_ignore_tags' => (bool) ($userConfig['respectIgnoreTags'] ?? true),
+]);
+
 $source = file_get_contents('/workspace/playground.php');
 if ($source === false || trim($source) === '') {
     exit(0);
@@ -173,7 +202,7 @@ function makeDirectory(targetPhp: PHP, dirPath: string) {
     try {
       targetPhp.mkdir(current);
     } catch {
-      // Directory already exists, ignore
+      // Directory already exists
     }
   }
 }
@@ -197,7 +226,6 @@ async function initRuntime(baseUrl: string) {
     }
 
     const vfs: Record<string, string> = await response.json();
-
     const createdDirs = new Set<string>();
 
     for (const [filePath, content] of Object.entries(vfs)) {
@@ -227,7 +255,7 @@ async function initRuntime(baseUrl: string) {
   }
 }
 
-async function runCode(code: string) {
+async function runCode(code: string, config?: any) {
   if (!php || !isReady) {
     self.postMessage({
       type: 'RUN_RESULT',
@@ -240,6 +268,9 @@ async function runCode(code: string) {
   }
 
   try {
+    if (config) {
+      php.writeFile('/workspace/config.json', JSON.stringify(config));
+    }
     php.writeFile('/workspace/playground.php', code);
 
     const startTime = performance.now();
@@ -273,10 +304,13 @@ async function runCode(code: string) {
   }
 }
 
-async function transformCode(code: string) {
+async function transformCode(code: string, config?: any) {
   if (!php || !isReady) return;
 
   try {
+    if (config) {
+      php.writeFile('/workspace/config.json', JSON.stringify(config));
+    }
     php.writeFile('/workspace/playground.php', code);
 
     const runResult = await php.runStream({
@@ -298,17 +332,17 @@ async function transformCode(code: string) {
 }
 
 self.onmessage = async (event: MessageEvent) => {
-  const { action, code, baseUrl } = event.data;
+  const { action, code, baseUrl, config } = event.data;
 
   switch (action) {
     case 'INIT':
       await initRuntime(baseUrl || '/docs/');
       break;
     case 'RUN':
-      await runCode(code || '');
+      await runCode(code || '', config);
       break;
     case 'TRANSFORM':
-      await transformCode(code || '');
+      await transformCode(code || '', config);
       break;
     default:
       console.warn('[Playground Worker] Unknown action:', action);
