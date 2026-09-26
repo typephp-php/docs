@@ -1,8 +1,16 @@
 <template>
-  <div class="playground-root" :style="{ '--playground-font-size': `${fontSize}px` }">
+  <div
+    class="playground-root"
+    :style="{ '--playground-font-size': `${fontSize}px` }"
+  >
+    <!-- Top Action Toolbar -->
     <header class="playground-toolbar">
       <div class="toolbar-left">
-        <select v-model="selectedPresetId" class="preset-select" @change="onSelectPreset">
+        <select
+          v-model="selectedPresetId"
+          class="preset-select"
+          @change="onSelectPreset"
+        >
           <option v-for="preset in presets" :key="preset.id" :value="preset.id">
             [{{ preset.badge }}] {{ preset.name }}
           </option>
@@ -10,65 +18,106 @@
       </div>
 
       <div class="toolbar-center">
-        <button class="run-btn" :disabled="!isReady || isRunning" @click="runCode">
-          <svg class="play-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+        <!-- Run Button -->
+        <button
+          class="run-btn"
+          :disabled="!isReady || isRunning"
+          @click="runCode"
+        >
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
             <path d="M8 5v14l11-7z" />
           </svg>
-          {{ isRunning ? 'Running...' : 'Run Code' }}
+          <span>{{ isRunning ? 'Running...' : 'Run' }}</span>
           <span class="key-hint">Ctrl+Enter</span>
         </button>
 
+        <!-- View Mode Switcher (Code vs X-Ray) -->
         <div class="view-mode-toggle">
-          <button :class="['mode-btn', { active: viewMode === 'source' }]" @click="viewMode = 'source'">
-            Source Code
+          <button
+            :class="['mode-btn', { active: viewMode === 'source' }]"
+            @click="viewMode = 'source'"
+          >
+            Source
           </button>
-          <button :class="['mode-btn', { active: viewMode === 'xray' }]"
-            title="Inspect TypePHP AST injected checks in-place with zero line-drift" @click="viewMode = 'xray'">
-            X-Ray View
+          <button
+            :class="['mode-btn', { active: viewMode === 'xray' }]"
+            title="Inspect TypePHP AST injected checks in-place with zero line-drift"
+            @click="viewMode = 'xray'"
+          >
+            X-Ray
           </button>
         </div>
       </div>
 
       <div class="toolbar-right">
-        <div class="font-zoom-widget" title="Adjust code and terminal text size">
-          <button class="zoom-btn" :disabled="fontSize <= 11" title="Decrease font size" @click="adjustFontSize(-1)">
+        <!-- Font Zoom Widget -->
+        <div class="font-zoom-widget" title="Adjust text size">
+          <button
+            class="zoom-btn"
+            :disabled="fontSize <= 11"
+            title="Decrease font size"
+            @click="adjustFontSize(-1)"
+          >
             A-
           </button>
           <span class="font-size-label">{{ fontSize }}px</span>
-          <button class="zoom-btn" :disabled="fontSize >= 20" title="Increase font size" @click="adjustFontSize(1)">
+          <button
+            class="zoom-btn"
+            :disabled="fontSize >= 20"
+            title="Increase font size"
+            @click="adjustFontSize(1)"
+          >
             A+
           </button>
         </div>
 
-        <button class="action-btn" title="Copy Editor Code" @click="copyEditorCode">
-          {{ copiedCode ? 'Copied Code!' : 'Copy Code' }}
+        <button class="action-btn" title="Copy code to clipboard" @click="copyEditorCode">
+          {{ copiedCode ? 'Copied' : 'Copy Code' }}
         </button>
 
-        <button class="action-btn" title="Share Snippet URL" @click="shareSnippet">
-          {{ copiedLink ? 'Copied Link!' : 'Share' }}
+        <button class="action-btn" title="Share URL" @click="shareSnippet">
+          {{ copiedLink ? 'Copied' : 'Share' }}
         </button>
 
         <span class="engine-badge" :title="workerStatus">
           <span :class="['status-dot', { active: isReady, loading: !isReady && !initError, error: initError }]"></span>
-          PHP 8.5 WASM
+          PHP 8.5
         </span>
       </div>
     </header>
 
-    <main class="playground-workspace">
+    <!-- Main Workspace -->
+    <main :class="['playground-workspace', `layout-${effectivePosition}`]">
+      <!-- Code Editor -->
       <div class="editor-pane">
-        <PlaygroundEditor :model-value="viewMode === 'source' ? code : transformedCode" :read-only="viewMode === 'xray'"
-          :font-size="fontSize" @update:model-value="onCodeUpdate" @run="runCode" />
+        <PlaygroundEditor
+          :model-value="viewMode === 'source' ? code : transformedCode"
+          :read-only="viewMode === 'xray'"
+          :font-size="fontSize"
+          @update:model-value="onCodeUpdate"
+          @run="runCode"
+        />
       </div>
 
-      <PlaygroundOutput ref="outputDrawerRef" :stdout="stdout" :stderr="stderr" :exit-code="exitCode"
-        :duration="duration" :status-message="workerStatus" :is-running="isRunning" @clear="clearConsole" />
+      <!-- Console Drawer / Sidebar -->
+      <PlaygroundOutput
+        ref="outputDrawerRef"
+        :position="effectivePosition"
+        :stdout="stdout"
+        :stderr="stderr"
+        :exit-code="exitCode"
+        :duration="duration"
+        :status-message="workerStatus"
+        :is-running="isRunning"
+        @clear="clearConsole"
+        @toggle-position="toggleLayoutPosition"
+      />
     </main>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useData } from 'vitepress';
 import LZString from 'lz-string';
 import { PLAYGROUND_PRESETS } from '../presets';
@@ -80,6 +129,8 @@ const selectedPresetId = ref<string>(presets[0].id);
 const code = ref<string>(presets[0].code);
 
 const viewMode = ref<'source' | 'xray'>('source');
+const layoutPosition = ref<'bottom' | 'side'>('bottom');
+const windowWidth = ref<number>(typeof window !== 'undefined' ? window.innerWidth : 1200);
 const outputDrawerRef = ref<InstanceType<typeof PlaygroundOutput> | null>(null);
 
 const fontSize = ref<number>(13.5);
@@ -101,7 +152,20 @@ const copiedCode = ref<boolean>(false);
 const { site } = useData();
 let worker: Worker | null = null;
 
+const effectivePosition = computed<'bottom' | 'side'>(() => {
+  if (windowWidth.value < 960) {
+    return 'bottom';
+  }
+  return layoutPosition.value;
+});
+
+function handleWindowResize() {
+  windowWidth.value = window.innerWidth;
+}
+
 onMounted(() => {
+  window.addEventListener('resize', handleWindowResize);
+
   try {
     const savedSize = localStorage.getItem('typephp_playground_fontsize');
     if (savedSize) {
@@ -110,7 +174,12 @@ onMounted(() => {
         fontSize.value = parsed;
       }
     }
-  } catch { }
+
+    const savedPos = localStorage.getItem('typephp_playground_dock');
+    if (savedPos === 'side' || savedPos === 'bottom') {
+      layoutPosition.value = savedPos;
+    }
+  } catch {}
 
   const hash = window.location.hash;
   if (hash.startsWith('#code=')) {
@@ -186,12 +255,20 @@ onMounted(() => {
   }
 });
 
+function toggleLayoutPosition() {
+  const newPos = layoutPosition.value === 'bottom' ? 'side' : 'bottom';
+  layoutPosition.value = newPos;
+  try {
+    localStorage.setItem('typephp_playground_dock', newPos);
+  } catch {}
+}
+
 function adjustFontSize(delta: number) {
   const newSize = Math.max(11, Math.min(20, fontSize.value + delta));
   fontSize.value = newSize;
   try {
     localStorage.setItem('typephp_playground_fontsize', newSize.toString());
-  } catch { }
+  } catch {}
 }
 
 function onCodeUpdate(newCode: string) {
@@ -215,7 +292,7 @@ function runCode() {
 
   isRunning.value = true;
   clearConsole();
-  
+
   outputDrawerRef.value?.expand();
 
   activeWorker.postMessage({ action: 'RUN', code: code.value });
@@ -258,6 +335,9 @@ function shareSnippet() {
 }
 
 onUnmounted(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('resize', handleWindowResize);
+  }
   if (worker) {
     worker.terminate();
     worker = null;
@@ -281,53 +361,48 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 16px;
+  padding: 6px 14px;
   background-color: var(--vp-c-bg-soft);
   border-bottom: 1px solid var(--vp-c-divider);
-  gap: 12px;
+  gap: 10px;
 }
 
-.toolbar-left {
+.toolbar-left, .toolbar-center, .toolbar-right {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .preset-select {
-  padding: 6px 10px;
-  font-size: 13px;
+  padding: 4px 8px;
+  font-size: 12px;
   font-weight: 500;
-  border-radius: 6px;
+  border-radius: 5px;
   border: 1px solid var(--vp-c-divider);
   background: var(--vp-c-bg);
   color: var(--vp-c-text-1);
   cursor: pointer;
   outline: none;
+  max-width: 260px;
 }
 
 .preset-select:hover {
   border-color: var(--vp-c-brand-1);
 }
 
-.toolbar-center {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
 .run-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  font-size: 13px;
+  gap: 5px;
+  padding: 4px 12px;
+  font-size: 12px;
   font-weight: 600;
   background-color: var(--vp-c-brand-1);
   color: #fff;
   border: none;
-  border-radius: 6px;
+  border-radius: 5px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .run-btn:hover:not(:disabled) {
@@ -340,8 +415,8 @@ onUnmounted(() => {
 }
 
 .key-hint {
-  font-size: 10.5px;
-  padding: 1px 5px;
+  font-size: 10px;
+  padding: 1px 4px;
   background: rgba(0, 0, 0, 0.2);
   border-radius: 3px;
   opacity: 0.85;
@@ -350,20 +425,20 @@ onUnmounted(() => {
 .view-mode-toggle {
   display: inline-flex;
   border: 1px solid var(--vp-c-divider);
-  border-radius: 6px;
+  border-radius: 5px;
   overflow: hidden;
   background: var(--vp-c-bg);
 }
 
 .mode-btn {
-  padding: 5px 12px;
-  font-size: 12.5px;
+  padding: 4px 10px;
+  font-size: 11.5px;
   font-weight: 600;
   border: none;
   background: transparent;
   color: var(--vp-c-text-2);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .mode-btn:hover {
@@ -375,31 +450,23 @@ onUnmounted(() => {
   color: var(--vp-c-brand-1);
 }
 
-.toolbar-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-/* Font Zoom Widget (A- / A+) */
 .font-zoom-widget {
   display: inline-flex;
   align-items: center;
   background: var(--vp-c-bg);
   border: 1px solid var(--vp-c-divider);
-  border-radius: 6px;
+  border-radius: 5px;
   overflow: hidden;
 }
 
 .zoom-btn {
-  padding: 3px 8px;
-  font-size: 11px;
+  padding: 2px 6px;
+  font-size: 10.5px;
   font-weight: 700;
   background: transparent;
   border: none;
   color: var(--vp-c-text-2);
   cursor: pointer;
-  transition: all 0.15s ease;
 }
 
 .zoom-btn:hover:not(:disabled) {
@@ -413,7 +480,7 @@ onUnmounted(() => {
 }
 
 .font-size-label {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
   color: var(--vp-c-text-2);
   padding: 0 4px;
@@ -422,15 +489,15 @@ onUnmounted(() => {
 }
 
 .action-btn {
-  padding: 4px 10px;
-  font-size: 12.5px;
+  padding: 3px 8px;
+  font-size: 11.5px;
   font-weight: 600;
   border: 1px solid var(--vp-c-divider);
   background: var(--vp-c-bg);
   color: var(--vp-c-text-1);
-  border-radius: 6px;
+  border-radius: 5px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .action-btn:hover {
@@ -441,54 +508,93 @@ onUnmounted(() => {
 .engine-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 5px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--vp-c-text-2);
   background: var(--vp-c-bg-mute);
-  padding: 3px 8px;
-  border-radius: 12px;
+  padding: 2px 6px;
+  border-radius: 10px;
   border: 1px solid var(--vp-c-divider);
+  white-space: nowrap;
 }
 
 .status-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: #9ca3af;
 }
 
-.status-dot.active {
-  background: #10b981;
-}
-
-.status-dot.loading {
-  background: #f59e0b;
-  animation: pulse 1s infinite;
-}
-
-.status-dot.error {
-  background: #ef4444;
-}
+.status-dot.active { background: #10b981; }
+.status-dot.loading { background: #f59e0b; animation: pulse 1s infinite; }
+.status-dot.error { background: #ef4444; }
 
 .playground-workspace {
   display: flex;
-  flex-direction: column;
   flex: 1;
-  height: calc(100% - 49px);
+  height: calc(100% - 45px);
+  position: relative;
   overflow: hidden;
 }
 
-.editor-pane {
+.playground-workspace.layout-bottom {
+  flex-direction: column;
+}
+
+.playground-workspace.layout-bottom .editor-pane {
   flex: 1;
   min-height: 0;
   width: 100%;
 }
 
-@media (max-width: 960px) {
+.playground-workspace.layout-side {
+  flex-direction: row;
+}
 
-  .key-hint,
-  .collapse-hint {
+.playground-workspace.layout-side .editor-pane {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+/* Tablet & Mobile Layout (< 960px) */
+@media (max-width: 960px) {
+  .playground-toolbar {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 10px;
+  }
+
+  .toolbar-left {
+    width: 100%;
+  }
+
+  .preset-select {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .toolbar-center, .toolbar-right {
+    justify-content: space-between;
+  }
+
+  .playground-workspace {
+    flex-direction: column !important;
+  }
+
+  .editor-pane {
+    height: 55% !important;
+    width: 100% !important;
+  }
+
+  .key-hint {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .font-zoom-widget {
     display: none;
   }
 }

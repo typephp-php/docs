@@ -15,6 +15,7 @@ import { php } from '@codemirror/lang-php';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { keymap } from '@codemirror/view';
 import { useData } from 'vitepress';
+import { phpdocHighlighter } from './phpdoc-highlighter';
 
 const props = withDefaults(defineProps<{
   modelValue: string;
@@ -36,6 +37,17 @@ const themeCompartment = new Compartment();
 const readOnlyCompartment = new Compartment();
 const { isDark } = useData();
 
+const baseTheme = EditorView.theme({
+  '&': { height: '100%', fontSize: 'var(--playground-font-size, 13.5px)' },
+  '.cm-scroller': { overflow: 'auto', fontFamily: 'var(--vp-font-family-mono)' },
+  '.cm-phpdoc-tag, .cm-phpdoc-tag *': { color: '#c678dd !important', fontWeight: '700 !important', fontStyle: 'normal !important' },
+  '.cm-phpdoc-type, .cm-phpdoc-type *': { color: '#e5c07b !important', fontWeight: '600 !important', fontStyle: 'normal !important' },
+  '.cm-phpdoc-generic-bracket, .cm-phpdoc-generic-bracket *': { color: '#e06c75 !important', fontWeight: '700 !important', fontStyle: 'normal !important' },
+  '.cm-phpdoc-generic-type, .cm-phpdoc-generic-type *': { color: '#56b6c2 !important', fontStyle: 'italic !important', fontWeight: '600 !important' },
+  '.cm-phpdoc-variance, .cm-phpdoc-variance *': { color: '#d19a66 !important', fontStyle: 'italic !important' },
+  '.cm-phpdoc-var, .cm-phpdoc-var *': { color: '#61afef !important', fontWeight: '600 !important', fontStyle: 'normal !important' },
+});
+
 onMounted(() => {
   if (!editorContainer.value) return;
 
@@ -54,6 +66,8 @@ onMounted(() => {
     extensions: [
       basicSetup,
       php(),
+      phpdocHighlighter, // Built-in MatchDecorator
+      baseTheme,
       runKeymap,
       themeCompartment.of(isDark.value ? oneDark : []),
       readOnlyCompartment.of([
@@ -65,10 +79,6 @@ onMounted(() => {
           emit('update:modelValue', update.state.doc.toString());
         }
       }),
-      EditorView.theme({
-        '&': { height: '100%', fontSize: 'var(--playground-font-size, 13.5px)' },
-        '.cm-scroller': { overflow: 'auto', fontFamily: 'var(--vp-font-family-mono)' }
-      })
     ]
   });
 
@@ -150,5 +160,35 @@ onUnmounted(() => {
 .code-editor-element {
   width: 100%;
   height: 100%;
+}
+
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-tag),
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-tag) * {
+  color: #7c3aed !important;
+}
+
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-type),
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-type) * {
+  color: #b45309 !important;
+}
+
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-generic-bracket),
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-generic-bracket) * {
+  color: #e11d48 !important;
+}
+
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-generic-type),
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-generic-type) * {
+  color: #0891b2 !important;
+}
+
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-variance),
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-variance) * {
+  color: #ea580c !important;
+}
+
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-var),
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-var) * {
+  color: #2563eb !important;
 }
 </style>
