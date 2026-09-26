@@ -1,7 +1,7 @@
 <template>
   <div class="playground-editor-wrapper">
     <div v-if="readOnly" class="xray-floating-badge">
-      X-Ray View (Read-Only) — Zero Line-Drift Injected Bytecode
+      X-Ray View (Read-Only) — Zero Line-Drift Optimized Transform Code
     </div>
     <div ref="editorContainer" class="code-editor-element"></div>
   </div>

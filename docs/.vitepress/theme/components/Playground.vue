@@ -44,7 +44,7 @@
             title="Inspect TypePHP AST injected checks in-place with zero line-drift"
             @click="viewMode = 'xray'"
           >
-            X-Ray
+            Transformed Source
           </button>
         </div>
       </div>
