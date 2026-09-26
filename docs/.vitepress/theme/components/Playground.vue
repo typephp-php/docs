@@ -1,6 +1,5 @@
 <template>
-  <div class="playground-root">
-    <!-- Top Action Toolbar -->
+  <div class="playground-root" :style="{ '--playground-font-size': `${fontSize}px` }">
     <header class="playground-toolbar">
       <div class="toolbar-left">
         <select v-model="selectedPresetId" class="preset-select" @change="onSelectPreset">
@@ -18,31 +17,52 @@
           {{ isRunning ? 'Running...' : 'Run Code' }}
           <span class="key-hint">Ctrl+Enter</span>
         </button>
+
+        <div class="view-mode-toggle">
+          <button :class="['mode-btn', { active: viewMode === 'source' }]" @click="viewMode = 'source'">
+            Source Code
+          </button>
+          <button :class="['mode-btn', { active: viewMode === 'xray' }]"
+            title="Inspect TypePHP AST injected checks in-place with zero line-drift" @click="viewMode = 'xray'">
+            X-Ray View
+          </button>
+        </div>
       </div>
 
       <div class="toolbar-right">
+        <div class="font-zoom-widget" title="Adjust code and terminal text size">
+          <button class="zoom-btn" :disabled="fontSize <= 11" title="Decrease font size" @click="adjustFontSize(-1)">
+            A-
+          </button>
+          <span class="font-size-label">{{ fontSize }}px</span>
+          <button class="zoom-btn" :disabled="fontSize >= 20" title="Increase font size" @click="adjustFontSize(1)">
+            A+
+          </button>
+        </div>
+
+        <button class="action-btn" title="Copy Editor Code" @click="copyEditorCode">
+          {{ copiedCode ? 'Copied Code!' : 'Copy Code' }}
+        </button>
+
+        <button class="action-btn" title="Share Snippet URL" @click="shareSnippet">
+          {{ copiedLink ? 'Copied Link!' : 'Share' }}
+        </button>
+
         <span class="engine-badge" :title="workerStatus">
           <span :class="['status-dot', { active: isReady, loading: !isReady && !initError, error: initError }]"></span>
           PHP 8.5 WASM
         </span>
-
-        <button class="action-btn" title="Share Snippet URL" @click="shareSnippet">
-          {{ copied ? 'Copied Link!' : 'Share' }}
-        </button>
       </div>
     </header>
 
-    <!-- Main Split-Screen Workspace -->
     <main class="playground-workspace">
       <div class="editor-pane">
-        <PlaygroundEditor v-model="code" @run="runCode" />
+        <PlaygroundEditor :model-value="viewMode === 'source' ? code : transformedCode" :read-only="viewMode === 'xray'"
+          :font-size="fontSize" @update:model-value="onCodeUpdate" @run="runCode" />
       </div>
 
-      <div class="output-pane">
-        <PlaygroundOutput :stdout="stdout" :stderr="stderr" :exit-code="exitCode" :duration="duration"
-          :transformed-code="transformedCode" :status-message="workerStatus" :is-running="isRunning"
-          @clear="clearConsole" />
-      </div>
+      <PlaygroundOutput ref="outputDrawerRef" :stdout="stdout" :stderr="stderr" :exit-code="exitCode"
+        :duration="duration" :status-message="workerStatus" :is-running="isRunning" @clear="clearConsole" />
     </main>
   </div>
 </template>
@@ -59,6 +79,11 @@ const presets = PLAYGROUND_PRESETS;
 const selectedPresetId = ref<string>(presets[0].id);
 const code = ref<string>(presets[0].code);
 
+const viewMode = ref<'source' | 'xray'>('source');
+const outputDrawerRef = ref<InstanceType<typeof PlaygroundOutput> | null>(null);
+
+const fontSize = ref<number>(13.5);
+
 const isReady = ref<boolean>(false);
 const isRunning = ref<boolean>(false);
 const initError = ref<boolean>(false);
@@ -69,13 +94,24 @@ const stderr = ref<string>('');
 const exitCode = ref<number | null>(null);
 const duration = ref<string>('');
 const transformedCode = ref<string>('');
-const copied = ref<boolean>(false);
+
+const copiedLink = ref<boolean>(false);
+const copiedCode = ref<boolean>(false);
 
 const { site } = useData();
 let worker: Worker | null = null;
 
 onMounted(() => {
-  // 1. Read URL hash if shared
+  try {
+    const savedSize = localStorage.getItem('typephp_playground_fontsize');
+    if (savedSize) {
+      const parsed = parseFloat(savedSize);
+      if (parsed >= 11 && parsed <= 20) {
+        fontSize.value = parsed;
+      }
+    }
+  } catch { }
+
   const hash = window.location.hash;
   if (hash.startsWith('#code=')) {
     try {
@@ -89,7 +125,6 @@ onMounted(() => {
     }
   }
 
-  // 2. Initialize Web Worker using browser-standard module Worker
   try {
     const activeWorker = new Worker(
       new URL('../workers/playground.worker.ts', import.meta.url),
@@ -103,7 +138,7 @@ onMounted(() => {
       console.error('[Playground Worker Error]', errorMsg, errorEvent.filename, errorEvent.lineno);
       initError.value = true;
       workerStatus.value = `Worker Error: ${errorMsg}`;
-      stderr.value = `Worker Error: ${errorMsg}\nLocation: ${errorEvent.filename || 'playground.worker.ts'}:${errorEvent.lineno || 0}\n\nCheck browser DevTools (F12) Console for full error trace.`;
+      stderr.value = `Worker Error: ${errorMsg}\nLocation: ${errorEvent.filename || 'playground.worker.ts'}:${errorEvent.lineno || 0}\n\nCheck browser DevTools (F12) Console for details.`;
     };
 
     activeWorker.onmessage = (event: MessageEvent) => {
@@ -151,10 +186,24 @@ onMounted(() => {
   }
 });
 
+function adjustFontSize(delta: number) {
+  const newSize = Math.max(11, Math.min(20, fontSize.value + delta));
+  fontSize.value = newSize;
+  try {
+    localStorage.setItem('typephp_playground_fontsize', newSize.toString());
+  } catch { }
+}
+
+function onCodeUpdate(newCode: string) {
+  code.value = newCode;
+  triggerTransform();
+}
+
 function onSelectPreset() {
   const matched = presets.find((p) => p.id === selectedPresetId.value);
   if (matched) {
     code.value = matched.code;
+    viewMode.value = 'source';
     clearConsole();
     triggerTransform();
   }
@@ -166,6 +215,8 @@ function runCode() {
 
   isRunning.value = true;
   clearConsole();
+  
+  outputDrawerRef.value?.expand();
 
   activeWorker.postMessage({ action: 'RUN', code: code.value });
   triggerTransform();
@@ -185,13 +236,23 @@ function clearConsole() {
   duration.value = '';
 }
 
+function copyEditorCode() {
+  const textToCopy = viewMode.value === 'source' ? code.value : transformedCode.value;
+  navigator.clipboard.writeText(textToCopy).then(() => {
+    copiedCode.value = true;
+    setTimeout(() => {
+      copiedCode.value = false;
+    }, 2000);
+  });
+}
+
 function shareSnippet() {
   const compressed = LZString.compressToEncodedURIComponent(code.value);
   const shareUrl = `${window.location.origin}${window.location.pathname}#code=${compressed}`;
   navigator.clipboard.writeText(shareUrl).then(() => {
-    copied.value = true;
+    copiedLink.value = true;
     setTimeout(() => {
-      copied.value = false;
+      copiedLink.value = false;
     }, 2000);
   });
 }
@@ -248,6 +309,12 @@ onUnmounted(() => {
   border-color: var(--vp-c-brand-1);
 }
 
+.toolbar-center {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
 .run-btn {
   display: inline-flex;
   align-items: center;
@@ -280,10 +347,95 @@ onUnmounted(() => {
   opacity: 0.85;
 }
 
+.view-mode-toggle {
+  display: inline-flex;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--vp-c-bg);
+}
+
+.mode-btn {
+  padding: 5px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: var(--vp-c-text-2);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mode-btn:hover {
+  color: var(--vp-c-text-1);
+}
+
+.mode-btn.active {
+  background: var(--vp-c-bg-mute);
+  color: var(--vp-c-brand-1);
+}
+
 .toolbar-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+}
+
+/* Font Zoom Widget (A- / A+) */
+.font-zoom-widget {
+  display: inline-flex;
+  align-items: center;
+  background: var(--vp-c-bg);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.zoom-btn {
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  background: transparent;
+  border: none;
+  color: var(--vp-c-text-2);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.zoom-btn:hover:not(:disabled) {
+  background: var(--vp-c-bg-mute);
+  color: var(--vp-c-brand-1);
+}
+
+.zoom-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.font-size-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vp-c-text-2);
+  padding: 0 4px;
+  font-family: var(--vp-font-family-mono);
+  user-select: none;
+}
+
+.action-btn {
+  padding: 4px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border: 1px solid var(--vp-c-divider);
+  background: var(--vp-c-bg);
+  color: var(--vp-c-text-1);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+  border-color: var(--vp-c-brand-1);
+  color: var(--vp-c-brand-1);
 }
 
 .engine-badge {
@@ -319,25 +471,9 @@ onUnmounted(() => {
   background: #ef4444;
 }
 
-.action-btn {
-  padding: 4px 10px;
-  font-size: 12.5px;
-  font-weight: 600;
-  border: 1px solid var(--vp-c-divider);
-  background: var(--vp-c-bg);
-  color: var(--vp-c-text-1);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.action-btn:hover {
-  border-color: var(--vp-c-brand-1);
-  color: var(--vp-c-brand-1);
-}
-
 .playground-workspace {
   display: flex;
+  flex-direction: column;
   flex: 1;
   height: calc(100% - 49px);
   overflow: hidden;
@@ -345,31 +481,14 @@ onUnmounted(() => {
 
 .editor-pane {
   flex: 1;
-  height: 100%;
-  border-right: 1px solid var(--vp-c-divider);
-}
-
-.output-pane {
-  flex: 1;
-  height: 100%;
+  min-height: 0;
+  width: 100%;
 }
 
 @media (max-width: 960px) {
-  .playground-workspace {
-    flex-direction: column;
-  }
 
-  .editor-pane {
-    height: 50%;
-    border-right: none;
-    border-bottom: 1px solid var(--vp-c-divider);
-  }
-
-  .output-pane {
-    height: 50%;
-  }
-
-  .key-hint {
+  .key-hint,
+  .collapse-hint {
     display: none;
   }
 }
