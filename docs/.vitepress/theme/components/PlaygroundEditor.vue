@@ -1,7 +1,7 @@
 <template>
   <div class="playground-editor-wrapper">
     <div v-if="readOnly" class="xray-floating-badge">
-      X-Ray View (Read-Only) — Zero Line-Drift Optimized Transform Code
+       Zero Line-Drift Optimized Transform Code (Read-Only)
     </div>
     <div ref="editorContainer" class="code-editor-element"></div>
   </div>
@@ -66,7 +66,7 @@ onMounted(() => {
     extensions: [
       basicSetup,
       php(),
-      phpdocHighlighter, // Built-in MatchDecorator
+      phpdocHighlighter, 
       baseTheme,
       runKeymap,
       themeCompartment.of(isDark.value ? oneDark : []),
@@ -190,5 +190,11 @@ onUnmounted(() => {
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-var),
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-var) * {
   color: #2563eb !important;
+}
+
+@media (max-width: 768px) {
+  .your-badge-class-name {
+    display: none !important;
+  }
 }
 </style>

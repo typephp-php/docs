@@ -598,4 +598,14 @@ onUnmounted(() => {
     display: none;
   }
 }
+
+@media (max-width: 768px) {
+  :deep(.readonly-badge),
+  :deep(.xray-badge),
+  :deep(.transform-badge),
+  :deep([class*="badge"]),
+  :deep([class*="xray"]) {
+    display: none !important;
+  }
+}
 </style>
