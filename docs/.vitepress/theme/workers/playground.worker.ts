@@ -112,7 +112,12 @@ if (file_exists('/workspace/config.json')) {
     }
 }
 
+$isEnabled = (bool) ($userConfig['enabled'] ?? true);
+$ignoreDepth = isset($userConfig['ignoreTraceDepth']) ? max(1, (int) $userConfig['ignoreTraceDepth']) : 25;
+
 \\TypePHP\\Internal\\Util\\Config::set([
+    'enabled' => $isEnabled,
+    'ignore_trace_depth' => $ignoreDepth,
     'cache' => false,
     'include' => ['/workspace/playground.php', '/workspace/transformed.php'],
     'exclude' => ['/typephp/**'],
@@ -130,6 +135,16 @@ if ($source === false || trim($source) === '') {
 
 if (!str_starts_with(trim($source), '<?php')) {
     $source = "<?php\\n" . $source;
+}
+
+if (!$isEnabled) {
+    try {
+        require '/workspace/playground.php';
+    } catch (\\Throwable $e) {
+        file_put_contents('php://stderr', formatExceptionTrace($e));
+        exit(255);
+    }
+    exit(0);
 }
 
 try {
@@ -172,11 +187,7 @@ if (file_exists('/workspace/config.json')) {
     }
 }
 
-\\TypePHP\\Internal\\Util\\Config::set([
-    'cache' => false,
-    'respect_ignore_tags' => (bool) ($userConfig['respectIgnoreTags'] ?? true),
-]);
-
+$isEnabled = (bool) ($userConfig['enabled'] ?? true);
 $source = file_get_contents('/workspace/playground.php');
 if ($source === false || trim($source) === '') {
     exit(0);
@@ -185,6 +196,16 @@ if ($source === false || trim($source) === '') {
 if (!str_starts_with(trim($source), '<?php')) {
     $source = "<?php\\n" . $source;
 }
+
+if (!$isEnabled) {
+    echo "// TypePHP runtime enforcement is disabled in Config.\\n// Transformed code is identical to raw source:\\n\\n" . $source;
+    exit(0);
+}
+
+\\TypePHP\\Internal\\Util\\Config::set([
+    'cache' => false,
+    'respect_ignore_tags' => (bool) ($userConfig['respectIgnoreTags'] ?? true),
+]);
 
 try {
     echo \\TypePHP\\Internal\\Io\\StreamWrapper::transformSource($source, '/workspace/playground.php');

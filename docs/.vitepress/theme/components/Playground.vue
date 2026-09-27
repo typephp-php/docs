@@ -1,30 +1,16 @@
 <template>
-  <div
-    class="playground-root"
-    :style="{ '--playground-font-size': `${fontSize}px` }"
-  >
+  <div class="playground-root" :style="{ '--playground-font-size': `${fontSize}px` }">
     <!-- Top Action Toolbar -->
     <header class="playground-toolbar">
       <div class="toolbar-left">
         <div class="preset-select-wrapper">
-          <select
-            v-model="selectedPresetId"
-            class="preset-select"
-            @change="onSelectPreset"
-          >
+          <select v-model="selectedPresetId" class="preset-select" @change="onSelectPreset">
             <option v-for="preset in presets" :key="preset?.id" :value="preset?.id">
               [{{ preset?.badge }}] {{ preset?.name }}
             </option>
           </select>
-          <svg
-            class="select-chevron"
-            viewBox="0 0 24 24"
-            width="12"
-            height="12"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.5"
-          >
+          <svg class="select-chevron" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor"
+            stroke-width="2.5">
             <polyline points="6 9 12 15 18 9"></polyline>
           </svg>
         </div>
@@ -32,11 +18,7 @@
 
       <div class="toolbar-center">
         <!-- Run Button -->
-        <button
-          class="run-btn"
-          :disabled="!isReady || isRunning"
-          @click="runCode"
-        >
+        <button class="run-btn" :disabled="!isReady || isRunning" @click="runCode">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
             <path d="M8 5v14l11-7z" />
           </svg>
@@ -46,17 +28,11 @@
 
         <!-- View Mode Switcher -->
         <div class="view-mode-toggle">
-          <button
-            :class="['mode-btn', { active: viewMode === 'source' }]"
-            @click="viewMode = 'source'"
-          >
+          <button :class="['mode-btn', { active: viewMode === 'source' }]" @click="viewMode = 'source'">
             Source
           </button>
-          <button
-            :class="['mode-btn', { active: viewMode === 'xray' }]"
-            title="Inspect TypePHP AST injected checks in-place with zero line-drift"
-            @click="viewMode = 'xray'"
-          >
+          <button :class="['mode-btn', { active: viewMode === 'xray' }]"
+            title="Inspect TypePHP AST injected checks in-place with zero line-drift" @click="viewMode = 'xray'">
             Transformed Source
           </button>
         </div>
@@ -65,14 +41,13 @@
       <div class="toolbar-right">
         <!-- Engine Config Popover Trigger -->
         <div ref="configWrapperRef" class="config-popover-wrapper">
-          <button
-            :class="['action-btn', 'config-trigger-btn', { active: isConfigOpen, 'has-custom': hasCustomConfig }]"
-            title="TypePHP Engine Configuration"
-            @click.stop="isConfigOpen = !isConfigOpen"
-          >
+          <button :class="['action-btn', 'config-trigger-btn', { active: isConfigOpen, 'has-custom': hasCustomConfig }]"
+            title="TypePHP Engine Configuration" @click.stop="isConfigOpen = !isConfigOpen">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="3"></circle>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+              <path
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+              </path>
             </svg>
             <span>Config</span>
             <span v-if="hasCustomConfig" class="config-active-dot" title="Custom configuration active"></span>
@@ -86,21 +61,31 @@
             </div>
 
             <div class="popover-body">
+              <!-- 0. Master Switch: Enable / Disable TypePHP -->
+              <div class="config-row master-toggle">
+                <div class="config-info">
+                  <span class="config-label">Enable TypePHP Enforcement</span>
+                  <span class="config-desc">Turn OFF to run pure native PHP for zero-overhead baseline
+                    benchmarking.</span>
+                </div>
+                <button :class="['toggle-switch', { active: config.enabled }]"
+                  @click="config.enabled = !config.enabled">
+                  <span class="toggle-knob"></span>
+                </button>
+              </div>
+
               <!-- 1. Array Validation Strategy -->
               <div class="config-row">
                 <div class="config-info">
                   <span class="config-label">Array Validation Strategy</span>
-                  <span class="config-desc">Full scans 100% of items. Hybrid switches to O(1) sampling on arrays &gt; 128 items.</span>
+                  <span class="config-desc">Full scans 100% of items. Hybrid switches to O(1) sampling on arrays &gt;
+                    128 items.</span>
                 </div>
                 <div class="pill-group">
-                  <button
-                    :class="['pill-btn', { active: config.arrayValidation === 'full' }]"
-                    @click="config.arrayValidation = 'full'"
-                  >Full O(n)</button>
-                  <button
-                    :class="['pill-btn', { active: config.arrayValidation === 'hybrid' }]"
-                    @click="config.arrayValidation = 'hybrid'"
-                  >Hybrid O(1)</button>
+                  <button :class="['pill-btn', { active: config.arrayValidation === 'full' }]"
+                    @click="config.arrayValidation = 'full'">Full O(n)</button>
+                  <button :class="['pill-btn', { active: config.arrayValidation === 'hybrid' }]"
+                    @click="config.arrayValidation = 'hybrid'">Hybrid O(1)</button>
                 </div>
               </div>
 
@@ -108,12 +93,11 @@
               <div class="config-row">
                 <div class="config-info">
                   <span class="config-label">Strict Generic Return Invariance</span>
-                  <span class="config-desc">PHPStan Level MAX invariance. Turn OFF for pragmatic return covariance (LSP).</span>
+                  <span class="config-desc">PHPStan Level MAX invariance. Turn OFF for pragmatic return covariance
+                    (LSP).</span>
                 </div>
-                <button
-                  :class="['toggle-switch', { active: config.strictReturnGenericInvariance }]"
-                  @click="config.strictReturnGenericInvariance = !config.strictReturnGenericInvariance"
-                >
+                <button :class="['toggle-switch', { active: config.strictReturnGenericInvariance }]"
+                  @click="config.strictReturnGenericInvariance = !config.strictReturnGenericInvariance">
                   <span class="toggle-knob"></span>
                 </button>
               </div>
@@ -122,12 +106,11 @@
               <div class="config-row">
                 <div class="config-info">
                   <span class="config-label">Respect Native Nullability</span>
-                  <span class="config-desc">Permits null if native parameter has ?Type even if omitted in DocBlock.</span>
+                  <span class="config-desc">Permits null if native parameter has ?Type even if omitted in
+                    DocBlock.</span>
                 </div>
-                <button
-                  :class="['toggle-switch', { active: config.respectNativeNullability }]"
-                  @click="config.respectNativeNullability = !config.respectNativeNullability"
-                >
+                <button :class="['toggle-switch', { active: config.respectNativeNullability }]"
+                  @click="config.respectNativeNullability = !config.respectNativeNullability">
                   <span class="toggle-knob"></span>
                 </button>
               </div>
@@ -138,21 +121,30 @@
                   <span class="config-label">Respect @typephp-ignore Tags</span>
                   <span class="config-desc">Honors ignore tags. Turn OFF to simulate a strict CI/CD audit run.</span>
                 </div>
-                <button
-                  :class="['toggle-switch', { active: config.respectIgnoreTags }]"
-                  @click="config.respectIgnoreTags = !config.respectIgnoreTags"
-                >
+                <button :class="['toggle-switch', { active: config.respectIgnoreTags }]"
+                  @click="config.respectIgnoreTags = !config.respectIgnoreTags">
                   <span class="toggle-knob"></span>
                 </button>
+              </div>
+
+              <!-- 5. Ignore Trace Depth -->
+              <div class="config-row">
+                <div class="config-info">
+                  <span class="config-label">Ignore Trace Depth</span>
+                  <span class="config-desc">Maximum call stack frames inspected above a failure for ignore tags.</span>
+                </div>
+                <div class="stepper-widget">
+                  <button class="stepper-btn" :disabled="config.ignoreTraceDepth <= 5"
+                    @click="adjustIgnoreTraceDepth(-5)">-5</button>
+                  <span class="stepper-val">{{ config.ignoreTraceDepth }}</span>
+                  <button class="stepper-btn" :disabled="config.ignoreTraceDepth >= 100"
+                    @click="adjustIgnoreTraceDepth(5)">+5</button>
+                </div>
               </div>
             </div>
 
             <div class="popover-footer">
-              <button
-                class="reset-config-btn"
-                :disabled="!hasCustomConfig"
-                @click="resetConfig"
-              >
+              <button class="reset-config-btn" :disabled="!hasCustomConfig" @click="resetConfig">
                 Reset to Defaults
               </button>
             </div>
@@ -161,21 +153,11 @@
 
         <!-- Font Zoom Widget -->
         <div class="font-zoom-widget" title="Adjust text size">
-          <button
-            class="zoom-btn"
-            :disabled="fontSize <= 11"
-            title="Decrease font size"
-            @click="adjustFontSize(-1)"
-          >
+          <button class="zoom-btn" :disabled="fontSize <= 11" title="Decrease font size" @click="adjustFontSize(-1)">
             A-
           </button>
           <span class="font-size-label">{{ fontSize }}px</span>
-          <button
-            class="zoom-btn"
-            :disabled="fontSize >= 20"
-            title="Increase font size"
-            @click="adjustFontSize(1)"
-          >
+          <button class="zoom-btn" :disabled="fontSize >= 20" title="Increase font size" @click="adjustFontSize(1)">
             A+
           </button>
         </div>
@@ -202,28 +184,13 @@
     <!-- Main Workspace -->
     <main :class="['playground-workspace', `layout-${effectivePosition}`]">
       <div class="editor-pane">
-        <PlaygroundEditor
-          ref="editorRef"
-          :model-value="viewMode === 'source' ? code : transformedCode"
-          :read-only="viewMode === 'xray'"
-          :font-size="fontSize"
-          @update:model-value="onCodeUpdate"
-          @run="runCode"
-        />
+        <PlaygroundEditor ref="editorRef" :model-value="viewMode === 'source' ? code : transformedCode"
+          :read-only="viewMode === 'xray'" :font-size="fontSize" @update:model-value="onCodeUpdate" @run="runCode" />
       </div>
 
-      <PlaygroundOutput
-        ref="outputDrawerRef"
-        :position="effectivePosition"
-        :stdout="stdout"
-        :stderr="stderr"
-        :exit-code="exitCode"
-        :duration="duration"
-        :status-message="workerStatus"
-        :is-running="isRunning"
-        @clear="clearConsole"
-        @toggle-position="toggleLayoutPosition"
-      />
+      <PlaygroundOutput ref="outputDrawerRef" :position="effectivePosition" :stdout="stdout" :stderr="stderr"
+        :exit-code="exitCode" :duration="duration" :status-message="workerStatus" :is-running="isRunning"
+        @clear="clearConsole" @toggle-position="toggleLayoutPosition" />
     </main>
   </div>
 </template>
@@ -267,19 +234,25 @@ const transformedCode = ref<string>('');
 const copiedLink = ref<boolean>(false);
 const copiedCode = ref<boolean>(false);
 
-// Config Popover State
 const isConfigOpen = ref<boolean>(false);
 const configWrapperRef = ref<HTMLDivElement | null>(null);
 const config = ref<PlaygroundConfig>({ ...DEFAULT_PLAYGROUND_CONFIG });
 
 const hasCustomConfig = computed<boolean>(() => {
   return (
+    config.value.enabled !== DEFAULT_PLAYGROUND_CONFIG.enabled ||
+    config.value.ignoreTraceDepth !== DEFAULT_PLAYGROUND_CONFIG.ignoreTraceDepth ||
     config.value.arrayValidation !== DEFAULT_PLAYGROUND_CONFIG.arrayValidation ||
     config.value.strictReturnGenericInvariance !== DEFAULT_PLAYGROUND_CONFIG.strictReturnGenericInvariance ||
     config.value.respectNativeNullability !== DEFAULT_PLAYGROUND_CONFIG.respectNativeNullability ||
     config.value.respectIgnoreTags !== DEFAULT_PLAYGROUND_CONFIG.respectIgnoreTags
   );
 });
+
+function adjustIgnoreTraceDepth(delta: number) {
+  const current = config.value.ignoreTraceDepth || 25;
+  config.value.ignoreTraceDepth = Math.max(1, Math.min(100, current + delta));
+}
 
 const { site } = useData();
 let worker: Worker | null = null;
@@ -326,7 +299,7 @@ onMounted(() => {
         config.value = { ...DEFAULT_PLAYGROUND_CONFIG, ...parsed };
       }
     }
-  } catch {}
+  } catch { }
 
   const hash = window.location.hash;
   if (hash.startsWith('#code=')) {
@@ -417,7 +390,7 @@ onMounted(() => {
 watch(config, (newConf) => {
   try {
     localStorage.setItem('typephp_playground_config', JSON.stringify(newConf));
-  } catch {}
+  } catch { }
   triggerTransform();
 }, { deep: true });
 
@@ -430,7 +403,7 @@ function toggleLayoutPosition() {
   layoutPosition.value = newPos;
   try {
     localStorage.setItem('typephp_playground_dock', newPos);
-  } catch {}
+  } catch { }
 }
 
 function adjustFontSize(delta: number) {
@@ -438,7 +411,7 @@ function adjustFontSize(delta: number) {
   fontSize.value = newSize;
   try {
     localStorage.setItem('typephp_playground_fontsize', newSize.toString());
-  } catch {}
+  } catch { }
 }
 
 function formatCode() {
@@ -557,7 +530,9 @@ onUnmounted(() => {
   gap: 10px;
 }
 
-.toolbar-left, .toolbar-center, .toolbar-right {
+.toolbar-left,
+.toolbar-center,
+.toolbar-right {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -931,9 +906,18 @@ onUnmounted(() => {
   background: #9ca3af;
 }
 
-.status-dot.active { background: #10b981; }
-.status-dot.loading { background: #f59e0b; animation: pulse 1s infinite; }
-.status-dot.error { background: #ef4444; }
+.status-dot.active {
+  background: #10b981;
+}
+
+.status-dot.loading {
+  background: #f59e0b;
+  animation: pulse 1s infinite;
+}
+
+.status-dot.error {
+  background: #ef4444;
+}
 
 .playground-workspace {
   display: flex;
@@ -984,7 +968,8 @@ onUnmounted(() => {
     width: 100%;
   }
 
-  .toolbar-center, .toolbar-right {
+  .toolbar-center,
+  .toolbar-right {
     justify-content: space-between;
   }
 
@@ -1012,5 +997,76 @@ onUnmounted(() => {
   .font-zoom-widget {
     display: none;
   }
+}
+
+.config-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 100;
+  width: 330px;
+  max-height: calc(100vh - 100px);
+  display: flex;
+  flex-direction: column;
+  background: var(--vp-c-bg);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.popover-body {
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.config-row.master-toggle {
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--vp-c-divider);
+}
+
+.stepper-widget {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--vp-c-bg-mute);
+  flex-shrink: 0;
+}
+
+.stepper-btn {
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  background: transparent;
+  border: none;
+  color: var(--vp-c-text-2);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.stepper-btn:hover:not(:disabled) {
+  background: var(--vp-c-bg-soft);
+  color: var(--vp-c-brand-1);
+}
+
+.stepper-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.stepper-val {
+  min-width: 30px;
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: var(--vp-font-family-mono);
+  color: var(--vp-c-text-1);
+  padding: 0 4px;
+  user-select: none;
 }
 </style>

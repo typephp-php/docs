@@ -1,4 +1,6 @@
 export interface PlaygroundConfig {
+  enabled: boolean;
+  ignoreTraceDepth: number;
   arrayValidation: 'full' | 'hybrid';
   strictReturnGenericInvariance: boolean;
   respectNativeNullability: boolean;
@@ -15,6 +17,8 @@ export interface PlaygroundPreset {
 }
 
 export const DEFAULT_PLAYGROUND_CONFIG: PlaygroundConfig = {
+  enabled: true,
+  ignoreTraceDepth: 25,
   arrayValidation: 'full',
   strictReturnGenericInvariance: true,
   respectNativeNullability: true,
