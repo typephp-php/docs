@@ -33,27 +33,6 @@ Want to see runtime reified generics and shape validation in action right now? L
 
 ---
 
-## Interactive Browser Playground
-
-Don't just take our word for it.. try breaking it yourself. The **[TypePHP Playground](/playground)** runs a full PHP 8.5 runtime compiled to WebAssembly directly inside your browser:
-
-* **Zero Installation:** Test generics, array shapes, and scalar refinements in 10 milliseconds without running `composer require`.
-* **Inspect Transformed Source (X-Ray Mode):** Toggle between your raw code and TypePHP's format-preserving AST transformation to see how guard rails are injected with **zero line-drift**.
-* **Pre-Loaded Interactive Presets:** Jump straight into real-world scenarios:
-  * *Runtime Reified Generics (`\WeakMap` state)*
-  * *PHP 8.4 Property Hooks Validation*
-  * *PHP 8.5 Native Pipe Operator (`|>`)*
-  * *Sealed vs. Unsealed Array Shapes*
-  * *Discriminator-Aware Tagged Unions*
-  * *Typestates & State Machines (`@self-out`)*
-* **Config Toggles:** Interactively switch between **Full O(n)** vs. **Hybrid O(1)** array sampling, toggle **Strict Invariance vs. Pragmatic Covariance**, and test **Native Nullability**.
-
-<div style="margin: 24px 0; text-align: center;">
-  <a href="/docs/playground" style="display: inline-block; padding: 10px 24px; font-weight: 700; font-size: 15px; color: #fff; background-color: var(--vp-c-brand-1); border-radius: 8px; text-decoration: none; transition: background-color 0.2s ease;">
-    Launch the TypePHP Playground →
-  </a>
-</div>
-
 ## See It In Action
 
 TypePHP operates entirely in userland using native stream wrappers and AST transformations. Because it requires no C-extensions or FFI, you can drop it into any PHP 8.1+ project or web framework effortlessly. It reads your existing PHPDoc annotations and enforces them the moment your code runs.
