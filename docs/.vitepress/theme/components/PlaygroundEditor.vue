@@ -16,6 +16,7 @@ import { oneDark } from '@codemirror/theme-one-dark';
 import { keymap } from '@codemirror/view';
 import { useData } from 'vitepress';
 import { phpdocHighlighter } from './phpdoc-highlighter';
+import { indentRange } from '@codemirror/language';
 
 const props = withDefaults(defineProps<{
   modelValue: string;
@@ -129,6 +130,17 @@ onUnmounted(() => {
   if (view) {
     view.destroy();
   }
+});
+
+function autoIndent() {
+  if (!view) return;
+  view.dispatch({
+    changes: indentRange(view.state, 0, view.state.doc.length)
+  });
+}
+
+defineExpose({
+  autoIndent
 });
 </script>
 

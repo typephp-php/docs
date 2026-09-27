@@ -118,10 +118,6 @@
     </div>
 
     <div v-show="!isCollapsed" class="drawer-body">
-      <div v-if="statusMessage && !isRunning" class="status-banner">
-        <span class="pulse-dot"></span> {{ statusMessage }}
-      </div>
-
       <div v-if="isRunning" class="running-indicator">
         <span class="spinner"></span> Executing in PHP 8.5 WebAssembly...
       </div>
@@ -513,18 +509,6 @@ defineExpose({
   color: var(--vp-c-text-1);
 }
 
-.status-banner {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11.5px;
-  color: var(--vp-c-brand-1);
-  background: rgba(59, 130, 246, 0.08);
-  padding: 5px 10px;
-  border-radius: 4px;
-  margin-bottom: 8px;
-}
-
 .running-indicator {
   display: flex;
   align-items: center;
@@ -541,14 +525,6 @@ defineExpose({
   border-top-color: var(--vp-c-brand-1);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
-}
-
-.pulse-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--vp-c-brand-1);
-  animation: pulse 1.5s ease-in-out infinite;
 }
 
 kbd {

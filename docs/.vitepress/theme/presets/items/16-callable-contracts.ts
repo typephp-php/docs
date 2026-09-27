@@ -4,7 +4,7 @@ export default {
   id: 'callable-contracts',
   name: 'Callables & Closures (Input & Return Contracts)',
   badge: 'Callables',
-  order: 9,
+  order: 16,
   code: `<?php
 
 declare(strict_types=1);
