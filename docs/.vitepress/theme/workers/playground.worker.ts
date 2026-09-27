@@ -230,23 +230,25 @@ function makeDirectory(targetPhp: PHP, dirPath: string) {
 
 async function initRuntime(baseUrl: string) {
   try {
-    self.postMessage({ type: 'STATUS', message: 'Loading PHP 8.5 WebAssembly engine...' });
-
-    const loaderModule = await getPHPLoaderModule('asyncify');
-    const runtimeId = await loadPHPRuntime(loaderModule);
-    php = new PHP(runtimeId);
-
-    self.postMessage({ type: 'STATUS', message: 'Mounting TypePHP virtual filesystem...' });
+    self.postMessage({ type: 'STATUS', message: 'Downloading PHP 8.5 engine & TypePHP bundle...' });
 
     const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/';
-    const bundleUrl = `${cleanBaseUrl}wasm/typephp-runtime.json?t=${Date.now()}`;
-    const response = await fetch(bundleUrl, { cache: 'no-cache' });
+    const bundleUrl = `${cleanBaseUrl}wasm/typephp-runtime.json`;
 
-    if (!response.ok) {
-      throw new Error(`Failed to load runtime bundle: ${response.statusText} (${bundleUrl})`);
-    }
+    const [runtimeId, vfs] = await Promise.all([
+      getPHPLoaderModule('asyncify').then((loaderModule) => loadPHPRuntime(loaderModule)),
+      fetch(bundleUrl).then(async (res) => {
+        if (!res.ok) {
+          throw new Error(`Failed to load runtime bundle: ${res.statusText} (${bundleUrl})`);
+        }
+        return res.json() as Promise<Record<string, string>>;
+      }),
+    ]);
 
-    const vfs: Record<string, string> = await response.json();
+    php = new PHP(runtimeId);
+
+    self.postMessage({ type: 'STATUS', message: 'Mounting virtual filesystem...' });
+
     const createdDirs = new Set<string>();
 
     for (const [filePath, content] of Object.entries(vfs)) {
