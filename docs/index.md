@@ -7,6 +7,9 @@ hero:
   tagline: "The first pure userland PHP library to transparently enforce DocBlock types at runtime. Bringing reified generics, typed arrays, and static analysis type refinements to life with zero new syntax, zero build steps, and zero C-extensions."
   actions:
     - theme: brand
+      text: "Try in Playground"
+      link: /playground
+    - theme: alt
       text: "Get Started →"
       link: /getting-started/installation
     - theme: alt
@@ -14,19 +17,42 @@ hero:
       link: https://github.com/typephp-php/typephp
 
 features:
+  - title: "Interactive Browser Playground"
+    details: "Test TypePHP live in your browser powered by real PHP 8.5 WebAssembly. Inspect zero line-drift AST transformations in real time with zero installation."
   - title: "First-of-its-Kind in Userland"
     details: "Operates 100% in pure PHP userland via native stream wrappers and AST transformations. No custom PHP binaries, C-extensions, FFI, or build steps required."
   - title: "True Reified Generics"
-    details: "The only PHP engine that statefully reifies generic templates per object instance in memory using native WeakMap tracking, with full support for variance, nested generics, upper bounds, and clone preservation."
-  - title: "Advanced Type Enhancements"
-    details: "Enforces typed arrays, sequential lists, array shapes, DNF, scalar refinements , and key-of / value-of extractions live at runtime."
+    details: "Statefully reifies generic templates per object instance in memory using native WeakMap tracking, with full support for variance, nested generics, and clone preservation."
   - title: "Zero Line-Drift & Total Compatibility"
     details: "100% drop-in compatible with any existing PHP 8.1+ codebase (Laravel, Symfony, Shopware). Error traces in Ignition, Symfony, and Pest highlight the exact source line without drift."
 ---
 
-::: tip The First Pure Userland Runtime Contract Engine for PHP
-**You don't have to refactor a single line of code, learn new syntax, or compile C-extensions.** TypePHP bridges the gap between static analysis and runtime execution. Drop TypePHP into your existing project, and your PHPStan and Psalm DocBlocks will immediately start enforcing reified generics, typed arrays, and shape contracts the moment your code runs.
+::: tip Test Drive TypePHP Live in Your Browser (No Setup Required)
+Want to see runtime reified generics and shape validation in action right now? Launch the **[Interactive WebAssembly Playground →](/playground)** running real PHP 8.5 in your browser. Experiment with presets, test your own edge cases, and inspect the transformed source code in real time!
 :::
+
+---
+
+## Interactive Browser Playground
+
+Don't just take our word for it.. try breaking it yourself. The **[TypePHP Playground](/playground)** runs a full PHP 8.5 runtime compiled to WebAssembly directly inside your browser:
+
+* **Zero Installation:** Test generics, array shapes, and scalar refinements in 10 milliseconds without running `composer require`.
+* **Inspect Transformed Source (X-Ray Mode):** Toggle between your raw code and TypePHP's format-preserving AST transformation to see how guard rails are injected with **zero line-drift**.
+* **Pre-Loaded Interactive Presets:** Jump straight into real-world scenarios:
+  * *Runtime Reified Generics (`\WeakMap` state)*
+  * *PHP 8.4 Property Hooks Validation*
+  * *PHP 8.5 Native Pipe Operator (`|>`)*
+  * *Sealed vs. Unsealed Array Shapes*
+  * *Discriminator-Aware Tagged Unions*
+  * *Typestates & State Machines (`@self-out`)*
+* **Config Toggles:** Interactively switch between **Full O(n)** vs. **Hybrid O(1)** array sampling, toggle **Strict Invariance vs. Pragmatic Covariance**, and test **Native Nullability**.
+
+<div style="margin: 24px 0; text-align: center;">
+  <a href="/docs/playground" style="display: inline-block; padding: 10px 24px; font-weight: 700; font-size: 15px; color: #fff; background-color: var(--vp-c-brand-1); border-radius: 8px; text-decoration: none; transition: background-color 0.2s ease;">
+    Launch the TypePHP Playground →
+  </a>
+</div>
 
 ## See It In Action
 
