@@ -46,24 +46,53 @@ function formatExceptionTrace(\\Throwable $e): string {
     $output .= "Stack trace:\\n";
 
     $rawTrace = $e->getTrace();
-    $visibleFrameIndex = 0;
+    $filteredFrames = [];
 
     foreach ($rawTrace as $frame) {
         $frameFile = isset($frame['file']) ? sanitizePath($frame['file']) : '';
-        $frameLine = isset($frame['line']) ? "({$frame['line']})" : '';
+        $frameLine = isset($frame['line']) ? $frame['line'] : null;
+        $frameFunc = $frame['function'] ?? '';
+        $frameClass = $frame['class'] ?? '';
 
         if (
             $frameFile === '' ||
             str_contains($frameFile, 'runner.php') ||
             str_contains($frameFile, '/typephp/') ||
-            (isset($frame['class']) && str_starts_with($frame['class'], 'TypePHP\\\\Internal\\\\'))
+            str_starts_with($frameClass, 'TypePHP\\\\')
         ) {
             continue;
         }
 
+        if ($frameFunc === '{closure}' || str_contains($frameFunc, '{closure')) {
+            if ($frameLine !== null && $frameLine === $line) {
+                continue;
+            }
+            if (!empty($frame['args']) && is_string($frame['args'][0] ?? null) && str_contains($frame['args'][0], '<')) {
+                continue;
+            }
+        }
+
+        if ($frameLine !== null && $frameLine === $line && $frameFunc === '__construct') {
+            continue;
+        }
+
+        $filteredFrames[] = $frame;
+    }
+
+    if (empty($filteredFrames)) {
+        $output .= "#0 {main}\\n";
+        $output .= "  thrown in {$file} on line {$line}\\n";
+        return $output;
+    }
+
+    $visibleIndex = 0;
+    foreach ($filteredFrames as $frame) {
+        $frameFile = isset($frame['file']) ? sanitizePath($frame['file']) : $file;
+        $frameLineStr = isset($frame['line']) ? "({$frame['line']})" : '';
+
         $call = '';
         if (isset($frame['class'])) {
-            $call .= $frame['class'] . $frame['type'];
+            $call .= $frame['class'] . ($frame['type'] ?? '->');
         }
         $call .= ($frame['function'] ?? '{main}');
 
@@ -84,11 +113,11 @@ function formatExceptionTrace(\\Throwable $e): string {
             $call .= '(' . implode(', ', $argsSummary) . ')';
         }
 
-        $output .= "#{$visibleFrameIndex} {$frameFile}{$frameLine}: {$call}\\n";
-        $visibleFrameIndex++;
+        $output .= "#{$visibleIndex} {$frameFile}{$frameLineStr}: {$call}\\n";
+        $visibleIndex++;
     }
 
-    $output .= "#{$visibleFrameIndex} {main}\\n";
+    $output .= "#{$visibleIndex} {main}\\n";
     $output .= "  thrown in {$file} on line {$line}\\n";
 
     return $output;
