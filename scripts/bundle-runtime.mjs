@@ -22,6 +22,12 @@ for (const candidate of searchPaths) {
 }
 
 if (!typephpRepoPath) {
+  if (fs.existsSync(outputFile)) {
+    console.log('\x1b[33m[TypePHP Bundler]\x1b[0m Core repository not found, but existing runtime bundle was found.');
+    console.log(`  • Reusing pre-built bundle at: ${outputFile}`);
+    process.exit(0);
+  }
+
   console.error('\x1b[31m[Bundle Error]\x1b[0m Could not locate the TypePHP core repository.');
   console.error('Searched in:', searchPaths);
   console.error('Please ensure the "typephp" repository is placed next to "typephp-docs" (e.g. ../typephp)');

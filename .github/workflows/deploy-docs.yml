@@ -10,7 +10,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
-  
+
 concurrency:
   group: 'pages'
   cancel-in-progress: false
@@ -20,11 +20,33 @@ jobs:
     name: Build Documentation
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      # 1. Checkout the documentation repository
+      - name: Checkout Documentation
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      # 2. Checkout the TypePHP core repository into ./typephp
+      - name: Checkout TypePHP Core
+        uses: actions/checkout@v4
+        with:
+          repository: typephp-php/typephp
+          path: typephp
+
+      # 3. Setup PHP to install core dependencies
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+
+      # 4. Install nikic/php-parser and phpstan/phpdoc-parser for bundling
+      - name: Install TypePHP Dependencies
+        run: |
+          cd typephp
+          composer install --no-dev --prefer-dist --no-progress --no-interaction
+
+      # 5. Setup Node.js for VitePress
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -34,10 +56,13 @@ jobs:
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v4
 
-      - name: Install Dependencies
+      - name: Install Node Dependencies
         run: npm ci
 
+      # 6. Build docs with TYPEPHP_PATH pointing to the cloned core repo
       - name: Build with VitePress
+        env:
+          TYPEPHP_PATH: ${{ github.workspace }}/typephp
         run: npm run docs:build
 
       - name: Upload Artifact
