@@ -6,6 +6,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 
+const outputDir = path.join(rootDir, 'docs/public/wasm');
+fs.mkdirSync(outputDir, { recursive: true });
+const outputFile = path.join(outputDir, 'typephp-runtime.json');
+
 const searchPaths = [
   process.env.TYPEPHP_PATH,
   path.resolve(rootDir, '../typephp'),
@@ -23,8 +27,8 @@ for (const candidate of searchPaths) {
 
 if (!typephpRepoPath) {
   if (fs.existsSync(outputFile)) {
-    console.log('\x1b[33m[TypePHP Bundler]\x1b[0m Core repository not found, but existing runtime bundle was found.');
-    console.log(`  • Reusing pre-built bundle at: ${outputFile}`);
+    console.log('\x1b[33m[TypePHP Bundler]\x1b[0m Core repository not found, but pre-built runtime bundle exists.');
+    console.log(`  • Reusing existing bundle at: ${outputFile}`);
     process.exit(0);
   }
 
@@ -36,10 +40,6 @@ if (!typephpRepoPath) {
 }
 
 console.log(`\x1b[36m[TypePHP Bundler]\x1b[0m Found TypePHP core at: ${typephpRepoPath}`);
-
-const outputDir = path.join(rootDir, 'docs/public/wasm');
-fs.mkdirSync(outputDir, { recursive: true });
-const outputFile = path.join(outputDir, 'typephp-runtime.json');
 
 const vfs = {};
 
@@ -56,8 +56,7 @@ function addFilesRecursively(srcDir, vfsPrefix) {
       addFilesRecursively(fullPath, `${vfsPrefix}/${entry.name}`);
     } else if (entry.isFile() && entry.name.endsWith('.php')) {
       const vfsPath = `${vfsPrefix}/${entry.name}`;
-      const content = fs.readFileSync(fullPath, 'utf8');
-      vfs[vfsPath] = content;
+      vfs[vfsPath] = fs.readFileSync(fullPath, 'utf8');
     }
   }
 }
@@ -115,4 +114,4 @@ const sizeMb = (fs.statSync(outputFile).size / (1024 * 1024)).toFixed(2);
 console.log(`\x1b[32m✓ Runtime bundle created successfully!\x1b[0m`);
 console.log(`  • Destination: docs/public/wasm/typephp-runtime.json`);
 console.log(`  • Files bundled: ${fileCount}`);
-console.log(`  • Uncompressed size: ${sizeMb} MB`);
+console.log(`  • Payload size: ${sizeMb} MB`);

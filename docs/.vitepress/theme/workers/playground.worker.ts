@@ -1,13 +1,6 @@
 import { PHP, loadPHPRuntime } from '@php-wasm/universal';
 import { getPHPLoaderModule } from '@php-wasm/web-8-5';
 
-self.addEventListener('error', (event) => {
-  console.error('[Worker Error Detail]', event.message, event.filename, event.lineno, event.error);
-});
-self.addEventListener('unhandledrejection', (event) => {
-  console.error('[Worker Rejection Detail]', event.reason);
-});
-
 let php: PHP | null = null;
 let isReady = false;
 
@@ -198,7 +191,7 @@ if (!str_starts_with(trim($source), '<?php')) {
 }
 
 if (!$isEnabled) {
-    echo "// TypePHP runtime enforcement is disabled in Config.\\n// Transformed code is identical to raw source:\\n\\n" . $source;
+    echo $source;
     exit(0);
 }
 
@@ -223,32 +216,30 @@ function makeDirectory(targetPhp: PHP, dirPath: string) {
     try {
       targetPhp.mkdir(current);
     } catch {
-      // Directory already exists
+      // Directory exists
     }
   }
 }
 
 async function initRuntime(baseUrl: string) {
   try {
-    self.postMessage({ type: 'STATUS', message: 'Downloading PHP 8.5 engine & TypePHP bundle...' });
+    self.postMessage({ type: 'STATUS', message: 'Loading PHP 8.5 WebAssembly engine...' });
 
-    const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/';
-    const bundleUrl = `${cleanBaseUrl}wasm/typephp-runtime.json`;
-
-    const [runtimeId, vfs] = await Promise.all([
-      getPHPLoaderModule('asyncify').then((loaderModule) => loadPHPRuntime(loaderModule)),
-      fetch(bundleUrl).then(async (res) => {
-        if (!res.ok) {
-          throw new Error(`Failed to load runtime bundle: ${res.statusText} (${bundleUrl})`);
-        }
-        return res.json() as Promise<Record<string, string>>;
-      }),
-    ]);
-
+    const loaderModule = await getPHPLoaderModule('asyncify');
+    const runtimeId = await loadPHPRuntime(loaderModule);
     php = new PHP(runtimeId);
 
     self.postMessage({ type: 'STATUS', message: 'Mounting virtual filesystem...' });
 
+    const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/';
+    const bundleUrl = `${cleanBaseUrl}wasm/typephp-runtime.json`;
+    const response = await fetch(bundleUrl);
+
+    if (!response.ok) {
+      throw new Error(`Failed to load runtime bundle: ${response.statusText} (${bundleUrl})`);
+    }
+
+    const vfs: Record<string, string> = await response.json();
     const createdDirs = new Set<string>();
 
     for (const [filePath, content] of Object.entries(vfs)) {
@@ -279,16 +270,7 @@ async function initRuntime(baseUrl: string) {
 }
 
 async function runCode(code: string, config?: any) {
-  if (!php || !isReady) {
-    self.postMessage({
-      type: 'RUN_RESULT',
-      stdout: '',
-      stderr: 'PHP 8.5 engine is still initializing. Please wait a moment...',
-      exitCode: 1,
-      duration: '0.0',
-    });
-    return;
-  }
+  if (!php || !isReady) return;
 
   try {
     if (config) {
@@ -367,7 +349,5 @@ self.onmessage = async (event: MessageEvent) => {
     case 'TRANSFORM':
       await transformCode(code || '', config);
       break;
-    default:
-      console.warn('[Playground Worker] Unknown action:', action);
   }
 };
