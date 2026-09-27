@@ -26,16 +26,8 @@ export default defineConfig({
           '.wasm': 'file',
         },
       },
-      exclude: [
-        '@php-wasm/web-7-4',
-        '@php-wasm/web-8-0',
-        '@php-wasm/web-8-1',
-        '@php-wasm/web-8-2',
-        '@php-wasm/web-8-3',
-        '@php-wasm/web-8-4',
-        '@php-wasm/web-8-5',
-        '@php-wasm/universal'
-      ]
+
+      exclude: ['@php-wasm/web-7-4', '@php-wasm/web-8-0', '@php-wasm/web-8-1', '@php-wasm/web-8-2', '@php-wasm/web-8-3', '@php-wasm/web-8-4']
     },
     build: {
       target: 'esnext'
