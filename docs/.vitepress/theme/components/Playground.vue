@@ -1,18 +1,42 @@
 <template>
-  <div class="playground-root" :style="{ '--playground-font-size': `${fontSize}px` }">
+  <div
+    class="playground-root"
+    :style="{ '--playground-font-size': `${fontSize}px` }"
+  >
     <!-- Top Action Toolbar -->
     <header class="playground-toolbar">
       <div class="toolbar-left">
-        <select v-model="selectedPresetId" class="preset-select" @change="onSelectPreset">
-          <option v-for="preset in presets" :key="preset?.id" :value="preset?.id">
-            [{{ preset?.badge }}] {{ preset?.name }}
-          </option>
-        </select>
+        <div class="preset-select-wrapper">
+          <select
+            v-model="selectedPresetId"
+            class="preset-select"
+            @change="onSelectPreset"
+          >
+            <option v-for="preset in presets" :key="preset?.id" :value="preset?.id">
+              [{{ preset?.badge }}] {{ preset?.name }}
+            </option>
+          </select>
+          <svg
+            class="select-chevron"
+            viewBox="0 0 24 24"
+            width="12"
+            height="12"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+          >
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </div>
       </div>
 
       <div class="toolbar-center">
         <!-- Run Button -->
-        <button class="run-btn" :disabled="!isReady || isRunning" @click="runCode">
+        <button
+          class="run-btn"
+          :disabled="!isReady || isRunning"
+          @click="runCode"
+        >
           <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
             <path d="M8 5v14l11-7z" />
           </svg>
@@ -22,11 +46,17 @@
 
         <!-- View Mode Switcher -->
         <div class="view-mode-toggle">
-          <button :class="['mode-btn', { active: viewMode === 'source' }]" @click="viewMode = 'source'">
+          <button
+            :class="['mode-btn', { active: viewMode === 'source' }]"
+            @click="viewMode = 'source'"
+          >
             Source
           </button>
-          <button :class="['mode-btn', { active: viewMode === 'xray' }]"
-            title="Inspect TypePHP AST injected checks in-place with zero line-drift" @click="viewMode = 'xray'">
+          <button
+            :class="['mode-btn', { active: viewMode === 'xray' }]"
+            title="Inspect TypePHP AST injected checks in-place with zero line-drift"
+            @click="viewMode = 'xray'"
+          >
             Transformed Source
           </button>
         </div>
@@ -35,13 +65,14 @@
       <div class="toolbar-right">
         <!-- Engine Config Popover Trigger -->
         <div ref="configWrapperRef" class="config-popover-wrapper">
-          <button :class="['action-btn', 'config-trigger-btn', { active: isConfigOpen, 'has-custom': hasCustomConfig }]"
-            title="TypePHP Engine Configuration" @click.stop="isConfigOpen = !isConfigOpen">
+          <button
+            :class="['action-btn', 'config-trigger-btn', { active: isConfigOpen, 'has-custom': hasCustomConfig }]"
+            title="TypePHP Engine Configuration"
+            @click.stop="isConfigOpen = !isConfigOpen"
+          >
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="3"></circle>
-              <path
-                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
-              </path>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
             </svg>
             <span>Config</span>
             <span v-if="hasCustomConfig" class="config-active-dot" title="Custom configuration active"></span>
@@ -59,14 +90,17 @@
               <div class="config-row">
                 <div class="config-info">
                   <span class="config-label">Array Validation Strategy</span>
-                  <span class="config-desc">Full scans 100% of items. Hybrid switches to O(1) sampling on arrays &gt;
-                    128 items.</span>
+                  <span class="config-desc">Full scans 100% of items. Hybrid switches to O(1) sampling on arrays &gt; 128 items.</span>
                 </div>
                 <div class="pill-group">
-                  <button :class="['pill-btn', { active: config.arrayValidation === 'full' }]"
-                    @click="config.arrayValidation = 'full'">Full O(n)</button>
-                  <button :class="['pill-btn', { active: config.arrayValidation === 'hybrid' }]"
-                    @click="config.arrayValidation = 'hybrid'">Hybrid O(1)</button>
+                  <button
+                    :class="['pill-btn', { active: config.arrayValidation === 'full' }]"
+                    @click="config.arrayValidation = 'full'"
+                  >Full O(n)</button>
+                  <button
+                    :class="['pill-btn', { active: config.arrayValidation === 'hybrid' }]"
+                    @click="config.arrayValidation = 'hybrid'"
+                  >Hybrid O(1)</button>
                 </div>
               </div>
 
@@ -74,11 +108,12 @@
               <div class="config-row">
                 <div class="config-info">
                   <span class="config-label">Strict Generic Return Invariance</span>
-                  <span class="config-desc">PHPStan Level MAX invariance. Turn OFF for pragmatic return covariance
-                    (LSP).</span>
+                  <span class="config-desc">PHPStan Level MAX invariance. Turn OFF for pragmatic return covariance (LSP).</span>
                 </div>
-                <button :class="['toggle-switch', { active: config.strictReturnGenericInvariance }]"
-                  @click="config.strictReturnGenericInvariance = !config.strictReturnGenericInvariance">
+                <button
+                  :class="['toggle-switch', { active: config.strictReturnGenericInvariance }]"
+                  @click="config.strictReturnGenericInvariance = !config.strictReturnGenericInvariance"
+                >
                   <span class="toggle-knob"></span>
                 </button>
               </div>
@@ -87,11 +122,12 @@
               <div class="config-row">
                 <div class="config-info">
                   <span class="config-label">Respect Native Nullability</span>
-                  <span class="config-desc">Permits null if native parameter has ?Type even if omitted in
-                    DocBlock.</span>
+                  <span class="config-desc">Permits null if native parameter has ?Type even if omitted in DocBlock.</span>
                 </div>
-                <button :class="['toggle-switch', { active: config.respectNativeNullability }]"
-                  @click="config.respectNativeNullability = !config.respectNativeNullability">
+                <button
+                  :class="['toggle-switch', { active: config.respectNativeNullability }]"
+                  @click="config.respectNativeNullability = !config.respectNativeNullability"
+                >
                   <span class="toggle-knob"></span>
                 </button>
               </div>
@@ -102,15 +138,21 @@
                   <span class="config-label">Respect @typephp-ignore Tags</span>
                   <span class="config-desc">Honors ignore tags. Turn OFF to simulate a strict CI/CD audit run.</span>
                 </div>
-                <button :class="['toggle-switch', { active: config.respectIgnoreTags }]"
-                  @click="config.respectIgnoreTags = !config.respectIgnoreTags">
+                <button
+                  :class="['toggle-switch', { active: config.respectIgnoreTags }]"
+                  @click="config.respectIgnoreTags = !config.respectIgnoreTags"
+                >
                   <span class="toggle-knob"></span>
                 </button>
               </div>
             </div>
 
             <div class="popover-footer">
-              <button class="reset-config-btn" :disabled="!hasCustomConfig" @click="resetConfig">
+              <button
+                class="reset-config-btn"
+                :disabled="!hasCustomConfig"
+                @click="resetConfig"
+              >
                 Reset to Defaults
               </button>
             </div>
@@ -119,11 +161,21 @@
 
         <!-- Font Zoom Widget -->
         <div class="font-zoom-widget" title="Adjust text size">
-          <button class="zoom-btn" :disabled="fontSize <= 11" title="Decrease font size" @click="adjustFontSize(-1)">
+          <button
+            class="zoom-btn"
+            :disabled="fontSize <= 11"
+            title="Decrease font size"
+            @click="adjustFontSize(-1)"
+          >
             A-
           </button>
           <span class="font-size-label">{{ fontSize }}px</span>
-          <button class="zoom-btn" :disabled="fontSize >= 20" title="Increase font size" @click="adjustFontSize(1)">
+          <button
+            class="zoom-btn"
+            :disabled="fontSize >= 20"
+            title="Increase font size"
+            @click="adjustFontSize(1)"
+          >
             A+
           </button>
         </div>
@@ -150,13 +202,28 @@
     <!-- Main Workspace -->
     <main :class="['playground-workspace', `layout-${effectivePosition}`]">
       <div class="editor-pane">
-        <PlaygroundEditor ref="editorRef" :model-value="viewMode === 'source' ? code : transformedCode"
-          :read-only="viewMode === 'xray'" :font-size="fontSize" @update:model-value="onCodeUpdate" @run="runCode" />
+        <PlaygroundEditor
+          ref="editorRef"
+          :model-value="viewMode === 'source' ? code : transformedCode"
+          :read-only="viewMode === 'xray'"
+          :font-size="fontSize"
+          @update:model-value="onCodeUpdate"
+          @run="runCode"
+        />
       </div>
 
-      <PlaygroundOutput ref="outputDrawerRef" :position="effectivePosition" :stdout="stdout" :stderr="stderr"
-        :exit-code="exitCode" :duration="duration" :status-message="workerStatus" :is-running="isRunning"
-        @clear="clearConsole" @toggle-position="toggleLayoutPosition" />
+      <PlaygroundOutput
+        ref="outputDrawerRef"
+        :position="effectivePosition"
+        :stdout="stdout"
+        :stderr="stderr"
+        :exit-code="exitCode"
+        :duration="duration"
+        :status-message="workerStatus"
+        :is-running="isRunning"
+        @clear="clearConsole"
+        @toggle-position="toggleLayoutPosition"
+      />
     </main>
   </div>
 </template>
@@ -180,7 +247,9 @@ const code = ref<string>(presets[0]?.code ?? '<?php\n');
 const viewMode = ref<'source' | 'xray'>('source');
 const layoutPosition = ref<'bottom' | 'side'>('bottom');
 const windowWidth = ref<number>(typeof window !== 'undefined' ? window.innerWidth : 1200);
+
 const outputDrawerRef = ref<InstanceType<typeof PlaygroundOutput> | null>(null);
+const editorRef = ref<InstanceType<typeof PlaygroundEditor> | null>(null);
 
 const fontSize = ref<number>(13.5);
 
@@ -198,6 +267,7 @@ const transformedCode = ref<string>('');
 const copiedLink = ref<boolean>(false);
 const copiedCode = ref<boolean>(false);
 
+// Config Popover State
 const isConfigOpen = ref<boolean>(false);
 const configWrapperRef = ref<HTMLDivElement | null>(null);
 const config = ref<PlaygroundConfig>({ ...DEFAULT_PLAYGROUND_CONFIG });
@@ -220,12 +290,6 @@ const effectivePosition = computed<'bottom' | 'side'>(() => {
   }
   return layoutPosition.value;
 });
-
-const editorRef = ref<InstanceType<typeof PlaygroundEditor> | null>(null);
-
-function formatCode() {
-  editorRef.value?.autoIndent();
-}
 
 function handleWindowResize() {
   windowWidth.value = window.innerWidth;
@@ -262,7 +326,7 @@ onMounted(() => {
         config.value = { ...DEFAULT_PLAYGROUND_CONFIG, ...parsed };
       }
     }
-  } catch { }
+  } catch {}
 
   const hash = window.location.hash;
   if (hash.startsWith('#code=')) {
@@ -353,7 +417,7 @@ onMounted(() => {
 watch(config, (newConf) => {
   try {
     localStorage.setItem('typephp_playground_config', JSON.stringify(newConf));
-  } catch { }
+  } catch {}
   triggerTransform();
 }, { deep: true });
 
@@ -366,7 +430,7 @@ function toggleLayoutPosition() {
   layoutPosition.value = newPos;
   try {
     localStorage.setItem('typephp_playground_dock', newPos);
-  } catch { }
+  } catch {}
 }
 
 function adjustFontSize(delta: number) {
@@ -374,7 +438,11 @@ function adjustFontSize(delta: number) {
   fontSize.value = newSize;
   try {
     localStorage.setItem('typephp_playground_fontsize', newSize.toString());
-  } catch { }
+  } catch {}
+}
+
+function formatCode() {
+  (editorRef.value as any)?.autoIndent?.();
 }
 
 function onCodeUpdate(newCode: string) {
@@ -489,29 +557,64 @@ onUnmounted(() => {
   gap: 10px;
 }
 
-.toolbar-left,
-.toolbar-center,
-.toolbar-right {
+.toolbar-left, .toolbar-center, .toolbar-right {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
+/* Preset Dropdown Wrapper & Chevron */
+.preset-select-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
 .preset-select {
-  padding: 4px 8px;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding: 5px 30px 5px 10px;
   font-size: 12px;
-  font-weight: 500;
-  border-radius: 5px;
+  font-weight: 600;
+  border-radius: 6px;
   border: 1px solid var(--vp-c-divider);
   background: var(--vp-c-bg);
   color: var(--vp-c-text-1);
   cursor: pointer;
   outline: none;
-  max-width: 260px;
+  width: 340px;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: all 0.2s ease;
 }
 
 .preset-select:hover {
   border-color: var(--vp-c-brand-1);
+}
+
+.preset-select:focus {
+  border-color: var(--vp-c-brand-1);
+  box-shadow: 0 0 0 1px var(--vp-c-brand-1);
+}
+
+.select-chevron {
+  position: absolute;
+  right: 10px;
+  pointer-events: none;
+  color: var(--vp-c-text-2);
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.preset-select-wrapper:hover .select-chevron {
+  color: var(--vp-c-brand-1);
+}
+
+@media (min-width: 1280px) {
+  .preset-select {
+    width: 380px;
+  }
 }
 
 .run-btn {
@@ -574,6 +677,7 @@ onUnmounted(() => {
   color: var(--vp-c-brand-1);
 }
 
+/* Config Popover */
 .config-popover-wrapper {
   position: relative;
   display: inline-flex;
@@ -827,18 +931,9 @@ onUnmounted(() => {
   background: #9ca3af;
 }
 
-.status-dot.active {
-  background: #10b981;
-}
-
-.status-dot.loading {
-  background: #f59e0b;
-  animation: pulse 1s infinite;
-}
-
-.status-dot.error {
-  background: #ef4444;
-}
+.status-dot.active { background: #10b981; }
+.status-dot.loading { background: #f59e0b; animation: pulse 1s infinite; }
+.status-dot.error { background: #ef4444; }
 
 .playground-workspace {
   display: flex;
@@ -880,13 +975,16 @@ onUnmounted(() => {
     width: 100%;
   }
 
+  .preset-select-wrapper {
+    width: 100%;
+  }
+
   .preset-select {
     max-width: 100%;
     width: 100%;
   }
 
-  .toolbar-center,
-  .toolbar-right {
+  .toolbar-center, .toolbar-right {
     justify-content: space-between;
   }
 
@@ -913,16 +1011,6 @@ onUnmounted(() => {
 @media (max-width: 640px) {
   .font-zoom-widget {
     display: none;
-  }
-}
-
-@media (max-width: 768px) {
-  :deep(.readonly-badge),
-  :deep(.xray-badge),
-  :deep(.transform-badge),
-  :deep([class*="badge"]),
-  :deep([class*="xray"]) {
-    display: none !important;
   }
 }
 </style>

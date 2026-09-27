@@ -34,18 +34,18 @@ class Shelter {
 }
 
 // 1. Valid: Dog satisfies upper bound Animal
-/** @var Shelter<Dog> $dogShelter */
+/** @var Shelter<Dog> */
 $dogShelter = new Shelter();
 $dogShelter->admit(new Dog('Buddy'));
 
 // 2. Valid: Cat satisfies upper bound Animal
-/** @var Shelter<Cat> $catShelter */
+/** @var Shelter<Cat> */
 $catShelter = new Shelter();
 $catShelter->admit(new Cat('Luna'));
 
 // 3. Invalid: Car violates upper bound Animal at assignment!
 echo "\\nAttempting to create Shelter<Car>...\\n";
-/** @var Shelter<Car> $carShelter */
+/** @var Shelter<Car> */
 $carShelter = new Shelter();
 `
 } satisfies PlaygroundPreset;
