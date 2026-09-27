@@ -250,9 +250,39 @@ function makeDirectory(targetPhp: PHP, dirPath: string) {
   }
 }
 
+async function fetchBundle(baseUrl: string): Promise<{ dirs: string[]; files: Record<string, string> }> {
+  const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/';
+  const gzUrl = `${cleanBaseUrl}wasm/typephp-runtime.json.gz`;
+  const fallbackUrl = `${cleanBaseUrl}wasm/typephp-runtime.json`;
+
+  try {
+    const res = await fetch(gzUrl);
+    if (res.ok && typeof DecompressionStream !== 'undefined') {
+      const stream = res.body!.pipeThrough(new DecompressionStream('gzip'));
+      const text = await new Response(stream).text();
+      return JSON.parse(text);
+    }
+  } catch {
+    // Fall back to raw JSON if decompression or gzip fails
+  }
+
+  const res = await fetch(fallbackUrl);
+  if (!res.ok) {
+    throw new Error(`Failed to load runtime bundle (${fallbackUrl})`);
+  }
+  const data = await res.json();
+  if (data.dirs && data.files) {
+    return data;
+  }
+
+  return { dirs: [], files: data };
+}
+
 async function initRuntime(baseUrl: string) {
   try {
     self.postMessage({ type: 'STATUS', message: 'Loading PHP 8.5 WebAssembly engine...' });
+
+    const bundlePromise = fetchBundle(baseUrl);
 
     const loaderModule = await getPHPLoaderModule('asyncify');
     const runtimeId = await loadPHPRuntime(loaderModule);
@@ -260,26 +290,17 @@ async function initRuntime(baseUrl: string) {
 
     self.postMessage({ type: 'STATUS', message: 'Mounting virtual filesystem...' });
 
-    const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/';
-    const bundleUrl = `${cleanBaseUrl}wasm/typephp-runtime.json`;
-    const response = await fetch(bundleUrl);
+    const bundle = await bundlePromise;
 
-    if (!response.ok) {
-      throw new Error(`Failed to load runtime bundle: ${response.statusText} (${bundleUrl})`);
+    for (const dir of bundle.dirs) {
+      try {
+        php.mkdir(dir);
+      } catch {
+        // Safe ignore
+      }
     }
 
-    const vfs: Record<string, string> = await response.json();
-    const createdDirs = new Set<string>();
-
-    for (const [filePath, content] of Object.entries(vfs)) {
-      const lastSlash = filePath.lastIndexOf('/');
-      if (lastSlash > 0) {
-        const dir = filePath.substring(0, lastSlash);
-        if (!createdDirs.has(dir)) {
-          makeDirectory(php, dir);
-          createdDirs.add(dir);
-        }
-      }
+    for (const [filePath, content] of Object.entries(bundle.files)) {
       php.writeFile(filePath, content);
     }
 

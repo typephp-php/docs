@@ -6,6 +6,7 @@ export default defineConfig({
   base: '/docs/',
 
   head: [
+    ['link', { rel: 'preload', href: '/docs/wasm/typephp-runtime.json.gz', as: 'fetch', crossorigin: 'anonymous' }],
     ['link', { rel: 'prefetch', href: '/docs/wasm/typephp-runtime.json', as: 'fetch' }]
   ],
 
