@@ -4,11 +4,7 @@ export default defineConfig({
   title: "TypePHP",
   description: "Transparent Runtime Type Enforcement for PHP.",
   base: '/docs/',
-
-  head: [
-    ['script', { src: '/docs/coi-serviceworker.js' }]
-  ],
-
+  
   markdown: {
     math: true
   },
