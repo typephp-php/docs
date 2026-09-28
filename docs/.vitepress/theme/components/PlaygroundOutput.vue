@@ -156,7 +156,7 @@ defineEmits<{
 
 const isCollapsed = ref<boolean>(false);
 const drawerHeight = ref<number>(230);
-const drawerWidth = ref<number>(360);
+const drawerWidth = ref<number>(600);
 const copied = ref<boolean>(false);
 
 const containerStyle = computed(() => {

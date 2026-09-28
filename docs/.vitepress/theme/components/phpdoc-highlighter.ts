@@ -12,6 +12,11 @@ const classDeco = Decoration.mark({ class: 'cm-php-class' });
 const methodDeco = Decoration.mark({ class: 'cm-php-method' });
 const funcDeco = Decoration.mark({ class: 'cm-php-func' });
 
+// ✨ New specialized decorations for $this, self/static, and properties
+const thisDeco = Decoration.mark({ class: 'cm-php-this' });
+const selfStaticDeco = Decoration.mark({ class: 'cm-php-self-static' });
+const propertyDeco = Decoration.mark({ class: 'cm-php-property' });
+
 interface LineToken {
   from: number;
   to: number;
@@ -75,9 +80,10 @@ function isInsideIgnored(from: number, to: number, ranges: Array<{ from: number;
 
 function tokenizePhpCode(lineFrom: number, text: string, lineTokens: LineToken[]) {
   const ignored = getIgnoredCodeRanges(text);
-
-  const methodCallRegex = /(?:->|\?->)\s*([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)\s*(?=\(|\.\.\.)/g;
   let match: RegExpExecArray | null;
+
+  // 1. Method calls: ->method(...) or ?->method(...)
+  const methodCallRegex = /(?:->|\?->)\s*([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)\s*(?=\(|\.\.\.)/g;
   while ((match = methodCallRegex.exec(text)) !== null) {
     const name = match[1];
     const from = lineFrom + match.index + match[0].indexOf(name);
@@ -87,6 +93,7 @@ function tokenizePhpCode(lineFrom: number, text: string, lineTokens: LineToken[]
     }
   }
 
+  // 2. Static method calls: ::method(...)
   const staticMethodRegex = /::\s*([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)\s*(?=\(|\.\.\.)/g;
   while ((match = staticMethodRegex.exec(text)) !== null) {
     const name = match[1];
@@ -97,6 +104,61 @@ function tokenizePhpCode(lineFrom: number, text: string, lineTokens: LineToken[]
     }
   }
 
+  // 3. ✨ Object Property Access: ->property or ?->property (NOT followed by `(` or `...`)
+  const propertyAccessRegex = /(?:->|\?->)\s*([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)\b(?!\s*(\(|\.\.\.))/g;
+  while ((match = propertyAccessRegex.exec(text)) !== null) {
+    const propName = match[1];
+    const from = lineFrom + match.index + match[0].indexOf(propName);
+    const to = from + propName.length;
+    if (!isInsideIgnored(from - lineFrom, to - lineFrom, ignored)) {
+      lineTokens.push({ from, to, deco: propertyDeco });
+    }
+  }
+
+  // 4. ✨ Declared Properties in Class: public string $state, public array $items
+  const propDeclRegex = /(?:public|protected|private|var)\s+(?:(?:static|readonly)\s+)?(?:(?!function\b)[a-zA-Z0-9_\\|\&<>\?,\s]+\s+)?\$([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)\b/g;
+  while ((match = propDeclRegex.exec(text)) !== null) {
+    const propName = match[1];
+    const varWithDollar = '$' + propName;
+    const startOffset = match[0].lastIndexOf(varWithDollar);
+    if (startOffset !== -1) {
+      const from = lineFrom + match.index + startOffset;
+      const to = from + varWithDollar.length;
+      if (!isInsideIgnored(from - lineFrom, to - lineFrom, ignored)) {
+        lineTokens.push({ from, to, deco: propertyDeco });
+      }
+    }
+  }
+
+  // 5. ✨ Special pseudo-variable $this
+  const thisRegex = /\b\$this\b/g;
+  while ((match = thisRegex.exec(text)) !== null) {
+    const from = lineFrom + match.index;
+    const to = from + 5;
+    if (!isInsideIgnored(match.index, match.index + 5, ignored)) {
+      lineTokens.push({ from, to, deco: thisDeco });
+    }
+  }
+
+  // 6. ✨ Special class scope references: self, static, parent (not preceded by -> or $)
+  const selfStaticRegex = /\b(self|static|parent)\b/g;
+  while ((match = selfStaticRegex.exec(text)) !== null) {
+    const word = match[1];
+    const startPos = match.index;
+    const from = lineFrom + startPos;
+    const to = from + word.length;
+    if (isInsideIgnored(startPos, startPos + word.length, ignored)) {
+      continue;
+    }
+    const prevChar = startPos > 0 ? text[startPos - 1] : '';
+    const twoCharsBefore = startPos > 1 ? text.slice(startPos - 2, startPos) : '';
+    if (twoCharsBefore === '->' || twoCharsBefore === '?->' || prevChar === '$') {
+      continue;
+    }
+    lineTokens.push({ from, to, deco: selfStaticDeco });
+  }
+
+  // 7. Class names
   const classRegex = /\b([A-Z][a-zA-Z0-9_]*|stdClass)\b/g;
   while ((match = classRegex.exec(text)) !== null) {
     const word = match[1];
@@ -121,6 +183,7 @@ function tokenizePhpCode(lineFrom: number, text: string, lineTokens: LineToken[]
     lineTokens.push({ from, to, deco: classDeco });
   }
 
+  // 8. Function calls
   const funcCallRegex = /\b([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)\s*(?=\(|\.\.\.)/g;
   while ((match = funcCallRegex.exec(text)) !== null) {
     const fnName = match[1];
@@ -204,7 +267,7 @@ function tokenizeTypeZone(startOffset: number, typeText: string, lineTokens: Lin
 
     const isInsideGeneric = genericRanges.some((r) => matchFrom >= r.from && matchTo <= r.to);
     if (!isInsideGeneric) {
-      lineTokens.push({ from: matchFrom, to: matchTo, deco: typeDeco });
+      lineTokens.push({ from: matchFrom, to: matchTo, deco: typeDeco }); 
     }
   }
 }

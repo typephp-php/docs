@@ -84,7 +84,7 @@ const selectedPresetId = ref<string>(presets[0]?.id ?? '');
 const code = ref<string>(presets[0]?.code ?? '<?php\n');
 
 const viewMode = ref<'source' | 'xray'>('source');
-const layoutPosition = ref<'bottom' | 'side'>('bottom');
+const layoutPosition = ref<'bottom' | 'side'>('side');
 const windowWidth = ref<number>(typeof window !== 'undefined' ? window.innerWidth : 1200);
 
 const outputDrawerRef = ref<InstanceType<typeof PlaygroundOutput> | null>(null);
@@ -146,6 +146,8 @@ onMounted(() => {
     const savedPos = localStorage.getItem('typephp_playground_dock');
     if (savedPos === 'side' || savedPos === 'bottom') {
       layoutPosition.value = savedPos;
+    } else {
+      layoutPosition.value = 'side';
     }
 
     const savedConfig = localStorage.getItem('typephp_playground_config');
@@ -210,6 +212,7 @@ onMounted(() => {
           isReady.value = true;
           workerStatus.value = `Ready (${data.version})`;
           triggerTransform();
+          runCode();
           break;
 
         case 'INIT_ERROR':
@@ -290,6 +293,7 @@ function onSelectPreset(presetId: string) {
     viewMode.value = 'source';
     clearConsole();
     triggerTransform();
+    runCode();
   }
 }
 

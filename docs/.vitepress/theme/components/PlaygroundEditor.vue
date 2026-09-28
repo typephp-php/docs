@@ -13,6 +13,7 @@ import { EditorView, basicSetup } from 'codemirror';
 import { EditorState, Compartment } from '@codemirror/state';
 import { php } from '@codemirror/lang-php';
 import { oneDark } from '@codemirror/theme-one-dark';
+import { oneLight } from './theme-one-light';
 import { keymap } from '@codemirror/view';
 import { useData } from 'vitepress';
 import { phpdocHighlighter } from './phpdoc-highlighter';
@@ -51,6 +52,9 @@ const baseTheme = EditorView.theme({
   '.cm-php-class, .cm-php-class *': { color: '#e5c07b !important', fontWeight: '600 !important' },
   '.cm-php-method, .cm-php-method *': { color: '#61afef !important' },
   '.cm-php-func, .cm-php-func *': { color: '#61afef !important' },
+  '.cm-php-this, .cm-php-this *': { color: '#c678dd !important', fontStyle: 'italic !important', fontWeight: '600 !important' },
+  '.cm-php-self-static, .cm-php-self-static *': { color: '#e5c07b !important', fontStyle: 'italic !important', fontWeight: '600 !important' },
+  '.cm-php-property, .cm-php-property *': { color: '#56b6c2 !important', fontWeight: '500 !important' },
 });
 
 onMounted(() => {
@@ -74,7 +78,7 @@ onMounted(() => {
       phpdocHighlighter, 
       baseTheme,
       runKeymap,
-      themeCompartment.of(isDark.value ? oneDark : []),
+      themeCompartment.of(isDark.value ? oneDark : oneLight),
       readOnlyCompartment.of([
         EditorState.readOnly.of(props.readOnly),
         EditorView.editable.of(!props.readOnly),
@@ -96,7 +100,7 @@ onMounted(() => {
 watch(isDark, (newDark) => {
   if (view) {
     view.dispatch({
-      effects: themeCompartment.reconfigure(newDark ? oneDark : [])
+      effects: themeCompartment.reconfigure(newDark ? oneDark : oneLight)
     });
   }
 });
@@ -180,48 +184,81 @@ defineExpose({
 
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-tag),
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-tag) * {
-  color: #7c3aed !important;
+  color: #a626a4 !important;
+  font-weight: 700 !important;
 }
 
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-type),
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-type) * {
-  color: #b45309 !important;
+  color: #c18401 !important;
+  font-weight: 600 !important;
 }
 
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-generic-bracket),
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-generic-bracket) * {
-  color: #e11d48 !important;
+  color: #e45649 !important;
+  font-weight: 700 !important;
 }
 
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-generic-type),
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-generic-type) * {
-  color: #0891b2 !important;
+  color: #0184bc !important;
+  font-style: italic !important;
+  font-weight: 600 !important;
 }
 
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-variance),
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-variance) * {
-  color: #ea580c !important;
+  color: #986801 !important;
+  font-style: italic !important;
 }
 
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-var),
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-var) * {
-  color: #2563eb !important;
+  color: #4078f2 !important;
+  font-weight: 600 !important;
+}
+
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-shape-key),
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-shape-key) * {
+  color: #c18401 !important;
 }
 
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-php-class),
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-php-class) * {
-  color: #b45309 !important;
+  color: #c18401 !important;
+  font-weight: 600 !important;
 }
 
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-php-method),
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-php-method) *,
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-php-func),
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-php-func) * {
-  color: #0284c7 !important;
+  color: #4078f2 !important;
+}
+
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-php-this),
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-php-this) * {
+  color: #a626a4 !important;
+  font-style: italic !important;
+  font-weight: 600 !important;
+}
+
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-php-self-static),
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-php-self-static) * {
+  color: #c18401 !important;
+  font-style: italic !important;
+  font-weight: 600 !important;
+}
+
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-php-property),
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-php-property) * {
+  color: #0184bc !important;
+  font-weight: 500 !important;
 }
 
 @media (max-width: 768px) {
-  .your-badge-class-name {
+  .xray-floating-badge {
     display: none !important;
   }
 }
