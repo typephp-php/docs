@@ -82,7 +82,21 @@
           </button>
         </div>
 
-        <!-- 4. Respect Ignore Tags -->
+        <!-- 4. Validate Dynamic Property Reads (__get) [NEW] -->
+        <div class="config-row">
+          <div class="config-info">
+            <span class="config-label">Validate Dynamic Property Reads (__get)</span>
+            <span class="config-desc">Enforces @property and @property-read on __get(). Keep OFF for unhydrated ORMs.</span>
+          </div>
+          <button
+            :class="['toggle-switch', { active: modelValue.magicPropertyReads }]"
+            @click="updateField('magicPropertyReads', !modelValue.magicPropertyReads)"
+          >
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+
+        <!-- 5. Respect Ignore Tags -->
         <div class="config-row">
           <div class="config-info">
             <span class="config-label">Respect @typephp-ignore Tags</span>
@@ -96,7 +110,7 @@
           </button>
         </div>
 
-        <!-- 5. Ignore Trace Depth -->
+        <!-- 6. Ignore Trace Depth -->
         <div class="config-row">
           <div class="config-info">
             <span class="config-label">Ignore Trace Depth</span>

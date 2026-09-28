@@ -115,7 +115,8 @@ const hasCustomConfig = computed<boolean>(() => {
     config.value.arrayValidation !== DEFAULT_PLAYGROUND_CONFIG.arrayValidation ||
     config.value.strictReturnGenericInvariance !== DEFAULT_PLAYGROUND_CONFIG.strictReturnGenericInvariance ||
     config.value.respectNativeNullability !== DEFAULT_PLAYGROUND_CONFIG.respectNativeNullability ||
-    config.value.respectIgnoreTags !== DEFAULT_PLAYGROUND_CONFIG.respectIgnoreTags
+    config.value.respectIgnoreTags !== DEFAULT_PLAYGROUND_CONFIG.respectIgnoreTags ||
+    config.value.magicPropertyReads !== DEFAULT_PLAYGROUND_CONFIG.magicPropertyReads
   );
 });
 

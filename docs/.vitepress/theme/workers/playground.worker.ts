@@ -20,6 +20,9 @@ if (!defined('STDOUT')) {
 
 require_once '/typephp/vendor/autoload.php';
 
+use TypePHP\\Internal\\Util\\Config;
+use TypePHP\\Internal\\Io\\StreamWrapper;
+
 function sanitizePath(string $path): string {
     $normalized = str_replace('\\\\', '/', $path);
     if (str_ends_with($normalized, 'transformed.php') || str_ends_with($normalized, 'playground.php')) {
@@ -136,14 +139,19 @@ if (file_exists('/workspace/config.json')) {
 
 $isEnabled = (bool) ($userConfig['enabled'] ?? true);
 $ignoreDepth = isset($userConfig['ignoreTraceDepth']) ? max(1, (int) $userConfig['ignoreTraceDepth']) : 25;
+$magicPropertyReads = (bool) ($userConfig['magicPropertyReads'] ?? false);
 
-\\TypePHP\\Internal\\Util\\Config::set([
+Config::set([
     'enabled' => $isEnabled,
     'ignore_trace_depth' => $ignoreDepth,
     'cache' => false,
     'include' => ['/workspace/playground.php', '/workspace/transformed.php'],
     'exclude' => ['/typephp/**'],
     'vendor_boundary_only' => false,
+    'magic_properties' => [
+        'write' => true,
+        'read' => $magicPropertyReads,
+    ],
     'array_validation' => $userConfig['arrayValidation'] ?? 'full',
     'strict_return_generic_invariance' => (bool) ($userConfig['strictReturnGenericInvariance'] ?? true),
     'respect_native_nullability' => (bool) ($userConfig['respectNativeNullability'] ?? true),
@@ -170,7 +178,7 @@ if (!$isEnabled) {
 }
 
 try {
-    $transformed = \\TypePHP\\Internal\\Io\\StreamWrapper::transformSource($source, '/workspace/playground.php');
+    $transformed = StreamWrapper::transformSource($source, '/workspace/playground.php');
     file_put_contents('/workspace/transformed.php', $transformed);
 } catch (\\PhpParser\\Error $e) {
     $line = $e->getStartLine();
@@ -198,6 +206,9 @@ ini_set('display_errors', '0');
 
 require_once '/typephp/vendor/autoload.php';
 
+use TypePHP\\Internal\\Util\\Config;
+use TypePHP\\Internal\\Io\\StreamWrapper;
+
 $userConfig = [];
 if (file_exists('/workspace/config.json')) {
     $raw = file_get_contents('/workspace/config.json');
@@ -224,13 +235,19 @@ if (!$isEnabled) {
     exit(0);
 }
 
-\\TypePHP\\Internal\\Util\\Config::set([
+$magicPropertyReads = (bool) ($userConfig['magicPropertyReads'] ?? false);
+
+Config::set([
     'cache' => false,
+    'magic_properties' => [
+        'write' => true,
+        'read' => $magicPropertyReads,
+    ],
     'respect_ignore_tags' => (bool) ($userConfig['respectIgnoreTags'] ?? true),
 ]);
 
 try {
-    echo \\TypePHP\\Internal\\Io\\StreamWrapper::transformSource($source, '/workspace/playground.php');
+    echo StreamWrapper::transformSource($source, '/workspace/playground.php');
 } catch (\\Throwable $e) {
     echo $source;
 }

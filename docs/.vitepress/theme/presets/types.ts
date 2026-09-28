@@ -5,6 +5,7 @@ export interface PlaygroundConfig {
   strictReturnGenericInvariance: boolean;
   respectNativeNullability: boolean;
   respectIgnoreTags: boolean;
+  magicPropertyReads: boolean;
 }
 
 export interface PlaygroundPreset {
@@ -23,4 +24,5 @@ export const DEFAULT_PLAYGROUND_CONFIG: PlaygroundConfig = {
   strictReturnGenericInvariance: true,
   respectNativeNullability: true,
   respectIgnoreTags: true,
+  magicPropertyReads: false,
 };
