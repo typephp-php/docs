@@ -22,112 +22,116 @@
       </div>
 
       <div class="popover-body">
-        <!-- 0. Master Switch: Enable / Disable -->
-        <div class="config-row master-toggle">
-          <div class="config-info">
+        <!-- 0. Master Switch: Full Width Top Banner -->
+        <div class="config-card master-banner">
+          <div class="config-card-header">
             <span class="config-label">Enable TypePHP Enforcement</span>
-            <span class="config-desc">Turn OFF to run pure native PHP for zero-overhead baseline benchmarking.</span>
-          </div>
-          <button
-            :class="['toggle-switch', { active: modelValue.enabled }]"
-            @click="updateField('enabled', !modelValue.enabled)"
-          >
-            <span class="toggle-knob"></span>
-          </button>
-        </div>
-
-        <!-- 1. Array Validation Strategy -->
-        <div class="config-row">
-          <div class="config-info">
-            <span class="config-label">Array Validation Strategy</span>
-            <span class="config-desc">Full scans 100% of items. Hybrid switches to O(1) sampling on arrays &gt; 128 items.</span>
-          </div>
-          <div class="pill-group">
             <button
-              :class="['pill-btn', { active: modelValue.arrayValidation === 'full' }]"
-              @click="updateField('arrayValidation', 'full')"
-            >Full O(n)</button>
-            <button
-              :class="['pill-btn', { active: modelValue.arrayValidation === 'hybrid' }]"
-              @click="updateField('arrayValidation', 'hybrid')"
-            >Hybrid O(1)</button>
+              :class="['toggle-switch', { active: modelValue.enabled }]"
+              title="Toggle runtime type checking"
+              @click="updateField('enabled', !modelValue.enabled)"
+            >
+              <span class="toggle-knob"></span>
+            </button>
           </div>
+          <span class="config-desc">Turn OFF to run pure native PHP for zero-overhead baseline benchmarking.</span>
         </div>
 
-        <!-- 2. Strict Generic Return Invariance -->
-        <div class="config-row">
-          <div class="config-info">
-            <span class="config-label">Strict Generic Return Invariance</span>
-            <span class="config-desc">PHPStan Level MAX invariance. Turn OFF for pragmatic return covariance (LSP).</span>
+        <!-- 2-Column Responsive Grid -->
+        <div class="config-grid">
+          <!-- Column 1, Item 1: Array Validation Strategy -->
+          <div class="config-card">
+            <div class="config-card-header">
+              <span class="config-label">Array Validation</span>
+              <div class="pill-group">
+                <button
+                  :class="['pill-btn', { active: modelValue.arrayValidation === 'full' }]"
+                  @click="updateField('arrayValidation', 'full')"
+                >Full O(n)</button>
+                <button
+                  :class="['pill-btn', { active: modelValue.arrayValidation === 'hybrid' }]"
+                  @click="updateField('arrayValidation', 'hybrid')"
+                >Hybrid O(1)</button>
+              </div>
+            </div>
+            <span class="config-desc">Full scans 100% of items. Hybrid uses O(1) sampling on arrays &gt; 128 items.</span>
           </div>
-          <button
-            :class="['toggle-switch', { active: modelValue.strictReturnGenericInvariance }]"
-            @click="updateField('strictReturnGenericInvariance', !modelValue.strictReturnGenericInvariance)"
-          >
-            <span class="toggle-knob"></span>
-          </button>
-        </div>
 
-        <!-- 3. Respect Native Nullability -->
-        <div class="config-row">
-          <div class="config-info">
-            <span class="config-label">Respect Native Nullability</span>
+          <!-- Column 2, Item 1: Dynamic Property Reads (__get) -->
+          <div class="config-card">
+            <div class="config-card-header">
+              <span class="config-label">Property Reads (__get)</span>
+              <button
+                :class="['toggle-switch', { active: modelValue.magicPropertyReads }]"
+                @click="updateField('magicPropertyReads', !modelValue.magicPropertyReads)"
+              >
+                <span class="toggle-knob"></span>
+              </button>
+            </div>
+            <span class="config-desc">Enforces @property-read on __get(). Keep OFF for unhydrated ORM models.</span>
+          </div>
+
+          <!-- Column 1, Item 2: Strict Generic Return Invariance -->
+          <div class="config-card">
+            <div class="config-card-header">
+              <span class="config-label">Return Invariance</span>
+              <button
+                :class="['toggle-switch', { active: modelValue.strictReturnGenericInvariance }]"
+                @click="updateField('strictReturnGenericInvariance', !modelValue.strictReturnGenericInvariance)"
+              >
+                <span class="toggle-knob"></span>
+              </button>
+            </div>
+            <span class="config-desc">PHPStan Level MAX invariance. Turn OFF for pragmatic return covariance.</span>
+          </div>
+
+          <!-- Column 2, Item 2: Respect Ignore Tags -->
+          <div class="config-card">
+            <div class="config-card-header">
+              <span class="config-label">Respect Ignore Tags</span>
+              <button
+                :class="['toggle-switch', { active: modelValue.respectIgnoreTags }]"
+                @click="updateField('respectIgnoreTags', !modelValue.respectIgnoreTags)"
+              >
+                <span class="toggle-knob"></span>
+              </button>
+            </div>
+            <span class="config-desc">Honors @typephp-ignore tags. Turn OFF to simulate a strict CI/CD audit run.</span>
+          </div>
+
+          <!-- Column 1, Item 3: Respect Native Nullability -->
+          <div class="config-card">
+            <div class="config-card-header">
+              <span class="config-label">Native Nullability</span>
+              <button
+                :class="['toggle-switch', { active: modelValue.respectNativeNullability }]"
+                @click="updateField('respectNativeNullability', !modelValue.respectNativeNullability)"
+              >
+                <span class="toggle-knob"></span>
+              </button>
+            </div>
             <span class="config-desc">Permits null if native parameter has ?Type even if omitted in DocBlock.</span>
           </div>
-          <button
-            :class="['toggle-switch', { active: modelValue.respectNativeNullability }]"
-            @click="updateField('respectNativeNullability', !modelValue.respectNativeNullability)"
-          >
-            <span class="toggle-knob"></span>
-          </button>
-        </div>
 
-        <!-- 4. Validate Dynamic Property Reads (__get) [NEW] -->
-        <div class="config-row">
-          <div class="config-info">
-            <span class="config-label">Validate Dynamic Property Reads (__get)</span>
-            <span class="config-desc">Enforces @property and @property-read on __get(). Keep OFF for unhydrated ORMs.</span>
-          </div>
-          <button
-            :class="['toggle-switch', { active: modelValue.magicPropertyReads }]"
-            @click="updateField('magicPropertyReads', !modelValue.magicPropertyReads)"
-          >
-            <span class="toggle-knob"></span>
-          </button>
-        </div>
-
-        <!-- 5. Respect Ignore Tags -->
-        <div class="config-row">
-          <div class="config-info">
-            <span class="config-label">Respect @typephp-ignore Tags</span>
-            <span class="config-desc">Honors ignore tags. Turn OFF to simulate a strict CI/CD audit run.</span>
-          </div>
-          <button
-            :class="['toggle-switch', { active: modelValue.respectIgnoreTags }]"
-            @click="updateField('respectIgnoreTags', !modelValue.respectIgnoreTags)"
-          >
-            <span class="toggle-knob"></span>
-          </button>
-        </div>
-
-        <!-- 6. Ignore Trace Depth -->
-        <div class="config-row">
-          <div class="config-info">
-            <span class="config-label">Ignore Trace Depth</span>
+          <!-- Column 2, Item 3: Ignore Trace Depth -->
+          <div class="config-card">
+            <div class="config-card-header">
+              <span class="config-label">Ignore Trace Depth</span>
+              <div class="stepper-widget">
+                <button
+                  class="stepper-btn"
+                  :disabled="modelValue.ignoreTraceDepth <= 5"
+                  @click="adjustDepth(-5)"
+                >-5</button>
+                <span class="stepper-val">{{ modelValue.ignoreTraceDepth }}</span>
+                <button
+                  class="stepper-btn"
+                  :disabled="modelValue.ignoreTraceDepth >= 100"
+                  @click="adjustDepth(5)"
+                >+5</button>
+              </div>
+            </div>
             <span class="config-desc">Maximum call stack frames inspected above a failure for ignore tags.</span>
-          </div>
-          <div class="stepper-widget">
-            <button
-              class="stepper-btn"
-              :disabled="modelValue.ignoreTraceDepth <= 5"
-              @click="adjustDepth(-5)"
-            >-5</button>
-            <span class="stepper-val">{{ modelValue.ignoreTraceDepth }}</span>
-            <button
-              class="stepper-btn"
-              :disabled="modelValue.ignoreTraceDepth >= 100"
-              @click="adjustDepth(5)"
-            >+5</button>
           </div>
         </div>
       </div>
@@ -221,19 +225,20 @@ onUnmounted(() => {
   box-shadow: 0 0 0 1.5px var(--vp-c-bg);
 }
 
+/* Desktop: Anchored Dropdown (2-Column) */
 .config-popover {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
   z-index: 100;
-  width: 330px;
-  max-height: calc(100vh - 100px);
+  width: 580px;
+  max-width: calc(100vw - 24px);
   display: flex;
   flex-direction: column;
   background: var(--vp-c-bg);
   border: 1px solid var(--vp-c-divider);
   border-radius: 8px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
   overflow: hidden;
 }
 
@@ -247,7 +252,7 @@ onUnmounted(() => {
 }
 
 .popover-title {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--vp-c-text-1);
 }
@@ -255,72 +260,93 @@ onUnmounted(() => {
 .popover-close-btn {
   background: none;
   border: none;
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1;
   color: var(--vp-c-text-2);
   cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 
 .popover-close-btn:hover {
   color: var(--vp-c-text-1);
+  background: var(--vp-c-bg-soft);
 }
 
 .popover-body {
-  padding: 10px 14px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   overflow-y: auto;
 }
 
-.config-row {
+/* 2-Column Responsive Grid */
+.config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 10px;
+}
+
+/* Card item layout */
+.config-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 6px;
+  transition: border-color 0.15s ease;
+}
+
+.config-card:hover {
+  border-color: var(--vp-c-brand-1);
+}
+
+.config-card.master-banner {
+  background: var(--vp-c-bg-mute);
+  border-color: var(--vp-c-divider);
+}
+
+.config-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-}
-
-.config-row.master-toggle {
-  padding-bottom: 10px;
-  border-bottom: 1px dashed var(--vp-c-divider);
-}
-
-.config-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
+  gap: 8px;
 }
 
 .config-label {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--vp-c-text-1);
 }
 
 .config-desc {
-  font-size: 10.5px;
+  font-size: 10px;
   color: var(--vp-c-text-2);
-  line-height: 1.3;
+  line-height: 1.35;
 }
 
+/* Controls */
 .pill-group {
   display: inline-flex;
   border: 1px solid var(--vp-c-divider);
-  border-radius: 5px;
+  border-radius: 4px;
   overflow: hidden;
-  background: var(--vp-c-bg-mute);
+  background: var(--vp-c-bg);
   flex-shrink: 0;
 }
 
 .pill-btn {
-  padding: 2px 7px;
-  font-size: 11px;
+  padding: 1px 6px;
+  font-size: 10px;
   font-weight: 600;
   border: none;
   background: transparent;
   color: var(--vp-c-text-2);
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .pill-btn.active {
@@ -330,8 +356,8 @@ onUnmounted(() => {
 
 .toggle-switch {
   position: relative;
-  width: 32px;
-  height: 18px;
+  width: 30px;
+  height: 16px;
   background: var(--vp-c-bg-mute);
   border: 1px solid var(--vp-c-divider);
   border-radius: 10px;
@@ -348,8 +374,8 @@ onUnmounted(() => {
 
 .toggle-knob {
   position: absolute;
-  top: 2px;
-  left: 2px;
+  top: 1px;
+  left: 1px;
   width: 12px;
   height: 12px;
   background: white;
@@ -365,15 +391,15 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   border: 1px solid var(--vp-c-divider);
-  border-radius: 6px;
+  border-radius: 4px;
   overflow: hidden;
-  background: var(--vp-c-bg-mute);
+  background: var(--vp-c-bg);
   flex-shrink: 0;
 }
 
 .stepper-btn {
-  padding: 2px 7px;
-  font-size: 11px;
+  padding: 1px 5px;
+  font-size: 10px;
   font-weight: 700;
   background: transparent;
   border: none;
@@ -383,7 +409,7 @@ onUnmounted(() => {
 }
 
 .stepper-btn:hover:not(:disabled) {
-  background: var(--vp-c-bg-soft);
+  background: var(--vp-c-bg-mute);
   color: var(--vp-c-brand-1);
 }
 
@@ -393,13 +419,13 @@ onUnmounted(() => {
 }
 
 .stepper-val {
-  min-width: 30px;
+  min-width: 24px;
   text-align: center;
-  font-size: 11.5px;
+  font-size: 10.5px;
   font-weight: 600;
   font-family: var(--vp-font-family-mono);
   color: var(--vp-c-text-1);
-  padding: 0 4px;
+  padding: 0 2px;
   user-select: none;
 }
 
@@ -443,11 +469,24 @@ onUnmounted(() => {
   color: var(--vp-c-brand-1);
 }
 
-@media (max-width: 960px) {
+@media (max-width: 768px) {
   .config-popover {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(340px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
+    max-height: 85vh;
     right: auto;
-    left: 0;
-    width: 290px;
+    bottom: auto;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45), 0 0 0 100vmax rgba(0, 0, 0, 0.4);
+  }
+
+  .config-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 }
 </style>
