@@ -22,6 +22,14 @@ return [
     |--------------------------------------------------------------------------
     | Controls whether TypePHP enforces type checks at runtime.
     | Set to false for an emergency kill-switch or zero-overhead benchmarking.
+    |
+    | Note on Disabling Approaches:
+    | - Config Switch ('enabled' => false): TypePHP boots normally, but turns all
+    |   runtime checks into instant no-ops (pass-through mode).
+    | - Bootstrap Prevention (TYPEPHP_DISABLE=true): To completely prevent TypePHP
+    |   from booting or registering its stream wrapper during Composer autoload,
+    |   set the environment variable TYPEPHP_DISABLE=true or define('TYPEPHP_DISABLE', true)
+    |   before requiring 'vendor/autoload.php'.
     */
     'enabled' => true,
 
@@ -29,8 +37,10 @@ return [
     |--------------------------------------------------------------------------
     | Function Boundary Contracts (@param, @return, @param-out, @self-out)
     |--------------------------------------------------------------------------
-    | Enforces function and method parameter, return, by-reference
-    | out-parameter, and self-out state transition contracts uniformly.
+    | Controls whether function and method parameter, return, and by-reference
+    | out-parameter contracts are enforced at runtime.
+    | When enabled, all parameter and return types (generics, shapes, scalars)
+    | are enforced uniformly to maintain type state consistency.
     */
     'params'     => true,
     'returns'    => true,
@@ -64,18 +74,63 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Respect Ignore Docblock Tags & Trace Depth
+    | Magic Annotations (@property & @method)
+    |--------------------------------------------------------------------------
+    | Enforces class-level annotations for dynamic properties and magic methods
+    | routed through __get, __set, __call, and __callStatic.
+    |
+    | 'magic_properties' supports granular options:
+    | - 'write': (Default: true) Validates dynamic property assignments via __set()
+    |            against @property and @property-write annotations.
+    | - 'read' : (Default: false) Validates dynamic property reads via __get()
+    |            against @property and @property-read annotations. Keep false
+    |            when working with frameworks (e.g. Eloquent/Doctrine) where
+    |            newly instantiated models return unpopulated null attributes.
+    |
+    | Alternatively, set 'magic_properties' => false to disable all checks.
+    */
+    'magic_properties' => [
+        'write' => true,
+        'read'  => false,
+    ],
+    'magic_methods' => true,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Respect Ignore Docblock Tags
     |--------------------------------------------------------------------------
     | When true (default), @typephp-ignore and @typephp-ignore-file docblock tags
     | skip type-checking on specific methods/files. Set to false in CI/CD or
-    | audit runs to force type-checking on all ignored methods.
-    |
-    | 'ignore_trace_depth' determines how many call frames above a failing check
-    | TypePHP will inspect to find an enclosing @typephp-ignore or @typephp-disable tag.
-    | Default is 25 frames. Increase this for deep pipelines or middlewares.
+    | audit runs to force type-checking on all ignored methods without deleting
+    | the docblock tags from source code.
     */
     'respect_ignore_tags' => true,
-    'ignore_trace_depth'  => 25,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Ignore Tag Stack Trace Depth
+    |--------------------------------------------------------------------------
+    | Controls how many stack frames above a failing type check TypePHP will
+    | inspect to find an enclosing @typephp-ignore or @typephp-disable tag.
+    | Default is 25 frames. Increase this if your application or test suite
+    | uses deep call stacks (e.g. pipelines, middlewares, or nested callers).
+    */
+    'ignore_trace_depth' => 25,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Array Validation Strategy
+    |--------------------------------------------------------------------------
+    | Controls how collections (list<T>, array<K, V>, Type[]) are verified:
+    |
+    | - 'full'   : (Default / Strict) 100% exhaustive scan. Checks every single 
+    |             item in every array, guaranteeing every single offending item
+    |             is caught without exception.
+    |
+    | - 'hybrid' : (Beartype O(1) Mode) Fast boundary + random sampling on
+    |             arrays > 128 items. Ideal for massive production datasets.
+    */
+    'array_validation' => 'full',
 
     /*
     |--------------------------------------------------------------------------
@@ -93,44 +148,30 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Magic Annotations (@property & @method)
-    |--------------------------------------------------------------------------
-    | Enforces class-level annotations for dynamic properties and magic methods
-    | routed through __get, __set, __call, and __callStatic.
-    */
-    'magic_properties' => true,
-    'magic_methods'    => true,
-
-    /*
-    |--------------------------------------------------------------------------
-    | Array Validation Strategy
-    |--------------------------------------------------------------------------
-    | Controls how collections (list<T>, array<K, V>, Type[]) are verified:
-    |
-    | - 'full'   : (Default / Strict) 100% exhaustive O(n) scan on every item.
-    |             Guarantees 100% single-item error detection on any array size.
-    |
-    | - 'hybrid' : (Beartype O(1) Mode) Fast boundary + random sampling on
-    |             arrays > 128 items. Ideal for massive production datasets.
-    */
-    'array_validation' => 'full',
-
-    /*
-    |--------------------------------------------------------------------------
     | Enable Caching & Cache Directory
     |--------------------------------------------------------------------------
-    | Pre-transforms and caches PHP files on disk for OPcache optimization.
+    | When enabled, transformed PHP files are cached on disk for speed.
+    | Set to false to run AST transformations purely in RAM (php://memory).
     |
     | 'cache_dir' determines where these files are stored. By default (null), 
     | it uses your system's temp directory. You can change this to a path
-    | inside your project (e.g., __DIR__ . '/storage/framework/typephp').
-    | TypePHP automatically protects this directory from being double-transformed.
-    |
-    | 'cache_check_mtime' controls file modification checks. Keep true in dev.
-    | Set to false in production to eliminate all disk stat() calls.
+    | inside your project, e.g., __DIR__ . '/storage/framework/typephp'.
+    | TypePHP will automatically protect this directory from being re-transformed.
     */
-    'cache'             => true,
-    'cache_dir'         => null,
+    'cache'     => true,
+    'cache_dir' => null,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cache File Modification Monitor
+    |--------------------------------------------------------------------------
+    | When enabled (default), TypePHP checks file modification times (filemtime)
+    | to automatically rebuild the cache when a file changes.
+    | 
+    | In production, files do not change. Set this to FALSE to eliminate 
+    | hundreds of disk I/O checks per request for maximum performance.
+    | Note: If disabled, you must run `php bin/typephp cache:clear` on deployment.
+    */
     'cache_check_mtime' => true,
 
     /*
@@ -158,7 +199,16 @@ return [
     |--------------------------------------------------------------------------
     | Inline Variable Validation (@var $x = ...)
     |--------------------------------------------------------------------------
-    | Fine-grained control over local variable assignment checks.
+    | Fine-grained control over which type categories are enforced on local
+    | variable assignments with inline @var Type $var docblocks.
+    |
+    | Supported options:
+    | - 'properties': Validates class property assignments (e.g. $this->id = 1).
+    | - 'generics'  : Prebinds generic template instances (e.g. Collection<Dog>).
+    | - 'callables' : Wraps inline callbacks (e.g. callable(int): string).
+    | - 'scalars'   : Enforces scalar constraints (e.g. positive-int, non-empty-string).
+    | - 'arrays'    : Enforces array shapes, lists, & typed arrays (e.g. array{id: int}, int[]).
+    | - 'objects'   : Enforces class instance checks (e.g. @var User $user).
     */
     'inline_vars' => [
         'properties' => true,
@@ -213,11 +263,11 @@ return [
 | **`'self_out'`** | `true` | Enforces generic state transitions on `$this` (`@self-out` / `@this-out`) upon method exit. |
 | **`'strict_return_generic_invariance'`** | `true` | Enforces strict generic return invariance matching PHPStan Level MAX (e.g. returning `Collection<Dog>` where `Collection<Animal>` is expected is rejected unless `@template-covariant` or `<covariant Animal>` is specified). Set to `false` (pragmatic mode) for frameworks (Laravel, Shopware) where collection classes omit covariance annotations. |
 | **`'vendor_boundary_only'`** | `true` | When `true` (default), whitelisted vendor classes (e.g. `Illuminate\Support\Collection`) only enforce type contracts when called from application code (`app/**`, `src/**`, `tests/**`). Calls originating from excluded vendor files or internal self-calls bypass strict checking. Set to `false` for strict pedantic auditing across all vendor code. |
+| **`'magic_properties'`** | `['write' => true, 'read' => false]` | Enforces class-level `@property`, `@property-read`, and `@property-write` annotations. Supports granular options: `'write'` (validates assignments via `__set()`) and `'read'` (validates dynamic property access via `__get()`). Alternatively, set to boolean `false` to disable all magic property checks. |
+| **`'magic_methods'`** | `true` | Enforces class-level `@method` annotations on dynamic method calls (`__call` / `__callStatic`). |
 | **`'respect_ignore_tags'`** | `true` | Respects `@typephp-ignore` and `@typephp-ignore-file` tags. Set to `false` in CI/CD to force audit checks. |
 | **`'ignore_trace_depth'`** | `25` | Maximum number of stack frames above a failing type check TypePHP will inspect to find an enclosing `@typephp-ignore` or `@typephp-disable` tag. Increase this if your architecture uses deep pipelines, command buses, serializer layers, or recursive callers. |
 | **`'respect_native_nullability'`** | `true` | When `true` (default), permits `null` if native PHP explicitly declares nullable syntax (`?Type` or `Type\|null = null`) even if omitted in the DocBlock. Set to `false` for strict pedantic enforcement. |
-| **`'magic_properties'`** | `true` | Enforces class-level `@property`, `@property-read`, and `@property-write` annotations on dynamic writes (`__set`). |
-| **`'magic_methods'`** | `true` | Enforces class-level `@method` annotations on dynamic method calls (`__call` / `__callStatic`). |
 | **`'array_validation'`** | `'full'` | Validation strategy for collections: `'full'` (exhaustive $O(n)$) or `'hybrid'` (Beartype $O(1)$ sampling for $> 128$ items). |
 | **`'cache'`** | `true` | Pre-transforms and caches PHP files on disk. Set to `false` to transform files purely in memory (`php://memory`). |
 | **`'cache_dir'`** | `null` | Custom path to store cached files. Defaults to system temporary directory (`sys_get_temp_dir() . '/typephp-cache-' . $userHash`). |

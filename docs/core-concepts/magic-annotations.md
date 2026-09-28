@@ -1,12 +1,12 @@
 # Magic Annotations (`@property` & `@method`)
 
-Dynamic properties and magic methods are widely used across modern PHP frameworks (such as Laravel Eloquent models, DTOs, and dynamic service repositories). TypePHP provides transparent, runtime enforcement for class-level `@property`, `@property-read`, `@property-write`, and `@method` annotations.
+Dynamic properties and magic methods are widely used across modern PHP frameworks (such as Laravel Eloquent models, DTOs, and dynamic service repositories). TypePHP provides transparent runtime enforcement for class-level `@property`, `@property-read`, `@property-write`, and `@method` annotations.
 
 ---
 
 ## Class-Level Magic Properties (`@property`, `@property-read`, `@property-write`)
 
-When a property does not physically exist on a class, PHP routes property writes through `__set()`. TypePHP intercepts these dynamic assignments and validates incoming values against class-level `@property`, `@property-read`, and `@property-write` annotations declared on the class, parent classes, interfaces, or traits:
+When a property does not physically exist on a class, PHP routes property writes through `__set()` and property reads through `__get()`. TypePHP intercepts these dynamic accesses and validates values against class-level `@property`, `@property-read`, and `@property-write` annotations declared on the class, parent classes, interfaces, or traits.
 
 ```php
 <?php
@@ -16,37 +16,74 @@ declare(strict_types=1);
 namespace App\DTOs;
 
 /**
+ * @property-read string $status
+ * @property-write string $name
  * @property positive-int $score
- * @property-write non-empty-string $username
- * @property-read list<string> $tags
  */
 class UserDTO
 {
-    private array $storage = [];
+    private array $data = [];
 
     public function __set(string $name, mixed $value): void
     {
-        $this->storage[$name] = $value;
+        $this->data[$name] = $value;
     }
 
     public function __get(string $name): mixed
     {
-        return $this->storage[$name] ?? null;
+        return $this->data[$name] ?? null;
     }
 }
-
-$user = new UserDTO();
-
-// Valid dynamic property assignment
-$user->score = 100;
-$user->username = 'Alice';
-
-// Invalid dynamic property assignment ($score = -50 violates positive-int)
-$user->score = -50;
-// Throws: TypeError: Property UserDTO::$score must be of type positive-int, negative int (-50) given
 ```
 
-> **Read/Write Mechanics:** Assigning to a `@property-write` or `@property-read` annotation will validate the incoming value against the declared type constraint.
+---
+
+### 1. Dynamic Property Writes (`__set`) [Default: Enabled]
+
+By default, TypePHP intercepts assignments to dynamic properties and validates the incoming value against `@property` and `@property-write` annotations before the write occurs:
+
+```php
+$user = new UserDTO();
+
+// Valid dynamic property write
+$user->score = 100;
+$user->name = 'Alice';
+
+// Invalid dynamic property write ($score = -50 violates positive-int)
+$user->score = -50;
+// Throws: TypeError: Property UserDTO::$score must be of type positive-int, negative int (-50) given
+
+// Invalid dynamic property write ($name = '' violates non-empty-string)
+$user->name = '';
+// Throws: TypeError: Property UserDTO::$name must be of type non-empty-string, empty string ('') given
+```
+
+---
+
+### 2. Dynamic Property Reads (`__get`) [Opt-in via `magic_properties.read => true`]
+
+TypePHP can also validate values returned from dynamic property reads (`$value = $user->status`) through `__get()` against `@property` and `@property-read` annotations:
+
+```php
+$user = new UserDTO();
+
+// 1. Valid Read: Returns a string satisfying @property-read string
+$user->name = 'Alice';
+$user->data['status'] = 'active';
+
+echo $user->status; // Output: 'active'
+
+// 2. Invalid Read: Property was unpopulated or returned null
+unset($user->data['status']);
+
+$currentStatus = $user->status;
+// Throws: TypeError: Property UserDTO::$status must be of type string, null returned
+```
+
+> **Why is read checking opt-in (`read: false` by default)?**  
+> In frameworks using Active Record (such as **Laravel Eloquent**), newly instantiated models (`$post = new Post()`) initially return `null` for unhydrated attributes before being saved or populated from the database.
+> 
+> Keeping `read: false` by default ensures existing framework models run without unexpected crashes on empty attributes. You can enable `'read' => true` for strict DTOs, value objects, and clean architecture layers where reading an unpopulated property should be strictly prevented.
 
 ---
 
@@ -132,7 +169,7 @@ class OrderService
 
 ## Configuration Toggles
 
-Magic property and magic method validations are enabled by default. You can fine-tune or disable them in your `typephp.php` configuration file:
+Magic property and magic method validations are customizable in `typephp.php`:
 
 ```php
 // typephp.php
@@ -141,8 +178,23 @@ return [
     |--------------------------------------------------------------------------
     | Magic Annotations (@property & @method)
     |--------------------------------------------------------------------------
+    | Enforces class-level annotations for dynamic properties and magic methods
+    | routed through __get, __set, __call, and __callStatic.
+    |
+    | 'magic_properties' supports granular options:
+    | - 'write': (Default: true) Validates dynamic assignments via __set()
+    | - 'read' : (Default: false) Validates dynamic property reads via __get()
+    |            Enable this for strict DTOs and clean architecture models.
+    |
+    | Alternatively, set 'magic_properties' => false to disable all checks.
     */
-    'magic_properties' => true, // Set to false to disable dynamic @property checks
-    'magic_methods'    => true, // Set to false to disable dynamic @method checks
+    'magic_properties' => [
+        'write' => true,
+        'read'  => false,
+    ],
+
+    'magic_methods' => true, // Set to false to disable dynamic @method checks
 ];
 ```
+
+> **Boolean Shorthand:** Passing `'magic_properties' => false` disables both writes and reads, while `'magic_properties' => true` enables writes with reads defaulting to `false` for complete backward compatibility.
