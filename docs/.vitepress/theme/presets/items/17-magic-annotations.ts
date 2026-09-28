@@ -20,7 +20,7 @@ declare(strict_types=1);
  */
 class DynamicModel
 {
-    private array $data = [];
+    public array $data = [];
 
     public function __call(string $name, array $args): mixed
     {
@@ -71,21 +71,9 @@ try {
     echo "✓ Caught expected method error:\\n   " . $e->getMessage() . "\\n\\n";
 }
 
-/*
- |--------------------------------------------------------------------------
- | 5. Dynamic Property Read Validation (__get)
- |--------------------------------------------------------------------------
- | This preset runs with "Validate Dynamic Property Reads (__get)" turned ON
- | in the [Config] popover above.
- |
- | Reading an unpopulated property returns null, which violates non-nullable
- | '@property-read string $status' and halts with a TypeError below!
- |
- | INTERACTIVE EXPERIMENT:
- | Open the [Config] popover in the top toolbar, toggle OFF
- | "Validate Dynamic Property Reads (__get)", and click Run again!
- | You will see it allow the null return (pragmatic mode for unhydrated ORMs).
- */
+// 5. Dynamic Property Read Validation (__get)
+// Reading unpopulated $status returns null, violating non-nullable @property-read string!
+// Tip: Open [Config] above, toggle OFF "Validate Dynamic Property Reads", and click Run to see it pass.
 echo "Reading unpopulated @property-read (returns null)...\\n";
 unset($model->data['status']);
 $val = $model->status;
