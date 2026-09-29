@@ -1,13 +1,14 @@
 <template>
   <div ref="wrapperRef" class="config-popover-wrapper">
     <!-- Trigger Button -->
-    <button :class="['action-btn', 'config-trigger-btn', { active: isOpen, 'has-custom': hasCustomConfig }]"
-      title="TypePHP Engine Configuration" @click.stop="togglePopover">
+    <button
+      :class="['action-btn', 'config-trigger-btn', { active: isOpen, 'has-custom': hasCustomConfig }]"
+      title="TypePHP Engine Configuration"
+      @click.stop="togglePopover"
+    >
       <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="3"></circle>
-        <path
-          d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
-        </path>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
       </svg>
       <span class="config-btn-label">Config</span>
       <span v-if="hasCustomConfig" class="config-active-dot" title="Custom configuration active"></span>
@@ -25,8 +26,11 @@
         <div class="config-card master-banner">
           <div class="config-card-header">
             <span class="config-label">Enable TypePHP Enforcement</span>
-            <button :class="['toggle-switch', { active: modelValue.enabled }]" title="Toggle runtime type checking"
-              @click="updateField('enabled', !modelValue.enabled)">
+            <button
+              :class="['toggle-switch', { active: modelValue.enabled }]"
+              title="Toggle runtime type checking"
+              @click="updateField('enabled', !modelValue.enabled)"
+            >
               <span class="toggle-knob"></span>
             </button>
           </div>
@@ -40,22 +44,27 @@
             <div class="config-card-header">
               <span class="config-label">Array Validation</span>
               <div class="pill-group">
-                <button :class="['pill-btn', { active: modelValue.arrayValidation === 'full' }]"
-                  @click="updateField('arrayValidation', 'full')">Full O(n)</button>
-                <button :class="['pill-btn', { active: modelValue.arrayValidation === 'hybrid' }]"
-                  @click="updateField('arrayValidation', 'hybrid')">Hybrid O(1)</button>
+                <button
+                  :class="['pill-btn', { active: modelValue.arrayValidation === 'full' }]"
+                  @click="updateField('arrayValidation', 'full')"
+                >Full O(n)</button>
+                <button
+                  :class="['pill-btn', { active: modelValue.arrayValidation === 'hybrid' }]"
+                  @click="updateField('arrayValidation', 'hybrid')"
+                >Hybrid O(1)</button>
               </div>
             </div>
-            <span class="config-desc">Full scans 100% of items. Hybrid uses O(1) sampling on arrays &gt; 128
-              items.</span>
+            <span class="config-desc">Full scans 100% of items. Hybrid uses O(1) sampling on arrays &gt; 128 items.</span>
           </div>
 
           <!-- Column 2, Item 1: Dynamic Property Reads (__get) -->
           <div class="config-card">
             <div class="config-card-header">
               <span class="config-label">Property Reads (__get)</span>
-              <button :class="['toggle-switch', { active: modelValue.magicPropertyReads }]"
-                @click="updateField('magicPropertyReads', !modelValue.magicPropertyReads)">
+              <button
+                :class="['toggle-switch', { active: modelValue.magicPropertyReads }]"
+                @click="updateField('magicPropertyReads', !modelValue.magicPropertyReads)"
+              >
                 <span class="toggle-knob"></span>
               </button>
             </div>
@@ -66,8 +75,10 @@
           <div class="config-card">
             <div class="config-card-header">
               <span class="config-label">Return Invariance</span>
-              <button :class="['toggle-switch', { active: modelValue.strictReturnGenericInvariance }]"
-                @click="updateField('strictReturnGenericInvariance', !modelValue.strictReturnGenericInvariance)">
+              <button
+                :class="['toggle-switch', { active: modelValue.strictReturnGenericInvariance }]"
+                @click="updateField('strictReturnGenericInvariance', !modelValue.strictReturnGenericInvariance)"
+              >
                 <span class="toggle-knob"></span>
               </button>
             </div>
@@ -78,8 +89,10 @@
           <div class="config-card">
             <div class="config-card-header">
               <span class="config-label">Respect Ignore Tags</span>
-              <button :class="['toggle-switch', { active: modelValue.respectIgnoreTags }]"
-                @click="updateField('respectIgnoreTags', !modelValue.respectIgnoreTags)">
+              <button
+                :class="['toggle-switch', { active: modelValue.respectIgnoreTags }]"
+                @click="updateField('respectIgnoreTags', !modelValue.respectIgnoreTags)"
+              >
                 <span class="toggle-knob"></span>
               </button>
             </div>
@@ -90,8 +103,10 @@
           <div class="config-card">
             <div class="config-card-header">
               <span class="config-label">Native Nullability</span>
-              <button :class="['toggle-switch', { active: modelValue.respectNativeNullability }]"
-                @click="updateField('respectNativeNullability', !modelValue.respectNativeNullability)">
+              <button
+                :class="['toggle-switch', { active: modelValue.respectNativeNullability }]"
+                @click="updateField('respectNativeNullability', !modelValue.respectNativeNullability)"
+              >
                 <span class="toggle-knob"></span>
               </button>
             </div>
@@ -103,20 +118,61 @@
             <div class="config-card-header">
               <span class="config-label">Ignore Trace Depth</span>
               <div class="stepper-widget">
-                <button class="stepper-btn" :disabled="modelValue.ignoreTraceDepth <= 5"
-                  @click="adjustDepth(-5)">-5</button>
+                <button
+                  class="stepper-btn"
+                  :disabled="modelValue.ignoreTraceDepth <= 5"
+                  @click="adjustDepth(-5)"
+                >-5</button>
                 <span class="stepper-val">{{ modelValue.ignoreTraceDepth }}</span>
-                <button class="stepper-btn" :disabled="modelValue.ignoreTraceDepth >= 100"
-                  @click="adjustDepth(5)">+5</button>
+                <button
+                  class="stepper-btn"
+                  :disabled="modelValue.ignoreTraceDepth >= 100"
+                  @click="adjustDepth(5)"
+                >+5</button>
               </div>
             </div>
             <span class="config-desc">Maximum call stack frames inspected above a failure for ignore tags.</span>
           </div>
         </div>
+
+        <!-- Inline Variables (@var) Full-Width Section -->
+        <div class="config-card inline-vars-banner">
+          <div class="config-card-header">
+            <div class="inline-vars-title-group">
+              <span class="config-label">Inline Variables (@var)</span>
+              <span class="inline-vars-status">
+                {{ activeInlineCount }}/6 Active
+              </span>
+            </div>
+            <button
+              :class="['toggle-switch', { active: isAllInlineVarsActive }]"
+              title="Toggle all inline variable checks"
+              @click="toggleAllInlineVars(!isAllInlineVarsActive)"
+            >
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
+          <span class="config-desc">Enforce types on local assignments & compound operations ($x = ..., $score += 5):</span>
+          
+          <div class="inline-chips-group">
+            <button
+              v-for="cat in inlineCategories"
+              :key="cat.key"
+              :class="['inline-chip-btn', { active: modelValue.inlineVars?.[cat.key] }]"
+              @click="toggleInlineCategory(cat.key)"
+            >
+              {{ cat.label }}
+            </button>
+          </div>
+        </div>
       </div>
 
       <div class="popover-footer">
-        <button class="reset-config-btn" :disabled="!hasCustomConfig" @click="$emit('reset')">
+        <button
+          class="reset-config-btn"
+          :disabled="!hasCustomConfig"
+          @click="$emit('reset')"
+        >
           Reset to Defaults
         </button>
       </div>
@@ -125,8 +181,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
-import type { PlaygroundConfig } from '../presets';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
+import type { PlaygroundConfig, InlineVarsConfig } from '../presets';
 
 const props = defineProps<{
   modelValue: PlaygroundConfig;
@@ -141,6 +197,22 @@ const emit = defineEmits<{
 const isOpen = ref<boolean>(false);
 const wrapperRef = ref<HTMLDivElement | null>(null);
 
+const inlineCategories: Array<{ key: keyof InlineVarsConfig; label: string }> = [
+  { key: 'scalars', label: 'Scalars' },
+  { key: 'arrays', label: 'Arrays' },
+  { key: 'properties', label: 'Properties' },
+  { key: 'generics', label: 'Generics' },
+  { key: 'callables', label: 'Callables' },
+  { key: 'objects', label: 'Objects' },
+];
+
+const activeInlineCount = computed(() => {
+  const iv = props.modelValue.inlineVars || {};
+  return inlineCategories.filter((c) => iv[c.key]).length;
+});
+
+const isAllInlineVarsActive = computed(() => activeInlineCount.value > 0);
+
 function togglePopover() {
   isOpen.value = !isOpen.value;
 }
@@ -153,6 +225,39 @@ function updateField<K extends keyof PlaygroundConfig>(field: K, value: Playgrou
   emit('update:modelValue', {
     ...props.modelValue,
     [field]: value,
+  });
+}
+
+function toggleInlineCategory(cat: keyof InlineVarsConfig) {
+  const current = props.modelValue.inlineVars || {
+    properties: true,
+    generics: true,
+    callables: true,
+    scalars: true,
+    arrays: true,
+    objects: true,
+  };
+
+  emit('update:modelValue', {
+    ...props.modelValue,
+    inlineVars: {
+      ...current,
+      [cat]: !current[cat],
+    },
+  });
+}
+
+function toggleAllInlineVars(state: boolean) {
+  emit('update:modelValue', {
+    ...props.modelValue,
+    inlineVars: {
+      properties: state,
+      generics: state,
+      callables: state,
+      scalars: state,
+      arrays: state,
+      objects: state,
+    },
   });
 }
 
@@ -180,6 +285,7 @@ onUnmounted(() => {
 .config-popover-wrapper {
   position: relative;
   display: inline-flex;
+  z-index: 50; 
 }
 
 .config-trigger-btn {
@@ -200,12 +306,11 @@ onUnmounted(() => {
   box-shadow: 0 0 0 1.5px var(--vp-c-bg);
 }
 
-/* Desktop: Anchored Dropdown (2-Column) */
 .config-popover {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  z-index: 100;
+  z-index: 100; 
   width: 580px;
   max-width: calc(100vw - 24px);
   display: flex;
@@ -213,7 +318,7 @@ onUnmounted(() => {
   background: var(--vp-c-bg);
   border: 1px solid var(--vp-c-divider);
   border-radius: 8px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.08);
   overflow: hidden;
 }
 
@@ -254,16 +359,15 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 10px;
   overflow-y: auto;
+  max-height: 80vh;
 }
 
-/* 2-Column Responsive Grid */
 .config-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px 10px;
 }
 
-/* Card item layout */
 .config-card {
   display: flex;
   flex-direction: column;
@@ -284,11 +388,32 @@ onUnmounted(() => {
   border-color: var(--vp-c-divider);
 }
 
+.config-card.inline-vars-banner {
+  background: var(--vp-c-bg-soft);
+  gap: 6px;
+}
+
 .config-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.inline-vars-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inline-vars-status {
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--vp-font-family-mono);
+  color: var(--vp-c-brand-1);
+  background: rgba(59, 130, 246, 0.12);
+  padding: 1px 5px;
+  border-radius: 4px;
 }
 
 .config-label {
@@ -301,6 +426,37 @@ onUnmounted(() => {
   font-size: 10px;
   color: var(--vp-c-text-2);
   line-height: 1.35;
+}
+
+/* Category Chips */
+.inline-chips-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.inline-chip-btn {
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  background: var(--vp-c-bg);
+  color: var(--vp-c-text-2);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.inline-chip-btn:hover {
+  border-color: var(--vp-c-brand-1);
+  color: var(--vp-c-text-1);
+}
+
+.inline-chip-btn.active {
+  background: var(--vp-c-brand-1);
+  border-color: var(--vp-c-brand-1);
+  color: #fff;
 }
 
 /* Controls */
@@ -444,6 +600,18 @@ onUnmounted(() => {
   color: var(--vp-c-brand-1);
 }
 
+@media (max-width: 860px) {
+  .config-btn-label {
+    display: none !important;
+  }
+  .config-trigger-btn {
+    padding: 0 !important;
+    width: 28px !important;
+    height: 28px !important;
+    justify-content: center !important;
+  }
+}
+
 @media (max-width: 768px) {
   .config-popover {
     position: fixed;
@@ -453,8 +621,6 @@ onUnmounted(() => {
     width: min(340px, calc(100vw - 32px));
     max-width: calc(100vw - 32px);
     max-height: 85vh;
-    right: auto;
-    bottom: auto;
     border-radius: 12px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45), 0 0 0 100vmax rgba(0, 0, 0, 0.4);
   }
@@ -462,19 +628,6 @@ onUnmounted(() => {
   .config-grid {
     grid-template-columns: 1fr;
     gap: 8px;
-  }
-}
-
-@media (max-width: 860px) {
-  .config-btn-label {
-    display: none;
-  }
-
-  .config-trigger-btn {
-    padding: 0;
-    width: 28px;
-    height: 28px;
-    justify-content: center;
   }
 }
 </style>

@@ -140,6 +140,7 @@ if (file_exists('/workspace/config.json')) {
 $isEnabled = (bool) ($userConfig['enabled'] ?? true);
 $ignoreDepth = isset($userConfig['ignoreTraceDepth']) ? max(1, (int) $userConfig['ignoreTraceDepth']) : 25;
 $magicPropertyReads = (bool) ($userConfig['magicPropertyReads'] ?? false);
+$userInlineVars = $userConfig['inlineVars'] ?? [];
 
 Config::set([
     'enabled' => $isEnabled,
@@ -156,6 +157,14 @@ Config::set([
     'strict_return_generic_invariance' => (bool) ($userConfig['strictReturnGenericInvariance'] ?? true),
     'respect_native_nullability' => (bool) ($userConfig['respectNativeNullability'] ?? true),
     'respect_ignore_tags' => (bool) ($userConfig['respectIgnoreTags'] ?? true),
+    'inline_vars' => [
+        'properties' => (bool) ($userInlineVars['properties'] ?? true),
+        'generics'   => (bool) ($userInlineVars['generics'] ?? true),
+        'callables'  => (bool) ($userInlineVars['callables'] ?? true),
+        'scalars'    => (bool) ($userInlineVars['scalars'] ?? true),
+        'arrays'     => (bool) ($userInlineVars['arrays'] ?? true),
+        'objects'    => (bool) ($userInlineVars['objects'] ?? true),
+    ],
 ]);
 
 $source = file_get_contents('/workspace/playground.php');
@@ -236,6 +245,7 @@ if (!$isEnabled) {
 }
 
 $magicPropertyReads = (bool) ($userConfig['magicPropertyReads'] ?? false);
+$userInlineVars = $userConfig['inlineVars'] ?? [];
 
 Config::set([
     'cache' => false,
@@ -244,6 +254,14 @@ Config::set([
         'read' => $magicPropertyReads,
     ],
     'respect_ignore_tags' => (bool) ($userConfig['respectIgnoreTags'] ?? true),
+    'inline_vars' => [
+        'properties' => (bool) ($userInlineVars['properties'] ?? true),
+        'generics'   => (bool) ($userInlineVars['generics'] ?? true),
+        'callables'  => (bool) ($userInlineVars['callables'] ?? true),
+        'scalars'    => (bool) ($userInlineVars['scalars'] ?? true),
+        'arrays'     => (bool) ($userInlineVars['arrays'] ?? true),
+        'objects'    => (bool) ($userInlineVars['objects'] ?? true),
+    ],
 ]);
 
 try {

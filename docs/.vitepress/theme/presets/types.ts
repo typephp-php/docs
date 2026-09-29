@@ -1,3 +1,12 @@
+export interface InlineVarsConfig {
+  properties: boolean;
+  generics: boolean;
+  callables: boolean;
+  scalars: boolean;
+  arrays: boolean;
+  objects: boolean;
+}
+
 export interface PlaygroundConfig {
   enabled: boolean;
   ignoreTraceDepth: number;
@@ -6,6 +15,7 @@ export interface PlaygroundConfig {
   respectNativeNullability: boolean;
   respectIgnoreTags: boolean;
   magicPropertyReads: boolean;
+  inlineVars: InlineVarsConfig;
 }
 
 export interface PlaygroundPreset {
@@ -17,6 +27,15 @@ export interface PlaygroundPreset {
   config?: Partial<PlaygroundConfig>;
 }
 
+export const DEFAULT_INLINE_VARS_CONFIG: InlineVarsConfig = {
+  properties: true,
+  generics: true,
+  callables: true,
+  scalars: true,
+  arrays: true,
+  objects: true,
+};
+
 export const DEFAULT_PLAYGROUND_CONFIG: PlaygroundConfig = {
   enabled: true,
   ignoreTraceDepth: 25,
@@ -25,4 +44,5 @@ export const DEFAULT_PLAYGROUND_CONFIG: PlaygroundConfig = {
   respectNativeNullability: true,
   respectIgnoreTags: true,
   magicPropertyReads: false,
+  inlineVars: { ...DEFAULT_INLINE_VARS_CONFIG },
 };

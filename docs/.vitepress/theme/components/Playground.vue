@@ -74,6 +74,7 @@ import LZString from 'lz-string';
 import {
   PLAYGROUND_PRESETS,
   DEFAULT_PLAYGROUND_CONFIG,
+  DEFAULT_INLINE_VARS_CONFIG,
   type PlaygroundConfig
 } from '../presets';
 import PlaygroundToolbar from './PlaygroundToolbar.vue';
@@ -113,9 +114,21 @@ const transformedCode = ref<string>('');
 const copiedLink = ref<boolean>(false);
 const copiedCode = ref<boolean>(false);
 
-const config = ref<PlaygroundConfig>({ ...DEFAULT_PLAYGROUND_CONFIG });
+const config = ref<PlaygroundConfig>({
+  ...DEFAULT_PLAYGROUND_CONFIG,
+  inlineVars: { ...DEFAULT_INLINE_VARS_CONFIG }
+});
 
 const hasCustomConfig = computed<boolean>(() => {
+  const iv = config.value.inlineVars || DEFAULT_INLINE_VARS_CONFIG;
+  const isInlineVarsCustom =
+    iv.properties !== DEFAULT_INLINE_VARS_CONFIG.properties ||
+    iv.generics !== DEFAULT_INLINE_VARS_CONFIG.generics ||
+    iv.callables !== DEFAULT_INLINE_VARS_CONFIG.callables ||
+    iv.scalars !== DEFAULT_INLINE_VARS_CONFIG.scalars ||
+    iv.arrays !== DEFAULT_INLINE_VARS_CONFIG.arrays ||
+    iv.objects !== DEFAULT_INLINE_VARS_CONFIG.objects;
+
   return (
     config.value.enabled !== DEFAULT_PLAYGROUND_CONFIG.enabled ||
     config.value.ignoreTraceDepth !== DEFAULT_PLAYGROUND_CONFIG.ignoreTraceDepth ||
@@ -123,7 +136,8 @@ const hasCustomConfig = computed<boolean>(() => {
     config.value.strictReturnGenericInvariance !== DEFAULT_PLAYGROUND_CONFIG.strictReturnGenericInvariance ||
     config.value.respectNativeNullability !== DEFAULT_PLAYGROUND_CONFIG.respectNativeNullability ||
     config.value.respectIgnoreTags !== DEFAULT_PLAYGROUND_CONFIG.respectIgnoreTags ||
-    config.value.magicPropertyReads !== DEFAULT_PLAYGROUND_CONFIG.magicPropertyReads
+    config.value.magicPropertyReads !== DEFAULT_PLAYGROUND_CONFIG.magicPropertyReads ||
+    isInlineVarsCustom
   );
 });
 
@@ -140,6 +154,7 @@ function handleWindowResize() {
   windowWidth.value = window.innerWidth;
 }
 
+// Global shortcut handler (Ctrl+Enter / Cmd+Enter anywhere on page)
 function handleGlobalKeyDown(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
     e.preventDefault();
@@ -182,7 +197,14 @@ onMounted(() => {
     if (savedConfig) {
       const parsed = JSON.parse(savedConfig);
       if (parsed && typeof parsed === 'object') {
-        config.value = { ...DEFAULT_PLAYGROUND_CONFIG, ...parsed };
+        config.value = {
+          ...DEFAULT_PLAYGROUND_CONFIG,
+          ...parsed,
+          inlineVars: {
+            ...DEFAULT_INLINE_VARS_CONFIG,
+            ...(parsed.inlineVars || {})
+          }
+        };
       }
     }
   } catch {}
@@ -204,7 +226,14 @@ onMounted(() => {
               snippetTitle.value = parsed.title;
             }
             if (parsed.config) {
-              config.value = { ...DEFAULT_PLAYGROUND_CONFIG, ...parsed.config };
+              config.value = {
+                ...DEFAULT_PLAYGROUND_CONFIG,
+                ...parsed.config,
+                inlineVars: {
+                  ...DEFAULT_INLINE_VARS_CONFIG,
+                  ...(parsed.config.inlineVars || {})
+                }
+              };
             }
             selectedPresetId.value = 'custom';
             restoredFromHash = true;
@@ -306,7 +335,10 @@ watch(config, (newConf) => {
 }, { deep: true });
 
 function resetConfig() {
-  config.value = { ...DEFAULT_PLAYGROUND_CONFIG };
+  config.value = {
+    ...DEFAULT_PLAYGROUND_CONFIG,
+    inlineVars: { ...DEFAULT_INLINE_VARS_CONFIG }
+  };
 }
 
 function toggleLayoutPosition() {
@@ -354,10 +386,18 @@ function onSelectPreset(presetId: string) {
     code.value = matched.code;
     snippetTitle.value = matched.name;
     if (matched.config) {
-      config.value = { ...DEFAULT_PLAYGROUND_CONFIG, ...matched.config };
+      config.value = {
+        ...DEFAULT_PLAYGROUND_CONFIG,
+        ...matched.config,
+        inlineVars: {
+          ...DEFAULT_INLINE_VARS_CONFIG,
+          ...(matched.config.inlineVars || {})
+        }
+      };
     }
     viewMode.value = 'source';
     
+    // Clear URL hash when switching to an official preset
     if (window.location.hash) {
       history.replaceState(null, '', window.location.pathname + window.location.search);
     }
@@ -371,7 +411,7 @@ function onSelectPreset(presetId: string) {
 
 function runCode() {
   const now = performance.now();
-  if (now - lastRunTimestamp < 150) return; 
+  if (now - lastRunTimestamp < 150) return; // Debounce rapid key triggers
   lastRunTimestamp = now;
 
   const activeWorker = worker;

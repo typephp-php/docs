@@ -203,18 +203,15 @@ function onPresetChange(e: Event) {
   const val = target.value;
   if (val) {
     emit('select-preset', val);
-    // Reset back to placeholder so button stays cleanly labeled "Presets"
     target.value = '';
   }
 }
 </script>
 
 <style scoped>
-/* ========================================================
-   Desktop Baseline (Clean Single 42px Row)
-   ======================================================== */
 .playground-toolbar {
   position: relative;
+  z-index: 50; 
   display: flex;
   align-items: center;
   justify-content: space-between;
