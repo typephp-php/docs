@@ -1,7 +1,7 @@
 <template>
   <div class="playground-editor-wrapper">
     <div v-if="readOnly" class="xray-floating-badge">
-       Zero Line-Drift Optimized Transform Code (Read-Only)
+      Zero Line-Drift Optimized Transform Code (Read-Only)
     </div>
     <div ref="editorContainer" class="code-editor-element"></div>
   </div>
@@ -10,7 +10,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { EditorView, basicSetup } from 'codemirror';
-import { EditorState, Compartment } from '@codemirror/state';
+import { EditorState, Compartment, Prec } from '@codemirror/state';
 import { php } from '@codemirror/lang-php';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { oneLight } from './theme-one-light';
@@ -60,24 +60,26 @@ const baseTheme = EditorView.theme({
 onMounted(() => {
   if (!editorContainer.value) return;
 
-  const runKeymap = keymap.of([
-    {
-      key: 'Mod-Enter',
-      run: () => {
-        emit('run');
-        return true;
+  const runKeymap = Prec.highest(
+    keymap.of([
+      {
+        key: 'Mod-Enter',
+        run: () => {
+          emit('run');
+          return true;
+        }
       }
-    }
-  ]);
+    ])
+  );
 
   const startState = EditorState.create({
     doc: props.modelValue,
     extensions: [
+      runKeymap,
       basicSetup,
       php(),
-      phpdocHighlighter, 
+      phpdocHighlighter,
       baseTheme,
-      runKeymap,
       themeCompartment.of(isDark.value ? oneDark : oneLight),
       readOnlyCompartment.of([
         EditorState.readOnly.of(props.readOnly),

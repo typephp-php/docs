@@ -130,6 +130,7 @@ const hasCustomConfig = computed<boolean>(() => {
 const { site } = useData();
 let worker: Worker | null = null;
 let saveDraftTimer: ReturnType<typeof setTimeout> | null = null;
+let lastRunTimestamp = 0;
 
 const effectivePosition = computed<'bottom' | 'side'>(() => {
   return windowWidth.value < 960 ? 'bottom' : layoutPosition.value;
@@ -137,6 +138,13 @@ const effectivePosition = computed<'bottom' | 'side'>(() => {
 
 function handleWindowResize() {
   windowWidth.value = window.innerWidth;
+}
+
+function handleGlobalKeyDown(e: KeyboardEvent) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    runCode();
+  }
 }
 
 function persistDraft() {
@@ -152,6 +160,7 @@ function persistDraft() {
 
 onMounted(() => {
   window.addEventListener('resize', handleWindowResize);
+  window.addEventListener('keydown', handleGlobalKeyDown);
 
   try {
     const savedSize = localStorage.getItem('typephp_playground_fontsize');
@@ -178,6 +187,7 @@ onMounted(() => {
     }
   } catch {}
 
+  // 1. Check URL Hash first (#code=...)
   let restoredFromHash = false;
   const hash = window.location.hash;
 
@@ -214,6 +224,7 @@ onMounted(() => {
     }
   }
 
+  // 2. If no hash, restore from persistent localStorage draft
   if (!restoredFromHash) {
     try {
       const savedDraftCode = localStorage.getItem(DRAFT_CODE_KEY);
@@ -321,6 +332,7 @@ function formatCode() {
 function onCodeUpdate(newCode: string) {
   code.value = newCode;
   
+  // If user modifies code away from the selected preset, mark as custom
   const matched = presets.find((p) => p.id === selectedPresetId.value);
   if (matched && matched.code !== newCode) {
     selectedPresetId.value = 'custom';
@@ -358,6 +370,10 @@ function onSelectPreset(presetId: string) {
 }
 
 function runCode() {
+  const now = performance.now();
+  if (now - lastRunTimestamp < 150) return; 
+  lastRunTimestamp = now;
+
   const activeWorker = worker;
   if (!activeWorker || !isReady.value || isRunning.value) return;
 
@@ -427,6 +443,7 @@ onUnmounted(() => {
   if (saveDraftTimer) clearTimeout(saveDraftTimer);
   if (typeof window !== 'undefined') {
     window.removeEventListener('resize', handleWindowResize);
+    window.removeEventListener('keydown', handleGlobalKeyDown);
   }
   if (worker) {
     worker.terminate();
@@ -450,7 +467,7 @@ onUnmounted(() => {
 .playground-workspace {
   display: flex;
   flex: 1;
-  min-height: 0; 
+  min-height: 0;
   position: relative;
   overflow: hidden;
 }
