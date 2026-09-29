@@ -4,7 +4,7 @@ export default defineConfig({
   title: "TypePHP",
   description: "Transparent Runtime Type Enforcement for PHP.",
   base: '/docs/',
-
+  cleanUrls: true,
   head: [
     ['link', { rel: 'preload', href: '/docs/wasm/typephp-runtime.json.gz', as: 'fetch', crossorigin: 'anonymous' }],
     ['link', { rel: 'prefetch', href: '/docs/wasm/typephp-runtime.json', as: 'fetch' }]
