@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 ini_set('html_errors', '0');
 ini_set('display_errors', '0');
+ini_set('default_socket_timeout', '2');
 error_reporting(E_ALL);
 
 if (!defined('STDERR')) {
