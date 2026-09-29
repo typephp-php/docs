@@ -1,6 +1,6 @@
 <template>
   <header class="playground-toolbar">
-    <!-- Left: Title Input AND Presets Dropdown -->
+    <!-- Row 1 on Mobile / Left on Desktop: Title & Presets -->
     <div class="toolbar-left">
       <!-- 1. Highlighted Snippet Title -->
       <div class="snippet-title-group" title="Click to rename snippet">
@@ -18,10 +18,11 @@
         />
       </div>
 
-      <!-- 2. Presets Dropdown Button (Guaranteed to render) -->
+      <!-- 2. Compact Presets Dropdown Button (Fully Restored & Guaranteed Visible) -->
       <div class="preset-dropdown-wrapper" title="Load an example preset">
+        <!-- Visual Button -->
         <button class="preset-pill-btn" type="button" tabindex="-1">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
             <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
           </svg>
@@ -31,6 +32,7 @@
           </svg>
         </button>
 
+        <!-- Functional Transparent Select Overlay -->
         <select
           class="preset-select-overlay"
           :value="selectedPresetId"
@@ -48,123 +50,126 @@
       </div>
     </div>
 
-    <!-- Center: Run & View Mode Switcher -->
-    <div class="toolbar-center">
-      <button
-        class="run-btn"
-        :disabled="!isReady || isRunning"
-        @click="$emit('run')"
-      >
-        <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
-          <path d="M8 5v14l11-7z" />
-        </svg>
-        <span>{{ !isReady ? '...' : (isRunning ? '...' : 'Run') }}</span>
-        <span class="key-hint">Ctrl+Enter</span>
-      </button>
+    <!-- Actions Wrapper: Centered & Right on Desktop; Row 2 on Mobile -->
+    <div class="toolbar-actions-wrapper">
+      <!-- Center: Run & View Mode Switcher -->
+      <div class="toolbar-center">
+        <button
+          class="run-btn"
+          :disabled="!isReady || isRunning"
+          @click="$emit('run')"
+        >
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+          <span>{{ !isReady ? '...' : (isRunning ? '...' : 'Run') }}</span>
+          <span class="key-hint">Ctrl+Enter</span>
+        </button>
 
-      <div class="view-mode-toggle">
-        <button
-          :class="['mode-btn', { active: viewMode === 'source' }]"
-          @click="$emit('update:viewMode', 'source')"
-        >
-          Source
-        </button>
-        <button
-          :class="['mode-btn', { active: viewMode === 'xray' }]"
-          title="Inspect TypePHP AST injected checks in-place with zero line-drift"
-          @click="$emit('update:viewMode', 'xray')"
-        >
-          <span class="mode-label-desktop">Transformed Source</span>
-          <span class="mode-label-mobile">Transformed</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Right: Config, Zoom, SVG Action Icons & Engine Badge -->
-    <div class="toolbar-right">
-      <!-- Config Popover -->
-      <PlaygroundConfigPopover
-        :model-value="config"
-        :has-custom-config="hasCustomConfig"
-        @update:model-value="$emit('update:config', $event)"
-        @reset="$emit('reset-config')"
-      />
-
-      <!-- Font Zoom Widget -->
-      <div class="font-zoom-widget" title="Adjust text size">
-        <button
-          class="zoom-btn"
-          :disabled="fontSize <= 11"
-          title="Decrease font size"
-          @click="$emit('adjust-font-size', -1)"
-        >
-          A-
-        </button>
-        <span class="font-size-label">{{ fontSize }}px</span>
-        <button
-          class="zoom-btn"
-          :disabled="fontSize >= 20"
-          title="Increase font size"
-          @click="$emit('adjust-font-size', 1)"
-        >
-          A+
-        </button>
+        <div class="view-mode-toggle">
+          <button
+            :class="['mode-btn', { active: viewMode === 'source' }]"
+            @click="$emit('update:viewMode', 'source')"
+          >
+            Source
+          </button>
+          <button
+            :class="['mode-btn', { active: viewMode === 'xray' }]"
+            title="Inspect TypePHP AST injected checks in-place with zero line-drift"
+            @click="$emit('update:viewMode', 'xray')"
+          >
+            <span class="mode-label-desktop">Transformed Source</span>
+            <span class="mode-label-mobile">Transformed</span>
+          </button>
+        </div>
       </div>
 
-      <!-- Action Icons (Using standard SVG paths for 100% production rendering) -->
-      <div class="icon-group">
-        <!-- 1. Format Code (Auto-indent) -->
-        <button
-          class="icon-action-btn"
-          title="Format Code (Auto-indent)"
-          aria-label="Format Code"
-          @click="$emit('format')"
-        >
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 10H7M21 6H3M21 14H3M21 18H7" />
-          </svg>
-        </button>
+      <!-- Right: Config, Zoom, SVG Action Icons & Engine Badge -->
+      <div class="toolbar-right">
+        <!-- Config Popover -->
+        <PlaygroundConfigPopover
+          :model-value="config"
+          :has-custom-config="hasCustomConfig"
+          @update:model-value="$emit('update:config', $event)"
+          @reset="$emit('reset-config')"
+        />
 
-        <!-- 2. Copy Code -->
-        <button
-          :class="['icon-action-btn', { success: copiedCode }]"
-          :title="copiedCode ? 'Code Copied!' : 'Copy Code'"
-          aria-label="Copy Code"
-          @click="$emit('copy-code')"
-        >
-          <svg v-if="!copiedCode" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-          </svg>
-          <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M20 6 9 17l-5-5" />
-          </svg>
-        </button>
+        <!-- Font Zoom Widget -->
+        <div class="font-zoom-widget" title="Adjust text size">
+          <button
+            class="zoom-btn"
+            :disabled="fontSize <= 11"
+            title="Decrease font size"
+            @click="$emit('adjust-font-size', -1)"
+          >
+            A-
+          </button>
+          <span class="font-size-label">{{ fontSize }}px</span>
+          <button
+            class="zoom-btn"
+            :disabled="fontSize >= 20"
+            title="Increase font size"
+            @click="$emit('adjust-font-size', 1)"
+          >
+            A+
+          </button>
+        </div>
 
-        <!-- 3. Share Snippet -->
-        <button
-          :class="['icon-action-btn', { success: copiedLink }]"
-          :title="copiedLink ? 'Share Link Copied!' : 'Share Snippet URL'"
-          aria-label="Share Snippet URL"
-          @click="$emit('share')"
-        >
-          <svg v-if="!copiedLink" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="18" cy="5" r="3" />
-            <circle cx="6" cy="12" r="3" />
-            <circle cx="18" cy="19" r="3" />
-            <path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98" />
-          </svg>
-          <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M20 6 9 17l-5-5" />
-          </svg>
-        </button>
+        <!-- Clustered Action Icons (All using standard <path> vectors) -->
+        <div class="icon-group">
+          <!-- 1. Format Code (Auto-indent) -->
+          <button
+            class="icon-action-btn"
+            title="Format Code (Auto-indent)"
+            aria-label="Format Code"
+            @click="$emit('format')"
+          >
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 10H7M21 6H3M21 14H3M21 18H7" />
+            </svg>
+          </button>
+
+          <!-- 2. Copy Code -->
+          <button
+            :class="['icon-action-btn', { success: copiedCode }]"
+            :title="copiedCode ? 'Code Copied!' : 'Copy Code'"
+            aria-label="Copy Code"
+            @click="$emit('copy-code')"
+          >
+            <svg v-if="!copiedCode" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+            <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+          </button>
+
+          <!-- 3. Share Snippet -->
+          <button
+            :class="['icon-action-btn', { success: copiedLink }]"
+            :title="copiedLink ? 'Share Link Copied!' : 'Share Snippet URL'"
+            aria-label="Share Snippet URL"
+            @click="$emit('share')"
+          >
+            <svg v-if="!copiedLink" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="18" cy="5" r="3" />
+              <circle cx="6" cy="12" r="3" />
+              <circle cx="18" cy="19" r="3" />
+              <path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98" />
+            </svg>
+            <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Engine Badge -->
+        <span class="engine-badge" :title="workerStatus">
+          <span :class="['status-dot', { active: isReady, loading: !isReady && !initError, error: initError }]"></span>
+          PHP 8.5
+        </span>
       </div>
-
-      <!-- Engine Badge -->
-      <span class="engine-badge" :title="workerStatus">
-        <span :class="['status-dot', { active: isReady, loading: !isReady && !initError, error: initError }]"></span>
-        PHP 8.5
-      </span>
     </div>
   </header>
 </template>
@@ -204,6 +209,9 @@ defineEmits<{
 </script>
 
 <style scoped>
+/* ========================================================
+   Desktop Baseline (Clean Single 42px Row)
+   ======================================================== */
 .playground-toolbar {
   position: relative;
   display: flex;
@@ -275,6 +283,8 @@ defineEmits<{
   display: inline-flex !important;
   align-items: center;
   flex-shrink: 0 !important;
+  min-width: 85px; /* Safeguard: Never collapse to 0px */
+  height: 28px;
   visibility: visible !important;
 }
 
@@ -326,7 +336,10 @@ defineEmits<{
   text-align: left;
 }
 
-/* Center Group: Dead-Center */
+.toolbar-actions-wrapper {
+  display: contents;
+}
+
 .toolbar-center {
   position: absolute;
   left: 50%;
@@ -493,6 +506,7 @@ defineEmits<{
   background: rgba(16, 185, 129, 0.08) !important;
 }
 
+/* Explicit SVG rendering guarantee */
 .icon-action-btn svg {
   width: 14px !important;
   height: 14px !important;
@@ -534,41 +548,73 @@ defineEmits<{
 @keyframes pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
 
 /* ========================================================
-   Mobile Breakpoint (< 860px)
+   Mobile & Tablet Responsive System (Clean 2-Row Layout)
    ======================================================== */
 @media (max-width: 860px) {
   .playground-toolbar {
     height: auto !important;
-    flex-wrap: wrap !important;
+    flex-direction: column !important;
     padding: 6px 10px !important;
-    gap: 8px !important;
+    gap: 6px !important;
+    overflow: hidden !important;
   }
 
+  /* Row 1: Title & Presets (Never wraps, never pushes Presets off-screen) */
   .toolbar-left {
     width: 100% !important;
     display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
     align-items: center !important;
     justify-content: space-between !important;
     gap: 8px !important;
+    min-width: 0 !important;
   }
 
   .snippet-title-group {
     flex: 1 1 auto !important;
     min-width: 0 !important;
+    max-width: calc(100% - 95px) !important; /* Reserves space so Presets ▾ stays visible */
+    overflow: hidden !important;
   }
 
   .snippet-title-input {
     width: 100% !important;
+    min-width: 0 !important;
     max-width: 100% !important;
+    font-size: 12px !important;
   }
 
   .preset-dropdown-wrapper {
-    flex-shrink: 0 !important;
+    flex: 0 0 auto !important;
+    display: inline-flex !important;
+    visibility: visible !important;
+  }
+
+  /* Row 2: All execution controls & tool icons */
+  .toolbar-actions-wrapper {
+    display: flex !important;
+    width: 100% !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    flex-wrap: nowrap !important;
+    gap: 6px !important;
   }
 
   .toolbar-center {
     position: static !important;
     transform: none !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .toolbar-right {
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    flex-shrink: 0 !important;
   }
 
   .key-hint {
@@ -586,9 +632,25 @@ defineEmits<{
   .mode-label-desktop {
     display: none !important;
   }
-
   .mode-label-mobile {
     display: inline !important;
+  }
+
+  .mode-btn {
+    padding: 0 7px !important;
+    font-size: 11px !important;
+  }
+
+  .run-btn {
+    padding: 0 10px !important;
+    font-size: 11.5px !important;
+  }
+
+  .icon-action-btn {
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px !important;
+    min-height: 28px !important;
   }
 }
 </style>
