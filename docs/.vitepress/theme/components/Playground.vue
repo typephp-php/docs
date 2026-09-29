@@ -7,6 +7,7 @@
     <PlaygroundToolbar
       :presets="presets"
       :selected-preset-id="selectedPresetId"
+      :snippet-title="snippetTitle"
       :view-mode="viewMode"
       :font-size="fontSize"
       :is-ready="isReady"
@@ -18,6 +19,7 @@
       :copied-code="copiedCode"
       :copied-link="copiedLink"
       @select-preset="onSelectPreset"
+      @update:snippet-title="onTitleUpdate"
       @run="runCode"
       @update:view-mode="viewMode = $event"
       @adjust-font-size="adjustFontSize"
@@ -79,8 +81,13 @@ import PlaygroundLoadingOverlay from './PlaygroundLoadingOverlay.vue';
 import PlaygroundEditor from './PlaygroundEditor.vue';
 import PlaygroundOutput from './PlaygroundOutput.vue';
 
+const DRAFT_CODE_KEY = 'typephp_playground_draft_code';
+const DRAFT_TITLE_KEY = 'typephp_playground_draft_title';
+const DRAFT_PRESET_KEY = 'typephp_playground_draft_preset';
+
 const presets = PLAYGROUND_PRESETS;
 const selectedPresetId = ref<string>(presets[0]?.id ?? '');
+const snippetTitle = ref<string>(presets[0]?.name ?? 'Runtime Reified Generics');
 const code = ref<string>(presets[0]?.code ?? '<?php\n');
 
 const viewMode = ref<'source' | 'xray'>('source');
@@ -122,6 +129,7 @@ const hasCustomConfig = computed<boolean>(() => {
 
 const { site } = useData();
 let worker: Worker | null = null;
+let saveDraftTimer: ReturnType<typeof setTimeout> | null = null;
 
 const effectivePosition = computed<'bottom' | 'side'>(() => {
   return windowWidth.value < 960 ? 'bottom' : layoutPosition.value;
@@ -129,6 +137,17 @@ const effectivePosition = computed<'bottom' | 'side'>(() => {
 
 function handleWindowResize() {
   windowWidth.value = window.innerWidth;
+}
+
+function persistDraft() {
+  if (saveDraftTimer) clearTimeout(saveDraftTimer);
+  saveDraftTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(DRAFT_CODE_KEY, code.value);
+      localStorage.setItem(DRAFT_TITLE_KEY, snippetTitle.value);
+      localStorage.setItem(DRAFT_PRESET_KEY, selectedPresetId.value);
+    } catch {}
+  }, 350);
 }
 
 onMounted(() => {
@@ -159,7 +178,9 @@ onMounted(() => {
     }
   } catch {}
 
+  let restoredFromHash = false;
   const hash = window.location.hash;
+
   if (hash.startsWith('#code=')) {
     try {
       const compressed = hash.substring(6);
@@ -169,19 +190,39 @@ onMounted(() => {
           const parsed = JSON.parse(decompressed);
           if (parsed && typeof parsed === 'object' && typeof parsed.code === 'string') {
             code.value = parsed.code;
+            if (typeof parsed.title === 'string' && parsed.title.trim()) {
+              snippetTitle.value = parsed.title;
+            }
             if (parsed.config) {
               config.value = { ...DEFAULT_PLAYGROUND_CONFIG, ...parsed.config };
             }
+            selectedPresetId.value = 'custom';
+            restoredFromHash = true;
           } else {
             code.value = decompressed;
+            selectedPresetId.value = 'custom';
+            restoredFromHash = true;
           }
         } catch {
           code.value = decompressed;
+          selectedPresetId.value = 'custom';
+          restoredFromHash = true;
         }
       }
     } catch (e) {
       console.error('[Playground] Failed to decompress URL hash:', e);
     }
+  }
+
+  if (!restoredFromHash) {
+    try {
+      const savedDraftCode = localStorage.getItem(DRAFT_CODE_KEY);
+      if (savedDraftCode && savedDraftCode.trim()) {
+        code.value = savedDraftCode;
+        snippetTitle.value = localStorage.getItem(DRAFT_TITLE_KEY) || snippetTitle.value;
+        selectedPresetId.value = localStorage.getItem(DRAFT_PRESET_KEY) || 'custom';
+      }
+    } catch {}
   }
 
   try {
@@ -279,7 +320,19 @@ function formatCode() {
 
 function onCodeUpdate(newCode: string) {
   code.value = newCode;
+  
+  const matched = presets.find((p) => p.id === selectedPresetId.value);
+  if (matched && matched.code !== newCode) {
+    selectedPresetId.value = 'custom';
+  }
+  
+  persistDraft();
   triggerTransform();
+}
+
+function onTitleUpdate(newTitle: string) {
+  snippetTitle.value = newTitle;
+  persistDraft();
 }
 
 function onSelectPreset(presetId: string) {
@@ -287,10 +340,17 @@ function onSelectPreset(presetId: string) {
   const matched = presets.find((p) => p.id === presetId);
   if (matched) {
     code.value = matched.code;
+    snippetTitle.value = matched.name;
     if (matched.config) {
       config.value = { ...DEFAULT_PLAYGROUND_CONFIG, ...matched.config };
     }
     viewMode.value = 'source';
+    
+    if (window.location.hash) {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+    
+    persistDraft();
     clearConsole();
     triggerTransform();
     runCode();
@@ -344,11 +404,17 @@ function copyEditorCode() {
 
 function shareSnippet() {
   const payload = {
+    title: snippetTitle.value || 'Custom Snippet',
     code: code.value,
     config: config.value,
   };
   const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(payload));
   const shareUrl = `${window.location.origin}${window.location.pathname}#code=${compressed}`;
+  
+  if (window.history && window.history.replaceState) {
+    window.history.replaceState(null, '', shareUrl);
+  }
+
   navigator.clipboard.writeText(shareUrl).then(() => {
     copiedLink.value = true;
     setTimeout(() => {
@@ -358,6 +424,7 @@ function shareSnippet() {
 }
 
 onUnmounted(() => {
+  if (saveDraftTimer) clearTimeout(saveDraftTimer);
   if (typeof window !== 'undefined') {
     window.removeEventListener('resize', handleWindowResize);
   }
@@ -383,7 +450,7 @@ onUnmounted(() => {
 .playground-workspace {
   display: flex;
   flex: 1;
-  height: calc(100% - 45px);
+  min-height: 0; 
   position: relative;
   overflow: hidden;
 }

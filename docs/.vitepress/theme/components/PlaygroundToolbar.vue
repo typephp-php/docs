@@ -1,32 +1,54 @@
 <template>
   <header class="playground-toolbar">
-    <!-- Left: Preset Dropdown -->
+    <!-- Left: Highlighted Snippet Title + Compact Presets Dropdown -->
     <div class="toolbar-left">
-      <div class="preset-select-wrapper">
+      <!-- Highlighted Title (Document Identity) -->
+      <div class="snippet-title-group" title="Click to rename snippet">
+        <svg class="file-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+        </svg>
+        <input
+          :value="snippetTitle"
+          type="text"
+          class="snippet-title-input"
+          placeholder="Untitled Snippet..."
+          aria-label="Snippet Title"
+          @input="$emit('update:snippet-title', ($event.target as HTMLInputElement).value)"
+        />
+      </div>
+
+      <!-- Compact Presets Dropdown -->
+      <div class="preset-dropdown-wrapper" title="Load an example preset">
+        <button class="preset-pill-btn" type="button" tabindex="-1">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+          </svg>
+          <span>Presets</span>
+          <svg class="select-chevron" viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+
         <select
+          class="preset-select-overlay"
           :value="selectedPresetId"
-          class="preset-select"
+          aria-label="Select Preset"
           @change="$emit('select-preset', ($event.target as HTMLSelectElement).value)"
         >
+          <option value="" disabled hidden>Presets</option>
+          <option v-if="selectedPresetId === 'custom'" value="custom" disabled>
+            [Custom] {{ snippetTitle || 'Untitled Snippet' }}
+          </option>
           <option v-for="preset in presets" :key="preset?.id" :value="preset?.id">
             [{{ preset?.badge }}] {{ preset?.name }}
           </option>
         </select>
-        <svg
-          class="select-chevron"
-          viewBox="0 0 24 24"
-          width="12"
-          height="12"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.5"
-        >
-          <polyline points="6 9 12 15 18 9"></polyline>
-        </svg>
       </div>
     </div>
 
-    <!-- Center: Run & View Mode Switcher -->
+    <!-- Center: Run & View Mode Switcher (Dead-Centered via absolute transform) -->
     <div class="toolbar-center">
       <button
         class="run-btn"
@@ -57,7 +79,7 @@
       </div>
     </div>
 
-    <!-- Right: Config, Zoom, Actions, Status -->
+    <!-- Right: Config, Zoom, SVG Action Icons & Engine Badge -->
     <div class="toolbar-right">
       <!-- Config Popover -->
       <PlaygroundConfigPopover
@@ -88,18 +110,57 @@
         </button>
       </div>
 
-      <button class="action-btn" title="Copy code to clipboard" @click="$emit('copy-code')">
-        {{ copiedCode ? 'Copied' : 'Copy Code' }}
+      <!-- Format Code (SVG Icon) -->
+      <button
+        class="icon-action-btn"
+        title="Format Code (Auto-indent)"
+        aria-label="Format Code"
+        @click="$emit('format')"
+      >
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="21" y1="10" x2="7" y2="10"></line>
+          <line x1="21" y1="6" x2="3" y2="6"></line>
+          <line x1="21" y1="14" x2="3" y2="14"></line>
+          <line x1="21" y1="18" x2="7" y2="18"></line>
+        </svg>
       </button>
 
-      <button class="action-btn" title="Auto-indent code" @click="$emit('format')">
-        Format
+      <!-- Copy Code (SVG Icon) -->
+      <button
+        :class="['icon-action-btn', { success: copiedCode }]"
+        :title="copiedCode ? 'Code Copied!' : 'Copy Code'"
+        aria-label="Copy Code"
+        @click="$emit('copy-code')"
+      >
+        <svg v-if="!copiedCode" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        <svg v-else viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
       </button>
 
-      <button class="action-btn" title="Share URL" @click="$emit('share')">
-        {{ copiedLink ? 'Copied' : 'Share' }}
+      <!-- Share (3-Node Network Share Icon) -->
+      <button
+        :class="['icon-action-btn', { success: copiedLink }]"
+        :title="copiedLink ? 'Share Link Copied!' : 'Share Snippet URL'"
+        aria-label="Share Snippet URL"
+        @click="$emit('share')"
+      >
+        <svg v-if="!copiedLink" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="18" cy="5" r="3"></circle>
+          <circle cx="6" cy="12" r="3"></circle>
+          <circle cx="18" cy="19" r="3"></circle>
+          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+        </svg>
+        <svg v-else viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
       </button>
 
+      <!-- Engine Badge -->
       <span class="engine-badge" :title="workerStatus">
         <span :class="['status-dot', { active: isReady, loading: !isReady && !initError, error: initError }]"></span>
         PHP 8.5
@@ -115,6 +176,7 @@ import PlaygroundConfigPopover from './PlaygroundConfigPopover.vue';
 defineProps<{
   presets: PlaygroundPreset[];
   selectedPresetId: string;
+  snippetTitle: string;
   viewMode: 'source' | 'xray';
   fontSize: number;
   isReady: boolean;
@@ -129,6 +191,7 @@ defineProps<{
 
 defineEmits<{
   (e: 'select-preset', id: string): void;
+  (e: 'update:snippet-title', title: string): void;
   (e: 'run'): void;
   (e: 'update:viewMode', mode: 'source' | 'xray'): void;
   (e: 'adjust-font-size', delta: number): void;
@@ -142,86 +205,133 @@ defineEmits<{
 
 <style scoped>
 .playground-toolbar {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 14px;
-  background-color: var(--vp-c-bg-soft);
+  height: 42px;
+  padding: 0 14px;
+  background-color: var(--vp-c-bg);
   border-bottom: 1px solid var(--vp-c-divider);
-  gap: 10px;
+  flex-shrink: 0;
+  gap: 12px;
 }
 
-.toolbar-left, .toolbar-center, .toolbar-right {
+.toolbar-left {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  z-index: 1;
 }
 
-/* Preset Dropdown Wrapper & Chevron */
-.preset-select-wrapper {
+.snippet-title-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--vp-c-bg-soft);
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.snippet-title-group:hover,
+.snippet-title-group:focus-within {
+  border-color: var(--vp-c-divider);
+  background: var(--vp-c-bg-mute);
+}
+
+.file-icon {
+  color: var(--vp-c-brand-1);
+  flex-shrink: 0;
+}
+
+.snippet-title-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--vp-c-text-1);
+  width: 220px;
+  max-width: 32vw;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.snippet-title-input::placeholder {
+  color: var(--vp-c-text-3);
+  font-weight: 500;
+}
+
+.preset-dropdown-wrapper {
   position: relative;
   display: inline-flex;
   align-items: center;
 }
 
-.preset-select {
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  padding: 5px 30px 5px 10px;
-  font-size: 12px;
+.preset-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 11.5px;
   font-weight: 600;
-  border-radius: 6px;
+  color: var(--vp-c-text-2);
+  background: var(--vp-c-bg-soft);
   border: 1px solid var(--vp-c-divider);
-  background: var(--vp-c-bg);
+  border-radius: 6px;
+  pointer-events: none;
+  transition: all 0.15s ease;
+}
+
+.preset-dropdown-wrapper:hover .preset-pill-btn {
   color: var(--vp-c-text-1);
-  cursor: pointer;
-  outline: none;
-  width: 340px;
-  max-width: 100%;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  transition: all 0.2s ease;
-}
-
-.preset-select:hover {
   border-color: var(--vp-c-brand-1);
-}
-
-.preset-select:focus {
-  border-color: var(--vp-c-brand-1);
-  box-shadow: 0 0 0 1px var(--vp-c-brand-1);
 }
 
 .select-chevron {
-  position: absolute;
-  right: 10px;
-  pointer-events: none;
-  color: var(--vp-c-text-2);
-  transition: transform 0.2s ease, color 0.2s ease;
+  color: var(--vp-c-text-3);
+  transition: transform 0.2s ease;
 }
 
-.preset-select-wrapper:hover .select-chevron {
+.preset-dropdown-wrapper:hover .select-chevron {
   color: var(--vp-c-brand-1);
 }
 
-@media (min-width: 1280px) {
-  .preset-select {
-    width: 380px;
-  }
+.preset-select-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.toolbar-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
 }
 
 .run-btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 4px 12px;
+  height: 28px;
+  padding: 0 12px;
   font-size: 12px;
   font-weight: 600;
   background-color: var(--vp-c-brand-1);
   color: #fff;
   border: none;
-  border-radius: 5px;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -236,7 +346,7 @@ defineEmits<{
 }
 
 .key-hint {
-  font-size: 10px;
+  font-size: 9.5px;
   padding: 1px 4px;
   background: rgba(0, 0, 0, 0.2);
   border-radius: 3px;
@@ -246,13 +356,14 @@ defineEmits<{
 .view-mode-toggle {
   display: inline-flex;
   border: 1px solid var(--vp-c-divider);
-  border-radius: 5px;
+  border-radius: 6px;
   overflow: hidden;
+  height: 28px;
   background: var(--vp-c-bg);
 }
 
 .mode-btn {
-  padding: 4px 10px;
+  padding: 0 10px;
   font-size: 11.5px;
   font-weight: 600;
   border: none;
@@ -271,18 +382,27 @@ defineEmits<{
   color: var(--vp-c-brand-1);
 }
 
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 1;
+}
+
 .font-zoom-widget {
   display: inline-flex;
   align-items: center;
+  height: 28px;
   background: var(--vp-c-bg);
   border: 1px solid var(--vp-c-divider);
-  border-radius: 5px;
+  border-radius: 6px;
   overflow: hidden;
 }
 
 .zoom-btn {
-  padding: 2px 6px;
-  font-size: 10.5px;
+  padding: 0 6px;
+  height: 100%;
+  font-size: 10px;
   font-weight: 700;
   background: transparent;
   border: none;
@@ -301,41 +421,51 @@ defineEmits<{
 }
 
 .font-size-label {
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--vp-c-text-2);
-  padding: 0 4px;
+  padding: 0 3px;
   font-family: var(--vp-font-family-mono);
   user-select: none;
 }
 
-.action-btn {
-  padding: 3px 8px;
-  font-size: 11.5px;
-  font-weight: 600;
+.icon-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border: 1px solid var(--vp-c-divider);
   background: var(--vp-c-bg);
-  color: var(--vp-c-text-1);
-  border-radius: 5px;
+  color: var(--vp-c-text-2);
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
-.action-btn:hover {
+.icon-action-btn:hover {
   border-color: var(--vp-c-brand-1);
   color: var(--vp-c-brand-1);
+}
+
+.icon-action-btn.success {
+  border-color: #10b981;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.08);
 }
 
 .engine-badge {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  height: 24px;
   font-size: 11px;
   font-weight: 600;
   color: var(--vp-c-text-2);
   background: var(--vp-c-bg-mute);
-  padding: 2px 6px;
-  border-radius: 10px;
+  padding: 0 7px;
+  border-radius: 12px;
   border: 1px solid var(--vp-c-divider);
   white-space: nowrap;
 }
@@ -353,30 +483,31 @@ defineEmits<{
 
 @keyframes pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
 
-@media (max-width: 960px) {
+@media (max-width: 1080px) {
+  .snippet-title-input {
+    width: 160px;
+  }
+}
+
+@media (max-width: 900px) {
+  .toolbar-center {
+    position: static;
+    transform: none;
+  }
   .playground-toolbar {
+    height: auto;
     flex-wrap: wrap;
-    gap: 6px;
     padding: 6px 10px;
+    gap: 8px;
   }
-
-  .toolbar-left {
+  .toolbar-left, .toolbar-center, .toolbar-right {
     width: 100%;
-  }
-
-  .preset-select-wrapper {
-    width: 100%;
-  }
-
-  .preset-select {
-    max-width: 100%;
-    width: 100%;
-  }
-
-  .toolbar-center, .toolbar-right {
     justify-content: space-between;
   }
-
+  .snippet-title-input {
+    width: 100%;
+    max-width: none;
+  }
   .key-hint {
     display: none;
   }
