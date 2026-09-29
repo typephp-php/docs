@@ -1,8 +1,8 @@
 <template>
   <header class="playground-toolbar">
-    <!-- Row 1 on Mobile / Left on Desktop: Title & Presets -->
+    <!-- Left: Title Input & Compact Presets Dropdown -->
     <div class="toolbar-left">
-      <!-- 1. Highlighted Snippet Title -->
+      <!-- 1. Highlighted Snippet Title (Displays the active name) -->
       <div class="snippet-title-group" title="Click to rename snippet">
         <svg class="file-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -18,163 +18,152 @@
         />
       </div>
 
-      <!-- 2. Compact Presets Dropdown Button (Fully Restored & Guaranteed Visible) -->
-      <div class="preset-dropdown-wrapper" title="Load an example preset">
-        <!-- Visual Button -->
-        <button class="preset-pill-btn" type="button" tabindex="-1">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-          </svg>
-          <span>Presets</span>
-          <svg class="select-chevron" viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="m6 9 6 6 6-6" />
-          </svg>
-        </button>
-
-        <!-- Functional Transparent Select Overlay -->
+      <!-- 2. Clean Presets Menu (Always says 'Presets' — zero text duplication) -->
+      <div class="preset-select-wrapper" title="Load an example preset">
+        <svg class="preset-book-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+        </svg>
         <select
-          class="preset-select-overlay"
-          :value="selectedPresetId"
+          ref="presetSelectRef"
+          class="preset-select"
           aria-label="Select Preset"
-          @change="$emit('select-preset', ($event.target as HTMLSelectElement).value)"
+          @change="onPresetChange($event)"
         >
-          <option value="" disabled hidden>Presets</option>
-          <option v-if="selectedPresetId === 'custom'" value="custom" disabled>
-            [Custom] {{ snippetTitle || 'Untitled Snippet' }}
-          </option>
-          <option v-for="preset in presets" :key="preset?.id" :value="preset?.id">
+          <option value="" disabled selected hidden>Presets</option>
+          <option v-for="preset in (presets || [])" :key="preset?.id" :value="preset?.id">
             [{{ preset?.badge }}] {{ preset?.name }}
           </option>
         </select>
+        <svg class="select-chevron" viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
       </div>
     </div>
 
-    <!-- Actions Wrapper: Centered & Right on Desktop; Row 2 on Mobile -->
-    <div class="toolbar-actions-wrapper">
-      <!-- Center: Run & View Mode Switcher -->
-      <div class="toolbar-center">
+    <!-- Center: Run & View Mode Switcher -->
+    <div class="toolbar-center">
+      <button
+        class="run-btn"
+        :disabled="!isReady || isRunning"
+        @click="$emit('run')"
+      >
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+          <path d="M8 5v14l11-7z" />
+        </svg>
+        <span>{{ !isReady ? '...' : (isRunning ? '...' : 'Run') }}</span>
+        <span class="key-hint">Ctrl+Enter</span>
+      </button>
+
+      <div class="view-mode-toggle">
         <button
-          class="run-btn"
-          :disabled="!isReady || isRunning"
-          @click="$emit('run')"
+          :class="['mode-btn', { active: viewMode === 'source' }]"
+          @click="$emit('update:viewMode', 'source')"
         >
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
-            <path d="M8 5v14l11-7z" />
+          Source
+        </button>
+        <button
+          :class="['mode-btn', { active: viewMode === 'xray' }]"
+          title="Inspect TypePHP AST injected checks in-place with zero line-drift"
+          @click="$emit('update:viewMode', 'xray')"
+        >
+          <span class="mode-label-desktop">Transformed Source</span>
+          <span class="mode-label-mobile">Transformed</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Right: Config, Zoom, SVG Action Icons & Engine Badge -->
+    <div class="toolbar-right">
+      <!-- Config Popover -->
+      <PlaygroundConfigPopover
+        :model-value="config"
+        :has-custom-config="hasCustomConfig"
+        @update:model-value="$emit('update:config', $event)"
+        @reset="$emit('reset-config')"
+      />
+
+      <!-- Font Zoom Widget -->
+      <div class="font-zoom-widget" title="Adjust text size">
+        <button
+          class="zoom-btn"
+          :disabled="fontSize <= 11"
+          title="Decrease font size"
+          @click="$emit('adjust-font-size', -1)"
+        >
+          A-
+        </button>
+        <span class="font-size-label">{{ fontSize }}px</span>
+        <button
+          class="zoom-btn"
+          :disabled="fontSize >= 20"
+          title="Increase font size"
+          @click="$emit('adjust-font-size', 1)"
+        >
+          A+
+        </button>
+      </div>
+
+      <!-- Action Icons -->
+      <div class="icon-group">
+        <!-- Format Code -->
+        <button
+          class="icon-action-btn"
+          title="Format Code (Auto-indent)"
+          aria-label="Format Code"
+          @click="$emit('format')"
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 10H7M21 6H3M21 14H3M21 18H7" />
           </svg>
-          <span>{{ !isReady ? '...' : (isRunning ? '...' : 'Run') }}</span>
-          <span class="key-hint">Ctrl+Enter</span>
         </button>
 
-        <div class="view-mode-toggle">
-          <button
-            :class="['mode-btn', { active: viewMode === 'source' }]"
-            @click="$emit('update:viewMode', 'source')"
-          >
-            Source
-          </button>
-          <button
-            :class="['mode-btn', { active: viewMode === 'xray' }]"
-            title="Inspect TypePHP AST injected checks in-place with zero line-drift"
-            @click="$emit('update:viewMode', 'xray')"
-          >
-            <span class="mode-label-desktop">Transformed Source</span>
-            <span class="mode-label-mobile">Transformed</span>
-          </button>
-        </div>
+        <!-- Copy Code -->
+        <button
+          :class="['icon-action-btn', { success: copiedCode }]"
+          :title="copiedCode ? 'Code Copied!' : 'Copy Code'"
+          aria-label="Copy Code"
+          @click="$emit('copy-code')"
+        >
+          <svg v-if="!copiedCode" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+          <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+        </button>
+
+        <!-- Share Snippet -->
+        <button
+          :class="['icon-action-btn', { success: copiedLink }]"
+          :title="copiedLink ? 'Share Link Copied!' : 'Share Snippet URL'"
+          aria-label="Share Snippet URL"
+          @click="$emit('share')"
+        >
+          <svg v-if="!copiedLink" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="18" cy="5" r="3" />
+            <circle cx="6" cy="12" r="3" />
+            <circle cx="18" cy="19" r="3" />
+            <path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98" />
+          </svg>
+          <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+        </button>
       </div>
 
-      <!-- Right: Config, Zoom, SVG Action Icons & Engine Badge -->
-      <div class="toolbar-right">
-        <!-- Config Popover -->
-        <PlaygroundConfigPopover
-          :model-value="config"
-          :has-custom-config="hasCustomConfig"
-          @update:model-value="$emit('update:config', $event)"
-          @reset="$emit('reset-config')"
-        />
-
-        <!-- Font Zoom Widget -->
-        <div class="font-zoom-widget" title="Adjust text size">
-          <button
-            class="zoom-btn"
-            :disabled="fontSize <= 11"
-            title="Decrease font size"
-            @click="$emit('adjust-font-size', -1)"
-          >
-            A-
-          </button>
-          <span class="font-size-label">{{ fontSize }}px</span>
-          <button
-            class="zoom-btn"
-            :disabled="fontSize >= 20"
-            title="Increase font size"
-            @click="$emit('adjust-font-size', 1)"
-          >
-            A+
-          </button>
-        </div>
-
-        <!-- Clustered Action Icons (All using standard <path> vectors) -->
-        <div class="icon-group">
-          <!-- 1. Format Code (Auto-indent) -->
-          <button
-            class="icon-action-btn"
-            title="Format Code (Auto-indent)"
-            aria-label="Format Code"
-            @click="$emit('format')"
-          >
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 10H7M21 6H3M21 14H3M21 18H7" />
-            </svg>
-          </button>
-
-          <!-- 2. Copy Code -->
-          <button
-            :class="['icon-action-btn', { success: copiedCode }]"
-            :title="copiedCode ? 'Code Copied!' : 'Copy Code'"
-            aria-label="Copy Code"
-            @click="$emit('copy-code')"
-          >
-            <svg v-if="!copiedCode" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-            </svg>
-            <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
-          </button>
-
-          <!-- 3. Share Snippet -->
-          <button
-            :class="['icon-action-btn', { success: copiedLink }]"
-            :title="copiedLink ? 'Share Link Copied!' : 'Share Snippet URL'"
-            aria-label="Share Snippet URL"
-            @click="$emit('share')"
-          >
-            <svg v-if="!copiedLink" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="18" cy="5" r="3" />
-              <circle cx="6" cy="12" r="3" />
-              <circle cx="18" cy="19" r="3" />
-              <path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98" />
-            </svg>
-            <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
-          </button>
-        </div>
-
-        <!-- Engine Badge -->
-        <span class="engine-badge" :title="workerStatus">
-          <span :class="['status-dot', { active: isReady, loading: !isReady && !initError, error: initError }]"></span>
-          PHP 8.5
-        </span>
-      </div>
+      <!-- Engine Badge -->
+      <span class="engine-badge" :title="workerStatus">
+        <span :class="['status-dot', { active: isReady, loading: !isReady && !initError, error: initError }]"></span>
+        PHP 8.5
+      </span>
     </div>
   </header>
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue';
 import type { PlaygroundPreset, PlaygroundConfig } from '../presets';
 import PlaygroundConfigPopover from './PlaygroundConfigPopover.vue';
 
@@ -194,7 +183,7 @@ defineProps<{
   copiedLink: boolean;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'select-preset', id: string): void;
   (e: 'update:snippet-title', title: string): void;
   (e: 'run'): void;
@@ -206,6 +195,18 @@ defineEmits<{
   (e: 'update:config', config: PlaygroundConfig): void;
   (e: 'reset-config'): void;
 }>();
+
+const presetSelectRef = ref<HTMLSelectElement | null>(null);
+
+function onPresetChange(e: Event) {
+  const target = e.target as HTMLSelectElement;
+  const val = target.value;
+  if (val) {
+    emit('select-preset', val);
+    // Reset back to placeholder so button stays cleanly labeled "Presets"
+    target.value = '';
+  }
+}
 </script>
 
 <style scoped>
@@ -243,14 +244,14 @@ defineEmits<{
   padding: 3px 8px;
   border-radius: 6px;
   background: var(--vp-c-bg-soft);
-  border: 1px solid transparent;
+  border: 1px solid var(--vp-c-divider);
   transition: all 0.2s ease;
   min-width: 0;
 }
 
 .snippet-title-group:hover,
 .snippet-title-group:focus-within {
-  border-color: var(--vp-c-divider);
+  border-color: var(--vp-c-brand-1);
   background: var(--vp-c-bg-mute);
 }
 
@@ -277,67 +278,79 @@ defineEmits<{
   font-weight: 500;
 }
 
-/* Presets Dropdown */
-.preset-dropdown-wrapper {
+/* ========================================================
+   Presets Menu Button & Dropdown Popup (Dark & Light Mode Safe)
+   ======================================================== */
+.preset-select-wrapper {
   position: relative;
   display: inline-flex !important;
   align-items: center;
-  flex-shrink: 0 !important;
-  min-width: 85px; /* Safeguard: Never collapse to 0px */
-  height: 28px;
-  visibility: visible !important;
-}
-
-.preset-pill-btn {
-  display: inline-flex !important;
-  align-items: center;
-  gap: 5px;
-  height: 28px;
-  padding: 0 10px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--vp-c-text-1);
   background: var(--vp-c-bg-soft);
   border: 1px solid var(--vp-c-divider);
   border-radius: 6px;
-  pointer-events: none;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-  visibility: visible !important;
+  height: 28px;
+  padding: 0 6px 0 8px;
+  transition: all 0.2s ease;
+  flex-shrink: 0 !important;
+  cursor: pointer;
 }
 
-.preset-dropdown-wrapper:hover .preset-pill-btn {
-  color: var(--vp-c-brand-1);
+.preset-select-wrapper:hover {
   border-color: var(--vp-c-brand-1);
+}
+
+.preset-book-icon {
+  color: var(--vp-c-brand-1);
+  margin-right: 5px;
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+.preset-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--vp-c-text-1) !important;
+  cursor: pointer;
+  width: 50px; 
+  padding: 0;
+  color-scheme: dark light;
+}
+
+:root.dark .preset-select {
+  color-scheme: dark !important;
+}
+
+:root:not(.dark) .preset-select {
+  color-scheme: light !important;
+}
+
+.preset-select option {
+  background-color: var(--vp-c-bg, #1e1e20) !important;
+  color: var(--vp-c-text-1, #ffffff) !important;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+:root:not(.dark) .preset-select option {
+  background-color: #ffffff !important;
+  color: #213547 !important;
 }
 
 .select-chevron {
   color: var(--vp-c-text-3);
+  pointer-events: none;
+  margin-left: 2px;
   transition: transform 0.2s ease;
 }
 
-.preset-dropdown-wrapper:hover .select-chevron {
+.preset-select-wrapper:hover .select-chevron {
   color: var(--vp-c-brand-1);
-}
-
-.preset-select-overlay {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
-  direction: rtl;
-}
-
-.preset-select-overlay option {
-  direction: ltr;
-  text-align: left;
-}
-
-.toolbar-actions-wrapper {
-  display: contents;
 }
 
 .toolbar-center {
@@ -421,7 +434,6 @@ defineEmits<{
   display: none;
 }
 
-/* Right Group */
 .toolbar-right {
   display: flex;
   align-items: center;
@@ -476,7 +488,6 @@ defineEmits<{
   user-select: none;
 }
 
-/* Action Icon Buttons */
 .icon-action-btn {
   display: inline-flex !important;
   align-items: center !important;
@@ -506,7 +517,6 @@ defineEmits<{
   background: rgba(16, 185, 129, 0.08) !important;
 }
 
-/* Explicit SVG rendering guarantee */
 .icon-action-btn svg {
   width: 14px !important;
   height: 14px !important;
@@ -547,74 +557,39 @@ defineEmits<{
 
 @keyframes pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
 
-/* ========================================================
-   Mobile & Tablet Responsive System (Clean 2-Row Layout)
-   ======================================================== */
 @media (max-width: 860px) {
   .playground-toolbar {
     height: auto !important;
-    flex-direction: column !important;
+    flex-wrap: wrap !important;
     padding: 6px 10px !important;
-    gap: 6px !important;
-    overflow: hidden !important;
+    gap: 8px !important;
   }
 
-  /* Row 1: Title & Presets (Never wraps, never pushes Presets off-screen) */
   .toolbar-left {
     width: 100% !important;
     display: flex !important;
-    flex-direction: row !important;
-    flex-wrap: nowrap !important;
     align-items: center !important;
     justify-content: space-between !important;
     gap: 8px !important;
-    min-width: 0 !important;
   }
 
   .snippet-title-group {
     flex: 1 1 auto !important;
     min-width: 0 !important;
-    max-width: calc(100% - 95px) !important; /* Reserves space so Presets ▾ stays visible */
-    overflow: hidden !important;
   }
 
   .snippet-title-input {
     width: 100% !important;
-    min-width: 0 !important;
     max-width: 100% !important;
-    font-size: 12px !important;
   }
 
-  .preset-dropdown-wrapper {
-    flex: 0 0 auto !important;
-    display: inline-flex !important;
-    visibility: visible !important;
-  }
-
-  /* Row 2: All execution controls & tool icons */
-  .toolbar-actions-wrapper {
-    display: flex !important;
-    width: 100% !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    flex-wrap: nowrap !important;
-    gap: 6px !important;
+  .preset-select-wrapper {
+    flex-shrink: 0 !important;
   }
 
   .toolbar-center {
     position: static !important;
     transform: none !important;
-    display: flex !important;
-    align-items: center !important;
-    gap: 6px !important;
-    flex-shrink: 0 !important;
-  }
-
-  .toolbar-right {
-    display: flex !important;
-    align-items: center !important;
-    gap: 4px !important;
-    flex-shrink: 0 !important;
   }
 
   .key-hint {
@@ -632,25 +607,9 @@ defineEmits<{
   .mode-label-desktop {
     display: none !important;
   }
+
   .mode-label-mobile {
     display: inline !important;
-  }
-
-  .mode-btn {
-    padding: 0 7px !important;
-    font-size: 11px !important;
-  }
-
-  .run-btn {
-    padding: 0 10px !important;
-    font-size: 11.5px !important;
-  }
-
-  .icon-action-btn {
-    width: 28px !important;
-    height: 28px !important;
-    min-width: 28px !important;
-    min-height: 28px !important;
   }
 }
 </style>
