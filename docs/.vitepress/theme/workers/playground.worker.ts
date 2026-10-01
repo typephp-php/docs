@@ -34,7 +34,11 @@ function sanitizePath(string $path): string {
 
 function sanitizeText(string $text): string {
     return str_replace(
-        ['/workspace/transformed.php', '/workspace/playground.php', 'transformed.php'],
+        [
+            '/workspace/transformed.php',
+            '/workspace/playground.php',
+            'transformed.php',
+        ],
         'playground.php',
         $text
     );
@@ -179,8 +183,15 @@ if (!str_starts_with(trim($source), '<?php')) {
 
 if (!$isEnabled) {
     try {
+        ob_start('sanitizeText');
         require '/workspace/playground.php';
+        while (ob_get_level() > 0) {
+            ob_end_flush();
+        }
     } catch (\\Throwable $e) {
+        while (ob_get_level() > 0) {
+            ob_end_flush();
+        }
         file_put_contents('php://stderr', formatExceptionTrace($e));
         exit(255);
     }
@@ -201,8 +212,16 @@ try {
 }
 
 try {
+    // Intercept all STDOUT (including user try/catch echoes and getMessage() calls)
+    ob_start('sanitizeText');
     require '/workspace/transformed.php';
+    while (ob_get_level() > 0) {
+        ob_end_flush();
+    }
 } catch (\\Throwable $e) {
+    while (ob_get_level() > 0) {
+        ob_end_flush();
+    }
     file_put_contents('php://stderr', formatExceptionTrace($e));
     exit(255);
 }
@@ -271,6 +290,14 @@ try {
     echo $source;
 }
 `;
+
+function sanitizeOutput(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/\/workspace\/transformed\.php/g, 'playground.php')
+    .replace(/\/workspace\/playground\.php/g, 'playground.php')
+    .replace(/transformed\.php/g, 'playground.php');
+}
 
 function makeDirectory(targetPhp: PHP, dirPath: string) {
   const parts = dirPath.split('/').filter(Boolean);
@@ -379,8 +406,8 @@ async function runCode(code: string, config?: any) {
 
     self.postMessage({
       type: 'RUN_RESULT',
-      stdout,
-      stderr,
+      stdout: sanitizeOutput(stdout),
+      stderr: sanitizeOutput(stderr),
       exitCode,
       duration,
     });
