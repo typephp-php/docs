@@ -4,7 +4,7 @@ layout: home
 hero:
   name: "TypePHP"
   text: "Transparent Runtime Type Enforcement"
-  tagline: "The first pure userland PHP library to transparently enforce DocBlock types at runtime. Bringing reified generics, typed arrays, and static analysis type refinements to life with zero new syntax, zero build steps, and zero C-extensions."
+  tagline: "The first pure userland PHP library to transparently enforce DocBlock types at runtime. Bringing reified generics, typed arrays, and 1-pass audit reporting to life with zero new syntax, zero build steps, and zero C-extensions."
   actions:
     - theme: brand
       text: "Try in Playground"
@@ -19,8 +19,8 @@ hero:
 features:
   - title: "Interactive Browser Playground"
     details: "Test TypePHP live in your browser powered by real PHP 8.5 WebAssembly. Inspect zero line-drift AST transformations in real time with zero installation."
-  - title: "First-of-its-Kind in Userland"
-    details: "Operates 100% in pure PHP userland via native stream wrappers and AST transformations. No custom PHP binaries, C-extensions, FFI, or build steps required."
+  - title: "1-Pass Audit & Violation Reporting"
+    details: "Audit existing codebases in a single test run without crashing. Export structured JSON reports, run multi-worker parallel shards, and gate CI builds effortlessly."
   - title: "True Reified Generics"
     details: "Statefully reifies generic templates per object instance in memory using native WeakMap tracking, with full support for variance, nested generics, and clone preservation."
   - title: "Zero Line-Drift & Total Compatibility"
@@ -65,6 +65,37 @@ class User extends Model
 // Executing $user->assignableRoles() throws:
 // TypePHP\Exception\TypeError: User::assignableRoles(): Return value[0] must be of type int, App\Enums\Role returned
 ```
+
+---
+
+### Non-Fatal Codebase Auditing & JSON Reports
+
+Onboard TypePHP onto legacy codebases without fixing errors one crash at a time. Run your test suite in Audit Mode (`TYPEPHP_ON_VIOLATION=report`) to execute all tests to completion and capture every single type discrepancy across your application into a single structured JSON report:
+
+```bash
+# 1. Run your test suite in non-fatal Audit Mode
+TYPEPHP_ON_VIOLATION=report TYPEPHP_REPORT_FILE=var/typephp-report.json ./vendor/bin/pest
+
+# 2. View clean formatted summary table in your terminal
+vendor/bin/typephp report
+```
+
+#### Terminal Audit Summary Output (`vendor/bin/typephp report`)
+```text
+  TYPEPHP  Violation Audit Report
+
+  • Total Violations: 4
+  • Files Affected:   3
+  • Report Source:    var/typephp-report.json
+
+  src/Services/PaymentService.php
+    Line 42    parameter   $amount      expected positive-int, negative int (-50)
+
+  src/Models/User.php
+    Line 88    return      return       expected list<int>, App\Enums\Role returned
+```
+
+> **Learn More:** Check out the [Violation Reporting & Auditing](/core-concepts/violation-reporting) guide for full details on parallel worker sharding and CI gatekeeping (`fail_on_report`).
 
 ---
 

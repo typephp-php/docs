@@ -39,13 +39,13 @@ registerUser(-5, 'Alice', 'admin');
 
 ## Sensitive Parameter Value Masking (PHP 8.2+ `#[SensitiveParameter]`)
 
-PHP 8.2 introduced the native `#[SensitiveParameter]` attribute to protect sensitive values (such as passwords, API keys, secret PINs, and bearer tokens) from leaking into stack traces and error monitoring logs (e.g. Sentry, Datadog, log aggregators).
+PHP 8.2 introduced the native `#[SensitiveParameter]` attribute to protect sensitive values (such as passwords, API keys, secret PINs, and bearer tokens) from leaking into stack traces and error monitoring logs (e.g. Sentry, Datadog, Bugsnag, CloudWatch).
 
 TypePHP natively detects `#[SensitiveParameter]` on functions, class methods, constructors, promoted properties, and inherited interface contracts.
 
 ### Why Value Masking Matters
 
-For standard parameters, TypePHP provides rich value inspection (such as `negative int (-5) given` or `empty string ('') given`). However, for sensitive parameters, printing the raw value would risk exposing credentials in exception messages and log files:
+For standard parameters, TypePHP provides rich, descriptive error messages to make debugging effortless (such as `negative int (-5) given` or `empty string ('') given`). However, for sensitive parameters, printing the raw value risks exposing confidential credentials in exception messages and log files:
 
 ```php
 use SensitiveParameter;
@@ -88,6 +88,85 @@ TypePHP enforces sensitive value masking across all declaration styles:
 | **Class Methods** | `public function auth(#[SensitiveParameter] string $token)` | Value masked on failure |
 | **Promoted Properties** | `public function __construct(#[SensitiveParameter] public string $secret)` | Value masked on instantiation |
 | **Inherited Interfaces** | `interface Auth { public function verify(#[SensitiveParameter] string $pin); }` | Inherited by implementing classes |
+
+---
+
+## Global Value Redaction (`redact_values => true`)
+
+While `#[SensitiveParameter]` is ideal for targeted parameters, relying **solely** on attributes has three major limitations in enterprise and production codebases:
+
+1. **Human Error & Coverage Gaps:** Developers often forget to annotate every sensitive parameter across hundreds of controllers, commands, and DTOs.
+2. **Unsupported Targets:** `#[SensitiveParameter]` only applies to method/function parameters. It **cannot** protect return values (`@return`), class property assignments (`$model->apiKey = ...`), or local inline variables (`/** @var ... */ $token = ...`).
+3. **PHP Version Restrictions:** `#[SensitiveParameter]` is only available on PHP 8.2+. Applications running on PHP 8.1 cannot use it.
+
+To solve this, TypePHP provides the **Global Value Redaction** toggle (`'redact_values' => true`).
+
+### Why Global Redaction is Useful
+
+When enabled, TypePHP treats **every single parameter, return value, class property, and local variable** across your entire application as sensitive:
+
+```
+# Without Redaction (Development Mode)
+TypeError: OrderService::checkout(): Argument $creditCard must be 'valid', string '4111-2222-3333-4444' given
+TypeError: Property User::$secretToken must be positive-int, negative int (-42) given
+TypeError: Return value must be of type positive-int, int (-999) returned
+
+# With Global Redaction (Production / Staging / Audit Mode)
+TypeError: OrderService::checkout(): Argument $creditCard must be 'valid', string given
+TypeError: Property User::$secretToken must be positive-int, int given
+TypeError: Return value must be of type positive-int, int returned
+```
+
+#### Key Benefits:
+* **Zero Code Modifications:** Protects legacy codebases, monolithic apps, and thousands of existing classes without requiring you to manually touch a single file or add attributes.
+* **PHP 8.1+ Compatibility:** Provides enterprise-grade credential masking even if your project has not upgraded to PHP 8.2 yet.
+* **Full-Spectrum Protection:** Redacts values across **all four** boundaries:
+  - Function & method arguments (`@param`).
+  - Function & method returns (`@return`).
+  - Class property assignments (both instance and static `$this->prop` / `self::$prop`).
+  - Inline `@var` variable reassignments and destructuring (`$var = ...`).
+* **Compliance Ready:** Essential for meeting strict data privacy standards (**HIPAA, GDPR, PCI-DSS, SOC 2**) by ensuring raw PII, payment details, or credentials are never written to error log aggregators (Sentry, Datadog) or TypePHP JSON audit reports.
+
+### How to Enable Global Redaction
+
+You can activate global redaction via configuration file, `composer.json`, or environment variable:
+
+#### 1. In `typephp.php`:
+```php
+return [
+    'redact_values' => true,
+];
+```
+
+#### 2. In `composer.json`:
+```json
+{
+  "extra": {
+    "typephp": {
+      "redact-values": true
+    }
+  }
+}
+```
+
+#### 3. Via Environment Variable (Recommended for Production & CI):
+```bash
+export TYPEPHP_REDACT_VALUES=true
+```
+
+---
+
+## Comparison: `#[SensitiveParameter]` vs. `'redact_values'`
+
+| Feature | `#[SensitiveParameter]` (Attribute) | `'redact_values' => true` (Global Toggle) |
+| :--- | :--- | :--- |
+| **Scope** | Granular (per-parameter opt-in) | Universal (project-wide) |
+| **Protected Targets** | Function/method parameters only | Parameters, returns, properties, local variables, reports |
+| **PHP Version** | PHP 8.2+ only | PHP 8.1, 8.2, 8.3, 8.4, 8.5+ |
+| **Code Changes Required** | Yes (manual attribute placement) | None (zero configuration overhead) |
+| **Ideal Environment** | Local development (detailed errors elsewhere, masked on secrets) | Staging, production, CI/CD audit runs, compliance-restricted systems |
+
+> **Best Practice:** Use `#[SensitiveParameter]` in your source code for explicit self-documentation. In your **production** and **staging** environments, set `TYPEPHP_REDACT_VALUES=true` as a fail-safe catch-all to guarantee that no secret or PII ever leaks into your centralized logs.
 
 ---
 

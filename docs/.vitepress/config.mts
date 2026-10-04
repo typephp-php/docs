@@ -67,6 +67,7 @@ export default defineConfig({
           { text: 'Property Validation', link: '/core-concepts/property-validation' },
           { text: 'Inline Variables', link: '/core-concepts/inline-variables' },
           { text: 'Magic Annotations', link: '/core-concepts/magic-annotations' },
+          { text: 'Violation Reporting & Auditing', link: '/core-concepts/violation-reporting' },
         ]
       },
       {

@@ -17,12 +17,41 @@ If TypePHP is not enforcing contracts on a specific file or method, check the fo
 
 ---
 
+### How do I prevent TypePHP from booting before PHPUnit reads `phpunit.xml`?
+
+When running `./vendor/bin/phpunit`, PHPUnit requires Composer's `vendor/autoload.php` **before** it reads `phpunit.xml`. Setting `<env name="TYPEPHP_DISABLE" value="true"/>` inside `phpunit.xml` occurs too late because TypePHP's stream wrapper has already registered.
+
+**Solution:** Disable auto-booting project-wide in your root `composer.json` or `typephp.php`:
+
+```json
+// In root composer.json:
+{
+  "extra": {
+    "typephp": {
+      "auto-boot": false
+    }
+  }
+}
+```
+
+Then, manually boot TypePHP inside your test bootstrap file (`tests/bootstrap.php`):
+
+```php
+// tests/bootstrap.php
+require __DIR__ . '/../vendor/autoload.php';
+
+// Manually boot TypePHP for this test suite:
+\TypePHP\TypePHP::boot();
+```
+
+---
+
 ### How do I know if TypePHP is actively transforming a file?
 
 You can verify that a file is being intercepted and transformed in two ways:
 
 1. **Intentionally Trigger an Error:** Pass an invalid argument (such as a negative integer to a `positive-int` parameter). If a `TypePHP\Exception\TypeError` is thrown, TypePHP is active.
-2. **Inspect the Cache Directory:** Look inside your configured `cache_dir` (if undefined, this defaults to your system temporary directory: `sys_get_temp_dir() . '/typephp-cache/'`). You will see transformed PHP files containing injected `RuntimeTypeChecker` calls.
+2. **Inspect the Cache Directory:** Look inside your configured `cache_dir` (if undefined, this defaults to your system temporary directory: `sys_get_temp_dir() . '/typephp-cache-' . $userHash`). You will see transformed PHP files containing injected `RuntimeTypeChecker` calls.
 
 ---
 
@@ -144,6 +173,34 @@ $collection = new Collection();
 
 ## Frameworks & Tooling
 
+### How do I audit an existing codebase without crashing on the first type error?
+
+Onboard TypePHP using **Audit Mode** (`'on_violation' => 'report'`):
+
+```bash
+# Run your test suite in Audit Mode
+TYPEPHP_ON_VIOLATION=report TYPEPHP_REPORT_FILE=var/typephp-report.json ./vendor/bin/pest
+```
+
+1. Your test suite executes 100% to completion without crashing mid-run.
+2. Every unique type contract violation across all tests is recorded in `var/typephp-report.json`.
+3. Run `vendor/bin/typephp report` to view a clean, color-coded terminal summary table of all violations grouped by file.
+4. Address all violations in one pass (fix the DocBlocks or add `@typephp-ignore`), then switch back to `'on_violation' => 'throw'`.
+
+---
+
+### How do I clear the generated audit report file?
+
+Use the CLI runner command:
+
+```bash
+vendor/bin/typephp report:clear
+```
+
+This deletes `var/typephp-report.json` and purges any temporary multi-process worker shards (`var/.typephp-shards/`).
+
+---
+
 ### Does TypePHP work with Laravel, Symfony, or WordPress?
 
 Yes. TypePHP boots automatically as soon as Composer's autoloader (`vendor/autoload.php`) is required. 
@@ -168,4 +225,3 @@ Yes, it is highly recommended.
 
 * **Static Analyzers (PHPStan, Psalm, Mago):** Analyze your source code at compile-time, linting docblock syntax and checking static logic in your IDE.
 * **TypePHP:** Enforces those same PHPDoc contracts at runtime during dynamic execution, protecting your application against invalid database records, un-sanitized API payloads, and unexpected runtime state.
-```
