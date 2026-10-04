@@ -35,6 +35,42 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Auto-Boot on Composer Autoload
+    |--------------------------------------------------------------------------
+    | When true (default), TypePHP automatically hooks into the stream wrapper
+    | as soon as 'vendor/autoload.php' is required.
+    |
+    | Set to false to disable auto-booting project-wide. You can then manually
+    | boot TypePHP where desired (e.g. in 'tests/bootstrap.php') via:
+    |   \TypePHP\TypePHP::boot();
+    |
+    | Can also be configured in root composer.json:
+    |   "extra": { "typephp": { "auto-boot": false } }
+    */
+    'auto_boot' => true,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Violation Handling Strategy & Audit Reporting
+    |--------------------------------------------------------------------------
+    | Controls what happens when a type contract is violated at runtime:
+    |
+    | - 'throw'  : (Default / Strict) Immediately throws TypePHP\Exception\TypeError.
+    | - 'report' : (Audit Mode) Does not throw; records each unique violation
+    |              and dumps a structured JSON audit report to 'report_file' at shutdown.
+    | - 'warn'   : Emits PHP E_USER_WARNING once per unique violation to your logs
+    |              and allows execution to continue normally without crashing.
+    |
+    | 'report_file'    : Sets the target JSON output path when 'report' mode is active.
+    | 'fail_on_report' : When true, terminates the process with exit code 1 at shutdown
+    |                    if the violation report is non-empty. Useful for CI gates.
+    */
+    'on_violation'   => 'throw',
+    'report_file'    => null,
+    'fail_on_report' => false,
+
+    /*
+    |--------------------------------------------------------------------------
     | Function Boundary Contracts (@param, @return, @param-out, @self-out)
     |--------------------------------------------------------------------------
     | Controls whether function and method parameter, return, and by-reference
@@ -82,7 +118,7 @@ return [
     | 'magic_properties' supports granular options:
     | - 'write': (Default: true) Validates dynamic property assignments via __set()
     |            against @property and @property-write annotations.
-    | - 'read' : (Default: false) Validates dynamic property reads via __get()
+    | - 'read' : (Default: false) Validates dynamic property access via __get()
     |            against @property and @property-read annotations. Keep false
     |            when working with frameworks (e.g. Eloquent/Doctrine) where
     |            newly instantiated models return unpopulated null attributes.
@@ -252,26 +288,73 @@ return [
 
 ---
 
+## Root `composer.json` Configuration (`extra.typephp`)
+
+In addition to `typephp.php`, key project-level options can be configured directly inside your root `composer.json` file under the `"extra.typephp"` key. 
+
+This allows team repositories, monorepos, and packages to enforce project-level booting and reporting rules without requiring developers to create a separate `typephp.php` file:
+
+```json
+{
+  "name": "acme/project",
+  "require-dev": {
+    "typephp/typephp": "^0.11"
+  },
+  "extra": {
+    "typephp": {
+      "auto-boot": false,
+      "on-violation": "report",
+      "report-file": "var/typephp-report.json",
+      "fail-on-report": true
+    }
+  }
+}
+```
+
+### Supported `composer.json` Options
+
+* **`"auto-boot"`**: Controls whether TypePHP automatically hooks into the stream wrapper on `vendor/autoload.php`. Set to `false` to require manual `\TypePHP\TypePHP::boot()` initialization (such as in `tests/bootstrap.php`).
+* **`"on-violation"`**: Sets the violation handling mode (`"throw"`, `"report"`, or `"warn"`).
+* **`"report-file"`**: Sets the JSON report output file path.
+* **`"fail-on-report"`**: Enables CI gatekeeping (exits with status `1` at shutdown if the audit report contains violations).
+
+### Configuration Precedence Hierarchy
+
+TypePHP resolves configuration settings using a deterministic priority hierarchy:
+
+$$\text{1. Environment Variables} \quad \longrightarrow \quad \text{2. } \mathbf{typephp.php} \quad \longrightarrow \quad \text{3. } \mathbf{composer.json \text{ (extra.typephp)}}$$
+
+1. **Environment Variables (Highest Priority):** `TYPEPHP_AUTO_BOOT`, `TYPEPHP_ON_VIOLATION`, `TYPEPHP_REPORT_FILE`, `TYPEPHP_FAIL_ON_REPORT`.
+2. **`typephp.php` Config File:** Overrides `composer.json` settings if explicitly defined in `typephp.php`.
+3. **`composer.json` (`extra.typephp`):** Used when `typephp.php` does not explicitly set the option.
+4. **Base Defaults:** `auto_boot: true`, `on_violation: 'throw'`, `report_file: null`, `fail_on_report: false`.
+
+---
+
 ## Configuration Reference
 
 | Configuration Option | Default | Description |
 | :--- | :--- | :--- |
 | **`'enabled'`** | `true` | Global master switch for runtime type enforcement. |
+| **`'auto_boot'`** | `true` | Controls whether TypePHP automatically registers its stream wrapper upon `vendor/autoload.php`. Set to `false` to disable auto-booting project-wide and initialize manually via `\TypePHP\TypePHP::boot()`. Can also be configured in `composer.json` (`extra.typephp.auto-boot`). |
+| **`'on_violation'`** | `'throw'` | Violation handling strategy: `'throw'` (immediately throws `TypeError`), `'report'` (silent audit mode exporting to JSON report), or `'warn'` (emits `E_USER_WARNING` to logs). Can also be set in `composer.json` (`extra.typephp.on-violation`) or via `TYPEPHP_ON_VIOLATION`. |
+| **`'report_file'`** | `null` | Output file path for JSON audit report when `'report'` mode is active. Can also be set in `composer.json` (`extra.typephp.report-file`) or via `TYPEPHP_REPORT_FILE`. |
+| **`'fail_on_report'`** | `false` | When `true`, terminates the process with exit code `1` at shutdown if the audit report contains violations. Can also be set in `composer.json` (`extra.typephp.fail-on-report`) or via `TYPEPHP_FAIL_ON_REPORT`. |
 | **`'params'`** | `true` | Enforces parameter `@param` contracts on functions and methods. |
 | **`'returns'`** | `true` | Enforces return `@return` contracts on functions and methods. |
 | **`'params_out'`** | `true` | Enforces by-reference out-parameter `@param-out` post-conditions on function and method exits. |
 | **`'self_out'`** | `true` | Enforces generic state transitions on `$this` (`@self-out` / `@this-out`) upon method exit. |
-| **`'strict_return_generic_invariance'`** | `true` | Enforces strict generic return invariance matching PHPStan Level MAX (e.g. returning `Collection<Dog>` where `Collection<Animal>` is expected is rejected unless `@template-covariant` or `<covariant Animal>` is specified). Set to `false` (pragmatic mode) for frameworks (Laravel, Shopware) where collection classes omit covariance annotations. |
-| **`'vendor_boundary_only'`** | `true` | When `true` (default), whitelisted vendor classes (e.g. `Illuminate\Support\Collection`) only enforce type contracts when called from application code (`app/**`, `src/**`, `tests/**`). Calls originating from excluded vendor files or internal self-calls bypass strict checking. Set to `false` for strict pedantic auditing across all vendor code. |
-| **`'magic_properties'`** | `['write' => true, 'read' => false]` | Enforces class-level `@property`, `@property-read`, and `@property-write` annotations. Supports granular options: `'write'` (validates assignments via `__set()`) and `'read'` (validates dynamic property access via `__get()`). Alternatively, set to boolean `false` to disable all magic property checks. |
+| **`'strict_return_generic_invariance'`** | `true` | Enforces strict generic return invariance matching PHPStan Level MAX. Set to `false` (pragmatic mode) for frameworks (Laravel, Shopware) where collection classes omit covariance annotations. |
+| **`'vendor_boundary_only'`** | `true` | Whitelisted vendor classes only enforce type contracts when called from application code (`app/**`, `src/**`, `tests/**`). Calls originating from excluded vendor files or internal self-calls bypass strict checking. |
+| **`'magic_properties'`** | `['write' => true, 'read' => false]` | Enforces class-level `@property`, `@property-read`, and `@property-write` annotations. |
 | **`'magic_methods'`** | `true` | Enforces class-level `@method` annotations on dynamic method calls (`__call` / `__callStatic`). |
-| **`'respect_ignore_tags'`** | `true` | Respects `@typephp-ignore` and `@typephp-ignore-file` tags. Set to `false` in CI/CD to force audit checks. |
-| **`'ignore_trace_depth'`** | `25` | Maximum number of stack frames above a failing type check TypePHP will inspect to find an enclosing `@typephp-ignore` or `@typephp-disable` tag. Increase this if your architecture uses deep pipelines, command buses, serializer layers, or recursive callers. |
-| **`'respect_native_nullability'`** | `true` | When `true` (default), permits `null` if native PHP explicitly declares nullable syntax (`?Type` or `Type\|null = null`) even if omitted in the DocBlock. Set to `false` for strict pedantic enforcement. |
+| **`'respect_ignore_tags'`** | `true` | Respects `@typephp-ignore` and `@typephp-ignore-file` tags. Set to `false` in CI/CD to force full audit checks. |
+| **`'ignore_trace_depth'`** | `25` | Maximum number of stack frames above a failing type check TypePHP will inspect to find an enclosing `@typephp-ignore` or `@typephp-disable` tag. |
+| **`'respect_native_nullability'`** | `true` | Permits `null` if native PHP explicitly declares nullable syntax (`?Type` or `Type\|null = null`) even if omitted in the DocBlock. |
 | **`'array_validation'`** | `'full'` | Validation strategy for collections: `'full'` (exhaustive $O(n)$) or `'hybrid'` (Beartype $O(1)$ sampling for $> 128$ items). |
 | **`'cache'`** | `true` | Pre-transforms and caches PHP files on disk. Set to `false` to transform files purely in memory (`php://memory`). |
 | **`'cache_dir'`** | `null` | Custom path to store cached files. Defaults to system temporary directory (`sys_get_temp_dir() . '/typephp-cache-' . $userHash`). |
-| **`'cache_check_mtime'`** | `true` | When `true` (default), checks `@filemtime` on file load to automatically rebuild the cache when source files change. Set to `false` in production to eliminate all disk `stat()` calls for maximum throughput via OPcache. |
+| **`'cache_check_mtime'`** | `true` | When `true` (default), checks `@filemtime` on file load to automatically rebuild the cache when source files change. Set to `false` in production to eliminate all disk `stat()` calls. |
 | **`'extensions'`** | `[]` | Explicit list of third-party extension classes implementing `ExtensionInterface`. |
 | **`'stubs'`** | `[]` | Path globs pointing to `.stub` files that override third-party vendor DocBlocks. |
 | **`'inline_vars'`** | `[...]` | Fine-grained configuration for local `@var` variable validations. |
@@ -308,35 +391,11 @@ However, modern PHP frameworks frequently decouple callers from the execution po
 2. **Upward Frame Scanning:** TypePHP inspects up to `ignore_trace_depth` frames (default: `25`) above the point of failure. If any enclosing class or method in that execution chain declares `@typephp-ignore` or `@typephp-disable`, the error is suppressed.
 3. **$O(1)$ Decision Caching:** Inspected methods and callers are memoized in memory. Repeated calls through the same stack frames resolve in sub-microseconds.
 
-### Customizing Trace Depth
-
-If your application architecture uses exceptionally deep pipelines or recursive handlers, expand the frame search window in `typephp.php`:
-
-```php
-// typephp.php
-return [
-    // Inspect up to 50 frames above the failing check
-    'ignore_trace_depth' => 50,
-];
-```
-
-You can also override this at runtime in specific tests:
-
-```php
-TypePHP::setConfig(['ignore_trace_depth' => 40]);
-```
-
 ---
 
 ## Vendor Boundary Isolation (`vendor_boundary_only`)
 
-When you whitelist a third-party vendor class (such as `Illuminate\Support\Collection` or a Symfony component), that class is often called thousands of times by the framework's own internal subsystems (e.g. routing, service containers, template compilers, or other third-party packages).
-
-Frameworks often rely on dynamic PHP engine features and loose typing internally (e.g. passing temporary array lists, loose keys, or untyped closures), which can cause false-positive type errors during application boot or test setup.
-
-### How Boundary Isolation Works
-
-TypePHP solves this by acting as an **Application Boundary Airlock**:
+When you whitelist a third-party vendor class (such as `Illuminate\Support\Collection` or a Symfony component), that class is often called thousands of times by the framework's own internal subsystems.
 
 ```
 [Your Application Code] ──calls──► [Vendor Class] ──► TypePHP STRICTLY ENFORCES types!
@@ -345,41 +404,7 @@ TypePHP solves this by acting as an **Application Boundary Airlock**:
 ```
 
 1. **Calls from Application Code:** When your code in `app/`, `src/`, or `tests/` calls a method on a whitelisted vendor class (e.g. `$collection->add(4)` on a `Collection<int, string>`), TypePHP **strictly validates all parameters and returns**.
-2. **Calls from Vendor Code:** When an excluded vendor package or framework internal (e.g. Spatie, Inertia, or Laravel's Application Kernel) calls that same method, TypePHP **instantly short-circuits** with zero overhead, allowing the framework to operate with native speed and flexibility.
-3. **Happy-Path Zero Overhead:** TypePHP resolves caller origins in sub-microseconds with $O(1)$ path memoization, ensuring your test suite and local environment run at near-native speeds.
-
-To force TypePHP to enforce strict types across all vendor internals (pedantic mode for package authors or audits), set:
-
-```php
-'vendor_boundary_only' => false,
-```
-
----
-
-## Inline Variable Categories Reference (`inline_vars`)
-
-You can toggle specific categories of local `@var` variable checks without disabling function boundary contracts:
-
-| Category | Default | Description | Example |
-| :--- | :--- | :--- | :--- |
-| **`'properties'`** | `true` | Class property writes | `$this->id = 10;` |
-| **`'generics'`** | `true` | Generic instance prebinding | `/** @var Collection<User> $users */` |
-| **`'callables'`** | `true` | Inline callback wrapping | `/** @var callable(int): string $cb */` |
-| **`'scalars'`** | `true` | Scalar refinements | `/** @var positive-int $count */` |
-| **`'arrays'`** | `true` | Array shapes, lists, and maps | `/** @var array{id: int} $user */` |
-| **`'objects'`** | `true` | Direct class instance checks | `/** @var User $user */` |
-
----
-
-## Path Specificity & Whitelisting Rules
-
-TypePHP resolves overlapping `include` and `exclude` paths by calculating **pattern specificity length**:
-
-$$\text{Winning Rule} = \max(\text{Pattern Length})$$
-
-* **Specific Vendor Whitelisting:** `'vendor/my-org/my-package/**'` (length 29) overrides the broader `'vendor/**'` exclusion (length 8).
-* **Single-File Blacklisting:** `'src/Legacy/UnsafeFile.php'` (length 25) overrides the broader `'src/**'` inclusion (length 6).
-* **Equal Length Tie-Breaker:** If pattern lengths are equal, `exclude` takes precedence to guarantee safety.
+2. **Calls from Vendor Code:** When an excluded vendor package or framework internal calls that same method, TypePHP **instantly short-circuits** with zero overhead, allowing the framework to operate with native speed and flexibility.
 
 ---
 
@@ -387,5 +412,5 @@ $$\text{Winning Rule} = \max(\text{Pattern Length})$$
 
 To disable TypePHP immediately without modifying application code:
 
-1. **Environment Level (Zero Overhead):** Set `TYPEPHP_DISABLE=true` in your server environment or `.env` file before autoloading.
+1. **Environment Level (Full Prevention):** Set `TYPEPHP_DISABLE=true` in your server environment or `.env` file before autoloading.
 2. **Config Level (Pass-Through):** Set `'enabled' => false` in `typephp.php` or call `TypePHP::setConfig(['enabled' => false])`.
