@@ -71,6 +71,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Global Value Redaction
+    |--------------------------------------------------------------------------
+    | When true, TypePHP redacts all raw parameter, return, property, and
+    | variable values from TypeError exception messages and audit reports,
+    | displaying only their types (e.g. 'string given' instead of 'secret_pwd').
+    |
+    | Useful for production environments, staging logs, and HIPAA/GDPR compliance.
+    |
+    | Can also be set via environment variable: TYPEPHP_REDACT_VALUES=true
+    | Can also be configured in root composer.json:
+    |   "extra": { "typephp": { "redact-values": true } }
+    */
+    'redact_values' => false,
+
+    /*
+    |--------------------------------------------------------------------------
     | Function Boundary Contracts (@param, @return, @param-out, @self-out)
     |--------------------------------------------------------------------------
     | Controls whether function and method parameter, return, and by-reference
@@ -305,7 +321,8 @@ This allows team repositories, monorepos, and packages to enforce project-level 
       "auto-boot": false,
       "on-violation": "report",
       "report-file": "var/typephp-report.json",
-      "fail-on-report": true
+      "fail-on-report": true,
+      "redact-values": true
     }
   }
 }
@@ -317,6 +334,7 @@ This allows team repositories, monorepos, and packages to enforce project-level 
 * **`"on-violation"`**: Sets the violation handling mode (`"throw"`, `"report"`, or `"warn"`).
 * **`"report-file"`**: Sets the JSON report output file path.
 * **`"fail-on-report"`**: Enables CI gatekeeping (exits with status `1` at shutdown if the audit report contains violations).
+* **`"redact-values"`**: Enables global value redaction across all exception messages and audit reports.
 
 ### Configuration Precedence Hierarchy
 
@@ -324,10 +342,10 @@ TypePHP resolves configuration settings using a deterministic priority hierarchy
 
 $$\text{1. Environment Variables} \quad \longrightarrow \quad \text{2. } \mathbf{typephp.php} \quad \longrightarrow \quad \text{3. } \mathbf{composer.json \text{ (extra.typephp)}}$$
 
-1. **Environment Variables (Highest Priority):** `TYPEPHP_AUTO_BOOT`, `TYPEPHP_ON_VIOLATION`, `TYPEPHP_REPORT_FILE`, `TYPEPHP_FAIL_ON_REPORT`.
+1. **Environment Variables (Highest Priority):** `TYPEPHP_AUTO_BOOT`, `TYPEPHP_ON_VIOLATION`, `TYPEPHP_REPORT_FILE`, `TYPEPHP_FAIL_ON_REPORT`, `TYPEPHP_REDACT_VALUES`.
 2. **`typephp.php` Config File:** Overrides `composer.json` settings if explicitly defined in `typephp.php`.
 3. **`composer.json` (`extra.typephp`):** Used when `typephp.php` does not explicitly set the option.
-4. **Base Defaults:** `auto_boot: true`, `on_violation: 'throw'`, `report_file: null`, `fail_on_report: false`.
+4. **Base Defaults:** `auto_boot: true`, `on_violation: 'throw'`, `report_file: null`, `fail_on_report: false`, `redact_values: false`.
 
 ---
 
@@ -340,6 +358,7 @@ $$\text{1. Environment Variables} \quad \longrightarrow \quad \text{2. } \mathbf
 | **`'on_violation'`** | `'throw'` | Violation handling strategy: `'throw'` (immediately throws `TypeError`), `'report'` (silent audit mode exporting to JSON report), or `'warn'` (emits `E_USER_WARNING` to logs). Can also be set in `composer.json` (`extra.typephp.on-violation`) or via `TYPEPHP_ON_VIOLATION`. |
 | **`'report_file'`** | `null` | Output file path for JSON audit report when `'report'` mode is active. Can also be set in `composer.json` (`extra.typephp.report-file`) or via `TYPEPHP_REPORT_FILE`. |
 | **`'fail_on_report'`** | `false` | When `true`, terminates the process with exit code `1` at shutdown if the audit report contains violations. Can also be set in `composer.json` (`extra.typephp.fail-on-report`) or via `TYPEPHP_FAIL_ON_REPORT`. |
+| **`'redact_values'`** | `false` | When `true`, redacts all raw argument, return, property, and variable values from `TypeError` exception messages and audit reports, displaying only their types (e.g. `'string given'` instead of `'secret_pwd'`). Essential for production logs and HIPAA/GDPR compliance. Can also be set in `composer.json` (`extra.typephp.redact-values`) or via `TYPEPHP_REDACT_VALUES`. |
 | **`'params'`** | `true` | Enforces parameter `@param` contracts on functions and methods. |
 | **`'returns'`** | `true` | Enforces return `@return` contracts on functions and methods. |
 | **`'params_out'`** | `true` | Enforces by-reference out-parameter `@param-out` post-conditions on function and method exits. |
@@ -360,6 +379,68 @@ $$\text{1. Environment Variables} \quad \longrightarrow \quad \text{2. } \mathbf
 | **`'inline_vars'`** | `[...]` | Fine-grained configuration for local `@var` variable validations. |
 | **`'include'`** | `[...]` | Path globs to intercept and type-check. |
 | **`'exclude'`** | `[...]` | Path globs to ignore and leave untouched. |
+
+---
+
+## Global Value Redaction (`redact_values`)
+
+By default, TypePHP provides rich, diagnostic error messages that display the actual offending runtime value to make debugging effortless:
+
+```
+TypeError: Argument $apiKey must be of type non-empty-string, empty string ('') given
+TypeError: Argument $pin must be of type positive-int, negative int (-42) given
+TypeError: Argument $role must be of type ('admin' | 'user'), string 'superadmin' given
+```
+
+However, in **production environments**, **staging error log sinks (Sentry, Datadog, Bugsnag)**, or compliance-restricted industries (**HIPAA, GDPR, SOC2, PCI-DSS**), printing raw values can risk leaking sensitive information such as API secrets, passwords, authentication tokens, or personally identifiable information (PII).
+
+### Enabling Global Redaction
+
+You can enable value redaction project-wide in any of the following ways:
+
+#### 1. In `typephp.php`:
+```php
+return [
+    'redact_values' => true,
+];
+```
+
+#### 2. In `composer.json`:
+```json
+{
+  "extra": {
+    "typephp": {
+      "redact-values": true
+    }
+  }
+}
+```
+
+#### 3. Via Environment Variable (Zero Config / Cloud Deployments):
+```bash
+export TYPEPHP_REDACT_VALUES=true
+```
+
+---
+
+### Before vs. After Value Redaction
+
+When `'redact_values' => true` is active, TypePHP strips all literal and scalar values from exception messages and audit reports, outputting only their native type names:
+
+| Violation Context | Standard Output (`redact_values => false`) | Redacted Output (`redact_values => true`) |
+|---|---|---|
+| **Empty string** | `...must be non-empty-string, empty string ('') given` | `...must be non-empty-string, string given` |
+| **Literal strings / tokens** | `...must be 'admin', string 'secret_token_123' given` | `...must be 'admin', string given` |
+| **Negative numbers** | `...must be positive-int, negative int (-42) given` | `...must be positive-int, int given` |
+| **Integer ranges** | `...must be <= 100, 250 given` | `...must be <= 100, int given` |
+| **Class-strings** | `...must be a class-string of User, 'App\Std' given` | `...must be a class-string of User, string given` |
+| **Return values** | `...Return value must be positive-int, -9999 returned` | `...Return value must be positive-int, int returned` |
+
+### Coexistence with PHP 8.2+ `#[SensitiveParameter]`
+
+TypePHP natively supports PHP 8.2's `#[SensitiveParameter]` attribute out of the box, ensuring that any parameter annotated with the attribute is redacted even when `'redact_values'` is `false`.
+
+Enabling `'redact_values' => true` extends this protection **globally** to every parameter, return value, class property, and local variable in your application without requiring you to manually attach `#[SensitiveParameter]` attributes across thousands of classes.
 
 ---
 
