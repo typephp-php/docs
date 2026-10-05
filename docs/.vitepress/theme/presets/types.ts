@@ -1,3 +1,5 @@
+export type ViolationMode = 'throw' | 'warn' | 'report';
+
 export interface InlineVarsConfig {
   properties: boolean;
   generics: boolean;
@@ -9,6 +11,8 @@ export interface InlineVarsConfig {
 
 export interface PlaygroundConfig {
   enabled: boolean;
+  onViolation: ViolationMode;
+  redactValues: boolean;
   ignoreTraceDepth: number;
   arrayValidation: 'full' | 'hybrid';
   strictReturnGenericInvariance: boolean;
@@ -16,6 +20,29 @@ export interface PlaygroundConfig {
   respectIgnoreTags: boolean;
   magicPropertyReads: boolean;
   inlineVars: InlineVarsConfig;
+}
+
+export interface ViolationRecordItem {
+  file: string;
+  line: number;
+  function: string;
+  kind: 'parameter' | 'return' | 'property' | 'variable' | 'param-out' | 'self-out' | 'callback' | 'yield' | 'send';
+  target: string;
+  expected: string;
+  given: string;
+  message: string;
+}
+
+export interface ViolationReportSummary {
+  total_violations: number;
+  files_affected: number;
+}
+
+export interface AuditReportDocument {
+  version: string;
+  generated_at: string;
+  summary: ViolationReportSummary;
+  violations: ViolationRecordItem[];
 }
 
 export interface PlaygroundPreset {
@@ -38,6 +65,8 @@ export const DEFAULT_INLINE_VARS_CONFIG: InlineVarsConfig = {
 
 export const DEFAULT_PLAYGROUND_CONFIG: PlaygroundConfig = {
   enabled: true,
+  onViolation: 'throw',
+  redactValues: false,
   ignoreTraceDepth: 25,
   arrayValidation: 'full',
   strictReturnGenericInvariance: true,

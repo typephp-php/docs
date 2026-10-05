@@ -50,7 +50,7 @@
         />
       </div>
 
-      <!-- Output Console Partial -->
+      <!-- Output Console & Audit Report Partial -->
       <PlaygroundOutput
         ref="outputDrawerRef"
         :position="effectivePosition"
@@ -60,7 +60,10 @@
         :duration="duration"
         :status-message="workerStatus"
         :is-running="isRunning"
+        :report="report"
+        :is-report-mode-active="config.onViolation === 'report'"
         @clear="clearConsole"
+        @clear-report="clearReport"
         @toggle-position="toggleLayoutPosition"
       />
     </main>
@@ -75,7 +78,8 @@ import {
   PLAYGROUND_PRESETS,
   DEFAULT_PLAYGROUND_CONFIG,
   DEFAULT_INLINE_VARS_CONFIG,
-  type PlaygroundConfig
+  type PlaygroundConfig,
+  type AuditReportDocument
 } from '../presets';
 import PlaygroundToolbar from './PlaygroundToolbar.vue';
 import PlaygroundLoadingOverlay from './PlaygroundLoadingOverlay.vue';
@@ -110,6 +114,7 @@ const stderr = ref<string>('');
 const exitCode = ref<number | null>(null);
 const duration = ref<string>('');
 const transformedCode = ref<string>('');
+const report = ref<AuditReportDocument | null>(null);
 
 const copiedLink = ref<boolean>(false);
 const copiedCode = ref<boolean>(false);
@@ -131,6 +136,8 @@ const hasCustomConfig = computed<boolean>(() => {
 
   return (
     config.value.enabled !== DEFAULT_PLAYGROUND_CONFIG.enabled ||
+    config.value.onViolation !== DEFAULT_PLAYGROUND_CONFIG.onViolation ||
+    config.value.redactValues !== DEFAULT_PLAYGROUND_CONFIG.redactValues ||
     config.value.ignoreTraceDepth !== DEFAULT_PLAYGROUND_CONFIG.ignoreTraceDepth ||
     config.value.arrayValidation !== DEFAULT_PLAYGROUND_CONFIG.arrayValidation ||
     config.value.strictReturnGenericInvariance !== DEFAULT_PLAYGROUND_CONFIG.strictReturnGenericInvariance ||
@@ -308,6 +315,11 @@ onMounted(() => {
           stderr.value = data.stderr;
           exitCode.value = data.exitCode;
           duration.value = data.duration;
+          report.value = data.report || null;
+          break;
+
+        case 'REPORT_CLEARED':
+          report.value = null;
           break;
 
         case 'TRANSFORM_RESULT':
@@ -364,7 +376,6 @@ function formatCode() {
 function onCodeUpdate(newCode: string) {
   code.value = newCode;
   
-  // If user modifies code away from the selected preset, mark as custom
   const matched = presets.find((p) => p.id === selectedPresetId.value);
   if (matched && matched.code !== newCode) {
     selectedPresetId.value = 'custom';
@@ -397,13 +408,13 @@ function onSelectPreset(presetId: string) {
     }
     viewMode.value = 'source';
     
-    // Clear URL hash when switching to an official preset
     if (window.location.hash) {
       history.replaceState(null, '', window.location.pathname + window.location.search);
     }
     
     persistDraft();
     clearConsole();
+    report.value = null;
     triggerTransform();
     runCode();
   }
@@ -411,7 +422,7 @@ function onSelectPreset(presetId: string) {
 
 function runCode() {
   const now = performance.now();
-  if (now - lastRunTimestamp < 150) return; // Debounce rapid key triggers
+  if (now - lastRunTimestamp < 150) return; 
   lastRunTimestamp = now;
 
   const activeWorker = worker;
@@ -419,6 +430,7 @@ function runCode() {
 
   isRunning.value = true;
   clearConsole();
+  report.value = null;
 
   outputDrawerRef.value?.expand();
 
@@ -446,6 +458,11 @@ function clearConsole() {
   stderr.value = '';
   exitCode.value = null;
   duration.value = '';
+}
+
+function clearReport() {
+  report.value = null;
+  worker?.postMessage({ action: 'CLEAR_REPORT' });
 }
 
 function copyEditorCode() {

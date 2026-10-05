@@ -44,6 +44,15 @@ function sanitizeText(string $text): string {
     );
 }
 
+set_error_handler(function (int $errno, string $errstr) {
+    if (str_contains($errstr, '[TypePHP Violation]')) {
+        $cleanStr = sanitizeText($errstr);
+        file_put_contents('php://stderr', "PHP Warning:  {$cleanStr}\\n");
+        return true;
+    }
+    return false;
+}, E_USER_WARNING);
+
 function formatExceptionTrace(\\Throwable $e): string {
     $className = get_class($e);
     $message = sanitizeText($e->getMessage());
@@ -143,12 +152,18 @@ if (file_exists('/workspace/config.json')) {
 }
 
 $isEnabled = (bool) ($userConfig['enabled'] ?? true);
+$onViolation = $userConfig['onViolation'] ?? 'throw';
+$redactValues = (bool) ($userConfig['redactValues'] ?? false);
 $ignoreDepth = isset($userConfig['ignoreTraceDepth']) ? max(1, (int) $userConfig['ignoreTraceDepth']) : 25;
 $magicPropertyReads = (bool) ($userConfig['magicPropertyReads'] ?? false);
 $userInlineVars = $userConfig['inlineVars'] ?? [];
 
 Config::set([
     'enabled' => $isEnabled,
+    'on_violation' => $onViolation,
+    'report_file' => '/workspace/report.json',
+    'fail_on_report' => false,
+    'redact_values' => $redactValues,
     'ignore_trace_depth' => $ignoreDepth,
     'cache' => false,
     'include' => ['/workspace/playground.php', '/workspace/transformed.php'],
@@ -212,7 +227,6 @@ try {
 }
 
 try {
-    // Intercept all STDOUT (including user try/catch echoes and getMessage() calls)
     ob_start('sanitizeText');
     require '/workspace/transformed.php';
     while (ob_get_level() > 0) {
@@ -294,6 +308,7 @@ try {
 function sanitizeOutput(text: string): string {
   if (!text) return '';
   return text
+    .replace(/\s+in \/typephp\/[^\r\n]+ on line \d+/g, '')
     .replace(/\/workspace\/transformed\.php/g, 'playground.php')
     .replace(/\/workspace\/playground\.php/g, 'playground.php')
     .replace(/transformed\.php/g, 'playground.php');
@@ -386,6 +401,12 @@ async function runCode(code: string, config?: any) {
   if (!php || !isReady) return;
 
   try {
+    try {
+      if (php.fileExists('/workspace/report.json')) {
+        php.unlink('/workspace/report.json');
+      }
+    } catch {}
+
     if (config) {
       php.writeFile('/workspace/config.json', JSON.stringify(config));
     }
@@ -404,12 +425,23 @@ async function runCode(code: string, config?: any) {
 
     const duration = (performance.now() - startTime).toFixed(1);
 
+    let parsedReport = null;
+    try {
+      if (php.fileExists('/workspace/report.json')) {
+        const rawReport = php.readFileAsText('/workspace/report.json');
+        if (rawReport) {
+          parsedReport = JSON.parse(sanitizeOutput(rawReport));
+        }
+      }
+    } catch {}
+
     self.postMessage({
       type: 'RUN_RESULT',
       stdout: sanitizeOutput(stdout),
       stderr: sanitizeOutput(stderr),
       exitCode,
       duration,
+      report: parsedReport,
     });
   } catch (error: any) {
     self.postMessage({
@@ -418,6 +450,7 @@ async function runCode(code: string, config?: any) {
       stderr: `Worker Execution Error: ${error?.message || String(error)}`,
       exitCode: 255,
       duration: '0.0',
+      report: null,
     });
   }
 }
@@ -449,6 +482,20 @@ async function transformCode(code: string, config?: any) {
   }
 }
 
+async function clearReport() {
+  if (!php || !isReady) return;
+
+  try {
+    if (php.fileExists('/workspace/report.json')) {
+      php.unlink('/workspace/report.json');
+    }
+  } catch { }
+
+  self.postMessage({
+    type: 'REPORT_CLEARED',
+  });
+}
+
 self.onmessage = async (event: MessageEvent) => {
   const { action, code, baseUrl, config } = event.data;
 
@@ -461,6 +508,9 @@ self.onmessage = async (event: MessageEvent) => {
       break;
     case 'TRANSFORM':
       await transformCode(code || '', config);
+      break;
+    case 'CLEAR_REPORT':
+      await clearReport();
       break;
   }
 };

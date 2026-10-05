@@ -22,7 +22,7 @@
       </div>
 
       <div class="popover-body">
-        <!-- 0. Master Switch: Full Width Top Banner -->
+        <!-- 0. Master Switch: Enable/Disable -->
         <div class="config-card master-banner">
           <div class="config-card-header">
             <span class="config-label">Enable TypePHP Enforcement</span>
@@ -37,9 +37,42 @@
           <span class="config-desc">Turn OFF to run pure native PHP for zero-overhead baseline benchmarking.</span>
         </div>
 
+        <!-- 1. Violation Strategy Banner (Throw | Warn | Report) -->
+        <div class="config-card strategy-banner">
+          <div class="config-card-header">
+            <span class="config-label">Violation Strategy</span>
+            <div class="pill-group">
+              <button
+                :class="['pill-btn', { active: modelValue.onViolation === 'throw' }]"
+                title="Throw TypeError on first contract failure"
+                @click="updateField('onViolation', 'throw')"
+              >Throw</button>
+              <button
+                :class="['pill-btn', { active: modelValue.onViolation === 'warn' }]"
+                title="Log E_USER_WARNING and continue execution"
+                @click="updateField('onViolation', 'warn')"
+              >Warn</button>
+              <button
+                :class="['pill-btn', { active: modelValue.onViolation === 'report' }]"
+                title="Collect all violations and export structured JSON audit report"
+                @click="updateField('onViolation', 'report')"
+              >Report</button>
+            </div>
+          </div>
+          <span class="config-desc">
+            {{
+              modelValue.onViolation === 'throw'
+                ? 'Strict mode: Halts execution immediately upon first contract violation.'
+                : (modelValue.onViolation === 'warn'
+                    ? 'Non-blocking mode: Logs PHP warnings and lets execution complete.'
+                    : 'Audit mode: Collects all violations silently and outputs structured JSON report.')
+            }}
+          </span>
+        </div>
+
         <!-- 2-Column Responsive Grid -->
         <div class="config-grid">
-          <!-- Column 1, Item 1: Array Validation Strategy -->
+          <!-- Array Validation Strategy -->
           <div class="config-card">
             <div class="config-card-header">
               <span class="config-label">Array Validation</span>
@@ -57,21 +90,22 @@
             <span class="config-desc">Full scans 100% of items. Hybrid uses O(1) sampling on arrays &gt; 128 items.</span>
           </div>
 
-          <!-- Column 2, Item 1: Dynamic Property Reads (__get) -->
+          <!-- Redact Values (GDPR/PII) -->
           <div class="config-card">
             <div class="config-card-header">
-              <span class="config-label">Property Reads (__get)</span>
+              <span class="config-label">Redact Raw Values</span>
               <button
-                :class="['toggle-switch', { active: modelValue.magicPropertyReads }]"
-                @click="updateField('magicPropertyReads', !modelValue.magicPropertyReads)"
+                :class="['toggle-switch', { active: modelValue.redactValues }]"
+                title="Mask raw values in errors and reports for GDPR/HIPAA compliance"
+                @click="updateField('redactValues', !modelValue.redactValues)"
               >
                 <span class="toggle-knob"></span>
               </button>
             </div>
-            <span class="config-desc">Enforces @property-read on __get(). Keep OFF for unhydrated ORM models.</span>
+            <span class="config-desc">Masks raw values in errors (e.g. 'string given' instead of secret values).</span>
           </div>
 
-          <!-- Column 1, Item 2: Strict Generic Return Invariance -->
+          <!-- Strict Generic Return Invariance -->
           <div class="config-card">
             <div class="config-card-header">
               <span class="config-label">Return Invariance</span>
@@ -85,21 +119,21 @@
             <span class="config-desc">PHPStan Level MAX invariance. Turn OFF for pragmatic return covariance.</span>
           </div>
 
-          <!-- Column 2, Item 2: Respect Ignore Tags -->
+          <!-- Dynamic Property Reads (__get) -->
           <div class="config-card">
             <div class="config-card-header">
-              <span class="config-label">Respect Ignore Tags</span>
+              <span class="config-label">Property Reads (__get)</span>
               <button
-                :class="['toggle-switch', { active: modelValue.respectIgnoreTags }]"
-                @click="updateField('respectIgnoreTags', !modelValue.respectIgnoreTags)"
+                :class="['toggle-switch', { active: modelValue.magicPropertyReads }]"
+                @click="updateField('magicPropertyReads', !modelValue.magicPropertyReads)"
               >
                 <span class="toggle-knob"></span>
               </button>
             </div>
-            <span class="config-desc">Honors @typephp-ignore tags. Turn OFF to simulate a strict CI/CD audit run.</span>
+            <span class="config-desc">Enforces @property-read on __get(). Keep OFF for unhydrated ORM models.</span>
           </div>
 
-          <!-- Column 1, Item 3: Respect Native Nullability -->
+          <!-- Respect Native Nullability -->
           <div class="config-card">
             <div class="config-card-header">
               <span class="config-label">Native Nullability</span>
@@ -113,8 +147,22 @@
             <span class="config-desc">Permits null if native parameter has ?Type even if omitted in DocBlock.</span>
           </div>
 
-          <!-- Column 2, Item 3: Ignore Trace Depth -->
+          <!-- Respect Ignore Tags -->
           <div class="config-card">
+            <div class="config-card-header">
+              <span class="config-label">Respect Ignore Tags</span>
+              <button
+                :class="['toggle-switch', { active: modelValue.respectIgnoreTags }]"
+                @click="updateField('respectIgnoreTags', !modelValue.respectIgnoreTags)"
+              >
+                <span class="toggle-knob"></span>
+              </button>
+            </div>
+            <span class="config-desc">Honors @typephp-ignore tags. Turn OFF to simulate a strict CI/CD audit run.</span>
+          </div>
+
+          <!-- Ignore Trace Depth (Spans full width or col) -->
+          <div class="config-card full-span-card">
             <div class="config-card-header">
               <span class="config-label">Ignore Trace Depth</span>
               <div class="stepper-widget">
@@ -285,7 +333,7 @@ onUnmounted(() => {
 .config-popover-wrapper {
   position: relative;
   display: inline-flex;
-  z-index: 50; 
+  z-index: 50; /* Stays above workspace resize handles */
 }
 
 .config-trigger-btn {
@@ -310,7 +358,7 @@ onUnmounted(() => {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  z-index: 100; 
+  z-index: 100;
   width: 580px;
   max-width: calc(100vw - 24px);
   display: flex;
@@ -357,7 +405,7 @@ onUnmounted(() => {
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   overflow-y: auto;
   max-height: 80vh;
 }
@@ -383,9 +431,14 @@ onUnmounted(() => {
   border-color: var(--vp-c-brand-1);
 }
 
-.config-card.master-banner {
+.config-card.master-banner,
+.config-card.strategy-banner {
   background: var(--vp-c-bg-mute);
   border-color: var(--vp-c-divider);
+}
+
+.config-card.full-span-card {
+  grid-column: 1 / -1;
 }
 
 .config-card.inline-vars-banner {
@@ -437,7 +490,7 @@ onUnmounted(() => {
 }
 
 .inline-chip-btn {
-  padding: 3px 8px;
+  padding: 2px 7px;
   font-size: 10px;
   font-weight: 600;
   border: 1px solid var(--vp-c-divider);
@@ -459,7 +512,7 @@ onUnmounted(() => {
   color: #fff;
 }
 
-/* Controls */
+/* Pill Controls */
 .pill-group {
   display: inline-flex;
   border: 1px solid var(--vp-c-divider);
@@ -470,7 +523,7 @@ onUnmounted(() => {
 }
 
 .pill-btn {
-  padding: 1px 6px;
+  padding: 1px 7px;
   font-size: 10px;
   font-weight: 600;
   border: none;
