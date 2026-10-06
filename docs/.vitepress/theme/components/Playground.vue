@@ -62,8 +62,10 @@
         :is-running="isRunning"
         :report="report"
         :is-report-mode-active="config.onViolation === 'report'"
+        :report-view-mode="reportViewMode"
         @clear="clearConsole"
         @clear-report="clearReport"
+        @update:report-view-mode="onReportViewModeUpdate"
         @toggle-position="toggleLayoutPosition"
       />
     </main>
@@ -89,6 +91,7 @@ import PlaygroundOutput from './PlaygroundOutput.vue';
 const DRAFT_CODE_KEY = 'typephp_playground_draft_code';
 const DRAFT_TITLE_KEY = 'typephp_playground_draft_title';
 const DRAFT_PRESET_KEY = 'typephp_playground_draft_preset';
+const DRAFT_REPORT_VIEW_KEY = 'typephp_playground_report_view_mode';
 
 const presets = PLAYGROUND_PRESETS;
 const selectedPresetId = ref<string>(presets[0]?.id ?? '');
@@ -96,6 +99,7 @@ const snippetTitle = ref<string>(presets[0]?.name ?? 'Runtime Reified Generics')
 const code = ref<string>(presets[0]?.code ?? '<?php\n');
 
 const viewMode = ref<'source' | 'xray'>('source');
+const reportViewMode = ref<'cards' | 'json'>('cards');
 const layoutPosition = ref<'bottom' | 'side'>('side');
 const windowWidth = ref<number>(typeof window !== 'undefined' ? window.innerWidth : 1200);
 
@@ -161,7 +165,6 @@ function handleWindowResize() {
   windowWidth.value = window.innerWidth;
 }
 
-// Global shortcut handler (Ctrl+Enter / Cmd+Enter anywhere on page)
 function handleGlobalKeyDown(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
     e.preventDefault();
@@ -178,6 +181,13 @@ function persistDraft() {
       localStorage.setItem(DRAFT_PRESET_KEY, selectedPresetId.value);
     } catch {}
   }, 350);
+}
+
+function onReportViewModeUpdate(mode: 'cards' | 'json') {
+  reportViewMode.value = mode;
+  try {
+    localStorage.setItem(DRAFT_REPORT_VIEW_KEY, mode);
+  } catch {}
 }
 
 onMounted(() => {
@@ -214,9 +224,13 @@ onMounted(() => {
         };
       }
     }
+
+    const savedReportView = localStorage.getItem(DRAFT_REPORT_VIEW_KEY);
+    if (savedReportView === 'cards' || savedReportView === 'json') {
+      reportViewMode.value = savedReportView;
+    }
   } catch {}
 
-  // 1. Check URL Hash first (#code=...)
   let restoredFromHash = false;
   const hash = window.location.hash;
 
@@ -231,6 +245,9 @@ onMounted(() => {
             code.value = parsed.code;
             if (typeof parsed.title === 'string' && parsed.title.trim()) {
               snippetTitle.value = parsed.title;
+            }
+            if (parsed.reportViewMode === 'cards' || parsed.reportViewMode === 'json') {
+              reportViewMode.value = parsed.reportViewMode;
             }
             if (parsed.config) {
               config.value = {
@@ -408,6 +425,7 @@ function onSelectPreset(presetId: string) {
     }
     viewMode.value = 'source';
     
+    // Clear URL hash when switching to an official preset
     if (window.location.hash) {
       history.replaceState(null, '', window.location.pathname + window.location.search);
     }
@@ -422,7 +440,7 @@ function onSelectPreset(presetId: string) {
 
 function runCode() {
   const now = performance.now();
-  if (now - lastRunTimestamp < 150) return; 
+  if (now - lastRunTimestamp < 150) return;
   lastRunTimestamp = now;
 
   const activeWorker = worker;
@@ -480,6 +498,7 @@ function shareSnippet() {
     title: snippetTitle.value || 'Custom Snippet',
     code: code.value,
     config: config.value,
+    reportViewMode: reportViewMode.value, // Persist Cards vs JSON subview in share link
   };
   const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(payload));
   const shareUrl = `${window.location.origin}${window.location.pathname}#code=${compressed}`;

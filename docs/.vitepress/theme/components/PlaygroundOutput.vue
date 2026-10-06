@@ -193,11 +193,11 @@
               <div class="report-subview-toggle">
                 <button
                   :class="['subview-btn', { active: reportViewMode === 'cards' }]"
-                  @click="reportViewMode = 'cards'"
+                  @click="$emit('update:reportViewMode', 'cards')"
                 >Cards</button>
                 <button
                   :class="['subview-btn', { active: reportViewMode === 'json' }]"
-                  @click="reportViewMode = 'json'"
+                  @click="$emit('update:reportViewMode', 'json')"
                 >JSON</button>
               </div>
 
@@ -299,20 +299,22 @@ const props = withDefaults(defineProps<{
   position?: 'bottom' | 'side';
   report?: AuditReportDocument | null;
   isReportModeActive?: boolean;
+  reportViewMode?: 'cards' | 'json';
 }>(), {
   position: 'bottom',
   report: null,
   isReportModeActive: false,
+  reportViewMode: 'cards',
 });
 
 const emit = defineEmits<{
   (e: 'clear'): void;
   (e: 'clear-report'): void;
   (e: 'toggle-position'): void;
+  (e: 'update:reportViewMode', mode: 'cards' | 'json'): void;
 }>();
 
 const activeTab = ref<'console' | 'report'>('console');
-const reportViewMode = ref<'cards' | 'json'>('cards');
 const isCollapsed = ref<boolean>(false);
 const drawerHeight = ref<number>(240);
 const drawerWidth = ref<number>(620);
@@ -323,7 +325,6 @@ const totalReportViolations = computed(() => {
   return props.report?.summary?.total_violations ?? 0;
 });
 
-// Distinguishes non-fatal warnings from fatal exceptions
 const isWarningOnly = computed(() => {
   if (!props.stderr) return false;
   const text = props.stderr;
@@ -342,10 +343,21 @@ const isWarningOnly = computed(() => {
   );
 });
 
-// Auto-switch to Audit Report tab when report data arrives
-watch(() => props.report, (newRep) => {
-  if (newRep && newRep.violations && newRep.violations.length > 0) {
-    activeTab.value = 'report';
+watch(
+  [() => props.isReportModeActive, () => props.report],
+  ([isReportMode, newReport]) => {
+    if (isReportMode && newReport && newReport.violations && newReport.violations.length > 0) {
+      activeTab.value = 'report';
+    } else if (!isReportMode && !newReport) {
+      activeTab.value = 'console';
+    }
+  },
+  { immediate: true }
+);
+
+watch(() => props.isRunning, (running) => {
+  if (running && !props.isReportModeActive) {
+    activeTab.value = 'console';
   }
 });
 
@@ -698,6 +710,7 @@ defineExpose({
   background: var(--vp-c-bg-soft);
 }
 
+/* Console View */
 .console-view {
   padding: 12px 14px;
 }
@@ -720,6 +733,7 @@ defineExpose({
   border-radius: 4px;
 }
 
+/* Non-blocking PHP Warnings / Notices (Amber/Gold) */
 .stderr-stream.is-warning {
   color: #fbbf24;
   background: rgba(245, 158, 11, 0.08);
@@ -768,6 +782,9 @@ defineExpose({
   animation: spin 0.8s linear infinite;
 }
 
+/* ========================================================
+   Audit Report Layout & Cards View
+   ======================================================== */
 .report-view {
   display: flex;
   flex-direction: column;
@@ -820,10 +837,12 @@ defineExpose({
   color: #ef4444;
 }
 
+/* Actions Group inside Summary Bar */
 .summary-actions {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 .report-subview-toggle {
@@ -831,6 +850,7 @@ defineExpose({
   border: 1px solid var(--vp-c-divider);
   border-radius: 4px;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .subview-btn {
@@ -862,6 +882,7 @@ defineExpose({
   color: var(--vp-c-text-2);
   cursor: pointer;
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .report-action-btn:hover {

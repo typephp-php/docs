@@ -16,13 +16,15 @@
 
     <!-- Popover Card -->
     <div v-if="isOpen" class="config-popover" @click.stop>
+      <!-- Fixed Header -->
       <div class="popover-header">
         <span class="popover-title">Engine Configuration</span>
         <button class="popover-close-btn" @click="close">&times;</button>
       </div>
 
+      <!-- Scrollable Body -->
       <div class="popover-body">
-        <!-- 0. Master Switch: Enable/Disable -->
+        <!-- 0. Master Switch -->
         <div class="config-card master-banner">
           <div class="config-card-header">
             <span class="config-label">Enable TypePHP Enforcement</span>
@@ -161,7 +163,7 @@
             <span class="config-desc">Honors @typephp-ignore tags. Turn OFF to simulate a strict CI/CD audit run.</span>
           </div>
 
-          <!-- Ignore Trace Depth (Spans full width or col) -->
+          <!-- Ignore Trace Depth -->
           <div class="config-card full-span-card">
             <div class="config-card-header">
               <span class="config-label">Ignore Trace Depth</span>
@@ -215,6 +217,7 @@
         </div>
       </div>
 
+      <!-- Fixed Footer: Always Visible -->
       <div class="popover-footer">
         <button
           class="reset-config-btn"
@@ -333,7 +336,7 @@ onUnmounted(() => {
 .config-popover-wrapper {
   position: relative;
   display: inline-flex;
-  z-index: 50; /* Stays above workspace resize handles */
+  z-index: 50;
 }
 
 .config-trigger-btn {
@@ -361,6 +364,7 @@ onUnmounted(() => {
   z-index: 100;
   width: 580px;
   max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 120px); 
   display: flex;
   flex-direction: column;
   background: var(--vp-c-bg);
@@ -374,9 +378,10 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  padding: 8px 14px;
   background: var(--vp-c-bg-mute);
   border-bottom: 1px solid var(--vp-c-divider);
+  flex-shrink: 0;
 }
 
 .popover-title {
@@ -402,25 +407,36 @@ onUnmounted(() => {
 }
 
 .popover-body {
-  padding: 12px 14px;
+  padding: 10px 14px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
-  max-height: 80vh;
+  overscroll-behavior: contain;
+}
+
+.popover-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.popover-body::-webkit-scrollbar-thumb {
+  background: var(--vp-c-divider);
+  border-radius: 4px;
 }
 
 .config-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px 10px;
+  gap: 6px 8px;
 }
 
 .config-card {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px 10px;
+  gap: 3px;
+  padding: 7px 9px;
   background: var(--vp-c-bg-soft);
   border: 1px solid var(--vp-c-divider);
   border-radius: 6px;
@@ -443,7 +459,7 @@ onUnmounted(() => {
 
 .config-card.inline-vars-banner {
   background: var(--vp-c-bg-soft);
-  gap: 6px;
+  gap: 5px;
 }
 
 .config-card-header {
@@ -476,7 +492,7 @@ onUnmounted(() => {
 }
 
 .config-desc {
-  font-size: 10px;
+  font-size: 9.5px;
   color: var(--vp-c-text-2);
   line-height: 1.35;
 }
@@ -485,13 +501,13 @@ onUnmounted(() => {
 .inline-chips-group {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 2px;
+  gap: 4px;
+  margin-top: 1px;
 }
 
 .inline-chip-btn {
   padding: 2px 7px;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 600;
   border: 1px solid var(--vp-c-divider);
   border-radius: 12px;
@@ -613,12 +629,14 @@ onUnmounted(() => {
   user-select: none;
 }
 
+/* Fixed Footer: Always Pinned at Bottom */
 .popover-footer {
   padding: 8px 14px;
   background: var(--vp-c-bg-soft);
   border-top: 1px solid var(--vp-c-divider);
   display: flex;
   justify-content: flex-end;
+  flex-shrink: 0;
 }
 
 .reset-config-btn {
@@ -680,7 +698,7 @@ onUnmounted(() => {
 
   .config-grid {
     grid-template-columns: 1fr;
-    gap: 8px;
+    gap: 6px;
   }
 }
 </style>
