@@ -80,7 +80,7 @@ registerUser(-20, 'Alice');
 
 When running automated test suites in CI/CD pipelines, you often want:
 1. The test suite to **run 100% to completion** so you receive a full test report.
-2. The CI pipeline job to **fail (Red ❌)** if type violations were detected.
+2. The CI pipeline job to **fail (Red)** if type violations were detected.
 
 Enable `'fail_on_report' => true` to achieve this:
 
