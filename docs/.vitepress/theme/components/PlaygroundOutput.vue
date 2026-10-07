@@ -162,7 +162,11 @@
         </div>
 
         <pre v-if="stdout" class="stdout-stream">{{ stdout }}</pre>
-        <pre v-if="stderr" :class="['stderr-stream', { 'is-warning': isWarningOnly }]">{{ stderr }}</pre>
+
+        <!-- Segmented STDERR Output (Warnings in Amber, Fatal Errors in Red) -->
+        <template v-for="(block, idx) in parsedStderrBlocks" :key="idx">
+          <pre :class="['stderr-stream', block.type === 'warning' ? 'is-warning' : 'is-error']">{{ block.content }}</pre>
+        </template>
 
         <div v-if="!stdout && !stderr && !isRunning && exitCode === null" class="empty-state">
           <p class="empty-state-text">
@@ -325,24 +329,60 @@ const totalReportViolations = computed(() => {
   return props.report?.summary?.total_violations ?? 0;
 });
 
-const isWarningOnly = computed(() => {
-  if (!props.stderr) return false;
-  const text = props.stderr;
-  const hasFatal =
-    text.includes('Fatal error') ||
-    text.includes('Parse error') ||
-    text.includes('Uncaught') ||
-    (props.exitCode !== null && props.exitCode !== 0);
+interface StderrBlock {
+  type: 'warning' | 'error';
+  content: string;
+}
 
-  return (
-    !hasFatal &&
-    (text.includes('PHP Warning') ||
-      text.includes('Warning') ||
-      text.includes('Notice') ||
-      text.includes('Deprecated'))
-  );
+const parsedStderrBlocks = computed<StderrBlock[]>(() => {
+  if (!props.stderr) return [];
+
+  const lines = props.stderr.split('\n');
+  const blocks: StderrBlock[] = [];
+  let currentBlock: StderrBlock | null = null;
+
+  const isWarningHeader = (line: string) =>
+    /^(?:PHP\s+)?(?:Warning|Notice|Deprecated):/i.test(line.trim());
+
+  const isErrorHeader = (line: string) =>
+    /^(?:PHP\s+)?(?:Fatal error|Parse error|Error):/i.test(line.trim()) ||
+    /^Uncaught\s+/i.test(line.trim());
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (isWarningHeader(trimmed)) {
+      if (currentBlock && currentBlock.type === 'warning') {
+        currentBlock.content += '\n' + line;
+      } else {
+        if (currentBlock) blocks.push(currentBlock);
+        currentBlock = { type: 'warning', content: line };
+      }
+    } else if (isErrorHeader(trimmed)) {
+      if (currentBlock && currentBlock.type === 'error') {
+        currentBlock.content += '\n' + line;
+      } else {
+        if (currentBlock) blocks.push(currentBlock);
+        currentBlock = { type: 'error', content: line };
+      }
+    } else {
+      if (currentBlock) {
+        currentBlock.content += '\n' + line;
+      } else if (trimmed !== '') {
+        const fallbackType = (props.exitCode !== null && props.exitCode !== 0) ? 'error' : 'warning';
+        currentBlock = { type: fallbackType, content: line };
+      }
+    }
+  }
+
+  if (currentBlock && currentBlock.content.trim()) {
+    blocks.push(currentBlock);
+  }
+
+  return blocks;
 });
 
+// 1. Synchronize active tab when switching modes or when report data changes
 watch(
   [() => props.isReportModeActive, () => props.report],
   ([isReportMode, newReport]) => {
@@ -355,6 +395,7 @@ watch(
   { immediate: true }
 );
 
+// 2. When a new run initiates in non-report mode, guarantee console view is active
 watch(() => props.isRunning, (running) => {
   if (running && !props.isReportModeActive) {
     activeTab.value = 'console';
@@ -710,7 +751,6 @@ defineExpose({
   background: var(--vp-c-bg-soft);
 }
 
-/* Console View */
 .console-view {
   padding: 12px 14px;
 }
@@ -723,17 +763,19 @@ defineExpose({
 }
 
 .stderr-stream {
-  color: #f87171;
   margin: 6px 0 0 0;
   white-space: pre-wrap;
   word-break: break-word;
-  background: rgba(239, 68, 68, 0.08);
   padding: 10px 12px;
-  border-left: 3px solid #ef4444;
   border-radius: 4px;
 }
 
-/* Non-blocking PHP Warnings / Notices (Amber/Gold) */
+.stderr-stream.is-error {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.08);
+  border-left: 3px solid #ef4444;
+}
+
 .stderr-stream.is-warning {
   color: #fbbf24;
   background: rgba(245, 158, 11, 0.08);
@@ -869,6 +911,7 @@ defineExpose({
   color: #fff;
 }
 
+/* Dedicated Copy & Download Action Buttons */
 .report-action-btn {
   display: inline-flex;
   align-items: center;
