@@ -12,9 +12,9 @@ You can configure the active handling strategy via `'on_violation'` in `typephp.
 
 | Strategy | Behavior | Best Used For |
 | :--- | :--- | :--- |
-| **`'throw'`** *(Default)* | Throws `TypePHP\Exception\TypeError` on the first violation. | Production gatekeeping, local feature development, and strict test suites. |
-| **`'report'`** | Suppresses exceptions; records all unique violations into memory, tracks occurrence frequencies, and exports a structured JSON report to `report_file` at shutdown. | 1-pass codebase audits, legacy migration, multi-module test runs, and non-blocking CI build gates. |
-| **`'warn'`** | Suppresses exceptions; emits a native PHP `E_USER_WARNING` with exact caller locations once per unique violation and continues execution normally. | Live staging logs, local dev server logs, and APM monitoring (Sentry / Datadog / Bugsnag). |
+| **`'throw'`** *(Default)* | Throws `TypePHP\Exception\TypeError` on the first violation. Telemetry tracking is disabled for **0 memory overhead**. | Production gatekeeping, local feature development, and strict test suites. |
+| **`'report'`** | Suppresses exceptions; activates telemetry to track instrumented files, records all unique violations into memory, tracks occurrence frequencies, and exports a structured JSON report to `report_file` at shutdown. | 1-pass codebase audits, legacy migration, multi-module test runs, and non-blocking CI build gates. |
+| **`'warn'`** | Suppresses exceptions; emits a native PHP `E_USER_WARNING` with exact caller locations once per unique violation and continues execution normally. Telemetry tracking is disabled for **0 memory overhead**. | Live staging logs, local dev server logs, and APM monitoring (Sentry / Datadog / Bugsnag). |
 
 ---
 
@@ -48,9 +48,10 @@ When adopting TypePHP on an existing codebase with legacy DocBlocks, running in 
 
 **Audit Mode solves this problem.** When `'on_violation' => 'report'` is active:
 1. **Zero Execution Crashes:** Contract failures do not throw exceptions. Execution continues naturally using the original runtime values.
-2. **$O(1)$ Deduplication & Occurrence Counting:** Repeated violations inside loops (e.g. iterating 50,000 array items) are deduplicated in RAM while accumulating an accurate occurrence `count`.
-3. **Deep Diagnostic Tracking:** Pinpoints the exact violation site, calling frame (`caller`), and the originating DocBlock declaration site (`declared_in`) for rapid triage.
-4. **Shutdown JSON Export:** At script completion, TypePHP exports all collected violations into a structured JSON report file.
+2. **Instrumentation Telemetry:** Tracks the exact count and list of application files intercepted and evaluated, ensuring a run that checked 0 files cannot pose as clean.
+3. **$O(1)$ Deduplication & Occurrence Counting:** Repeated violations inside loops (e.g. iterating 50,000 array items) are deduplicated in RAM while accumulating an accurate occurrence `count`.
+4. **Deep Diagnostic Tracking:** Pinpoints the exact violation site, calling frame (`caller`), and the originating DocBlock declaration site (`declared_in`) for rapid triage.
+5. **Shutdown JSON Export:** At script completion, TypePHP exports all collected violations into a structured JSON report file.
 
 ```php
 // typephp.php
@@ -76,34 +77,36 @@ registerUser(-20, 'Alice');
 
 ---
 
-## CI/CD Non-Blocking Gatekeeping (`fail_on_report => true`)
+## CI/CD Non-Blocking Gatekeeping (`fail_on_report` & `fail_on_zero_files`)
 
 When running automated test suites in CI/CD pipelines, you often want:
 1. The test suite to **run 100% to completion** so you receive a full test report.
 2. The CI pipeline job to **fail (Red)** if type violations were detected.
-
-Enable `'fail_on_report' => true` to achieve this:
+3. The CI job to **fail (Red)** if zero application files were instrumented (preventing a misconfigured `include` glob or shadowed config from silently passing).
 
 ```php
 // typephp.php
 return [
-    'on_violation'   => 'report',
-    'report_file'    => __DIR__ . '/var/typephp-report.json',
-    'fail_on_report' => true, // Exits with status 1 at shutdown if violations exist
+    'on_violation'       => 'report',
+    'report_file'        => __DIR__ . '/var/typephp-report.json',
+    'fail_on_report'     => true,  // Exits with status 1 at shutdown if violations exist
+    'fail_on_zero_files' => true,  // Exits with status 1 if 0 files were instrumented
 ];
 ```
 
-### How CI Gatekeeping Works Under the Hood
+### Protecting CI from Silent False Negatives
 
-1. Your entire Pest / PHPUnit test suite executes to completion without throwing exceptions mid-run.
-2. All contract violations are saved to `var/typephp-report.json`.
-3. During PHP's process shutdown handler, TypePHP detects that violations were recorded, prints a summary message to `STDERR`, and invokes `exit(1)`:
+In large codebases or monorepos, a misconfigured path (or a `composer.json` located in a subdirectory) can cause `include` patterns to match **zero files**. In plain reporting mode, an empty run reports `0 violations`, which looks identical to a clean run.
+
+TypePHP prevents this silent false-negative gate:
+* When `'fail_on_report' => true` or `'fail_on_zero_files' => true` is active, if the process finishes and **0 application files** were instrumented, TypePHP prints an error to `STDERR` and terminates with **exit code `1`**:
 
 ```text
-[TypePHP] 4 contract violation(s) recorded in report. Exiting with status 1.
+[TypePHP Error] 0 application files were instrumented matching the configured include patterns.
+Exiting with status 1 to prevent silent pass.
 ```
 
-Your CI pipeline receives a non-zero exit code (`1`), blocking the pull request while making the complete `var/typephp-report.json` available as a downloadable CI build artifact.
+Your CI pipeline receives a non-zero exit code (`1`), immediately alerting the team to inspect their path configurations.
 
 ---
 
@@ -134,15 +137,21 @@ Subsequent occurrences of the exact same violation in the same process are handl
 
 ## JSON Report Document Schema
 
-When `'report_file'` is generated, TypePHP outputs a versioned, machine-readable JSON schema designed for both human review and automated tooling:
+When `'report_file'` is generated, TypePHP outputs a versioned, machine-readable JSON schema that pairs runtime violations with full run context:
 
 ```json
 {
   "version": "1.0",
-  "generated_at": "2026-10-06T16:24:00+00:00",
+  "generated_at": "2026-10-11T16:24:00+00:00",
+  "context": {
+    "project_root": "/var/www/app",
+    "config_file": "typephp.php",
+    "files_instrumented": 2450
+  },
   "summary": {
     "total_violations": 4,
-    "files_affected": 3
+    "files_affected": 3,
+    "files_instrumented": 2450
   },
   "violations": [
     {
@@ -203,6 +212,35 @@ When `'report_file'` is generated, TypePHP outputs a versioned, machine-readable
 
 ### Schema Field Reference
 
+#### Top-Level Fields
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| **`"version"`** | `string` | Schema specification version (`"1.0"`). |
+| **`"generated_at"`** | `string` | ISO 8601 UTC timestamp of report generation. |
+| **`"context"`** | `object` | Execution environment metadata (see Context below). |
+| **`"summary"`** | `object` | Statistical aggregation of the audit run (see Summary below). |
+| **`"violations"`** | `list<object>` | List of recorded unique violation records. |
+
+#### Context Object (`"context"`)
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| **`"project_root"`** | `string` | Resolved project root path used during execution. |
+| **`"config_file"`** | `string` | Relative path to the configuration file loaded, or `"defaults"` if built-in fallback configuration was used. |
+| **`"files_instrumented"`** | `int` | Total number of unique application PHP files loaded and instrumented. |
+
+#### Summary Object (`"summary"`)
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| **`"total_violations"`** | `int` | Total number of unique violations recorded. |
+| **`"files_affected"`** | `int` | Total count of distinct source files containing violations. |
+| **`"files_instrumented"`** | `int` | Total count of unique application files instrumented. |
+| **`"warning"`** | `string\|null` | Present when `files_instrumented === 0`, alerting to misconfigured include patterns. |
+
+#### Violation Record Object (`"violations[]"`)
+
 | Field | Type | Description |
 | :--- | :--- | :--- |
 | **`"file"`** | `string` | Project-relative path where the violation was evaluated. |
@@ -258,31 +296,6 @@ Identifies **which function or method invoked the operation**.
   
   In this case, `caller` is intentionally `null`. Setting it to the same line would be redundant because `"file"` and `"line"` already point to the exact statement.
 
-```php
-// index.php
-$person = new Person();
-$person->name = ""; // Line 12
-```
-* `"file"` & `"line"`: `index.php:12` *(Where the assignment happened)*
-* `"declared_in"`: `Person.php:8` *(Where /** @var non-empty-string */ was written)*
-* `"caller"`: `null` *(Executed directly in global scope; no calling function)*
-
-```php
-// OrderService.php
-class OrderService {
-    public function update(): void {
-        $person = new Person();
-        $person->name = ""; // Line 14
-    }
-}
-
-// Controller.php
-$service->update(); // Line 50
-```
-* `"file"` & `"line"`: `OrderService.php:14` *(Where the assignment happened)*
-* `"declared_in"`: `Person.php:8` *(Where /** @var non-empty-string */ was written)*
-* `"caller"`: `Controller.php:50 (App\Controllers\Controller::index())` *(Who called update())*
-
 ---
 
 ### Violation Taxonomy (`kind`)
@@ -325,8 +338,8 @@ When executing tests across multiple parallel worker processes (`pest --parallel
             └───────────────────────────┘
 ```
 
-1. **Lock-Free Worker Writing:** Each worker process detects its worker ID (`TEST_TOKEN` or `PEST_PARALLEL_WORKER_ID`) and writes to a process-isolated shard file in `var/.typephp-shards/shard_<worker>_<pid>.json`. No file locking (`flock`) or process contention occurs.
-2. **Automatic Map-Reduce Consolidation:** When `vendor/bin/typephp report` or `TypePHP::exportReport()` executes, TypePHP merges all worker shards, deduplicates identical violations, aggregates their occurrence counts, writes the master `typephp-report.json`, and cleans up the shard directory.
+1. **Lock-Free Worker Writing:** Each worker process detects its worker ID (`TEST_TOKEN` or `PEST_PARALLEL_WORKER_ID`) and writes to a process-isolated shard file in `var/.typephp-shards/shard_<worker>_<pid>.json`. It records both violations and the worker's instrumented file set without acquiring file locks (`flock`).
+2. **Automatic Map-Reduce Consolidation:** When `vendor/bin/typephp report` or `TypePHP::exportReport()` executes, TypePHP merges all worker shards, unifies instrumented files, deduplicates identical violations, sums occurrence counts, writes the master `typephp-report.json`, and deletes the shard directory.
 
 ---
 
@@ -365,13 +378,15 @@ Display an ANSI color-formatted audit summary grouped by file with occurrence co
 vendor/bin/typephp report
 ```
 
-#### Terminal Output
+#### Output when Violations Exist (Exit Code `1`):
 ```text
   TYPEPHP  Violation Audit Report
 
-  • Total Violations: 3
-  • Files Affected:   2
-  • Report Source:    var/typephp-report.json
+  • Total Violations:   3
+  • Files Affected:     2
+  • Files Instrumented: 2450
+  • Config Source:      typephp.php
+  • Report File:        var/typephp-report.json
 
   src/Services/PaymentService.php
     Line 42    parameter   $amount      expected positive-int, negative int (-50) (x120)
@@ -388,7 +403,30 @@ vendor/bin/typephp report
       ↳ declared in: src/Models/Person.php:8
 ```
 
-> **Exit Code Behavior:** `vendor/bin/typephp report` returns exit code `0` if 0 violations were found, or exit code `1` if violations exist, allowing it to function as a standalone CI step.
+#### Output on Clean Run ($\ge 1$ Files Instrumented, Exit Code `0`):
+```text
+  TYPEPHP  Violation Audit Report
+
+  • Total Violations:   0
+  • Files Instrumented: 2450
+  • Config Source:      typephp.php
+
+  ✓ Clean run: No type violations found across 2450 instrumented file(s).
+```
+
+#### Output when 0 Files Were Instrumented (Empty Run, Exit Code `1`):
+```text
+  TYPEPHP  Violation Audit Report
+
+  • Total Violations:   0
+  • Files Instrumented: 0 (⚠️  No files matched configuration!)
+  • Config Source:      defaults
+  • Project Root:       /var/www/app
+
+  ✗ 0 violations over 0 instrumented files. Check your 'include'/'exclude' paths in typephp.php.
+```
+
+> **Exit Code Behavior:** `vendor/bin/typephp report` returns exit code `0` on a confirmed clean run, or exit code `1` if violations exist **or if zero application files were instrumented**, preventing silent passes in CI gates.
 
 ### 2. Merge Multiple Reports (`vendor/bin/typephp report:merge`)
 
@@ -457,6 +495,7 @@ Configure reporting options at any level without modifying source code:
 export TYPEPHP_ON_VIOLATION=report
 export TYPEPHP_REPORT_FILE=var/typephp-report.json
 export TYPEPHP_FAIL_ON_REPORT=true
+export TYPEPHP_FAIL_ON_ZERO_FILES=true
 export TYPEPHP_REDACT_VALUES=true
 ```
 
@@ -468,6 +507,7 @@ export TYPEPHP_REDACT_VALUES=true
       "on-violation": "report",
       "report-file": "var/typephp-report.json",
       "fail-on-report": true,
+      "fail-on-zero-files": true,
       "redact-values": true
     }
   }
@@ -477,10 +517,11 @@ export TYPEPHP_REDACT_VALUES=true
 ### 3. `typephp.php` Configuration File
 ```php
 return [
-    'on_violation'   => 'report',
-    'report_file'    => __DIR__ . '/var/typephp-report.json',
-    'fail_on_report' => false,
-    'redact_values'  => false,
+    'on_violation'       => 'report',
+    'report_file'        => __DIR__ . '/var/typephp-report.json',
+    'fail_on_report'     => false,
+    'fail_on_zero_files' => false,
+    'redact_values'      => false,
 ];
 ```
 
