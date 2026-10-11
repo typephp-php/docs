@@ -61,13 +61,16 @@ return [
     | - 'warn'   : Emits PHP E_USER_WARNING once per unique violation to your logs
     |              and allows execution to continue normally without crashing.
     |
-    | 'report_file'    : Sets the target JSON output path when 'report' mode is active.
-    | 'fail_on_report' : When true, terminates the process with exit code 1 at shutdown
-    |                    if the violation report is non-empty. Useful for CI gates.
+    | 'report_file'        : Sets the target JSON output path when 'report' mode is active.
+    | 'fail_on_report'     : When true, terminates the process with exit code 1 at shutdown
+    |                        if the violation report is non-empty. Useful for CI gates.
+    | 'fail_on_zero_files' : When true, terminates with exit code 1 if 0 application files
+    |                        were instrumented. Prevents CI passes when include patterns match nothing.
     */
-    'on_violation'   => 'throw',
-    'report_file'    => null,
-    'fail_on_report' => false,
+    'on_violation'       => 'throw',
+    'report_file'        => null,
+    'fail_on_report'     => false,
+    'fail_on_zero_files' => false,
 
     /*
     |--------------------------------------------------------------------------
@@ -322,6 +325,7 @@ This allows team repositories, monorepos, and packages to enforce project-level 
       "on-violation": "report",
       "report-file": "var/typephp-report.json",
       "fail-on-report": true,
+      "fail-on-zero-files": true,
       "redact-values": true
     }
   }
@@ -334,6 +338,7 @@ This allows team repositories, monorepos, and packages to enforce project-level 
 * **`"on-violation"`**: Sets the violation handling mode (`"throw"`, `"report"`, or `"warn"`).
 * **`"report-file"`**: Sets the JSON report output file path.
 * **`"fail-on-report"`**: Enables CI gatekeeping (exits with status `1` at shutdown if the audit report contains violations).
+* **`"fail-on-zero-files"`**: Controls whether TypePHP terminates with exit code `1` if zero application files were instrumented. Prevents CI builds from falsely passing when include patterns match nothing.
 * **`"redact-values"`**: Enables global value redaction across all exception messages and audit reports.
 
 ### Configuration Precedence Hierarchy
@@ -342,10 +347,35 @@ TypePHP resolves configuration settings using a deterministic priority hierarchy
 
 $$\text{1. Environment Variables} \quad \longrightarrow \quad \text{2. } \mathbf{typephp.php} \quad \longrightarrow \quad \text{3. } \mathbf{composer.json \text{ (extra.typephp)}}$$
 
-1. **Environment Variables (Highest Priority):** `TYPEPHP_AUTO_BOOT`, `TYPEPHP_ON_VIOLATION`, `TYPEPHP_REPORT_FILE`, `TYPEPHP_FAIL_ON_REPORT`, `TYPEPHP_REDACT_VALUES`.
+1. **Environment Variables (Highest Priority):** `TYPEPHP_AUTO_BOOT`, `TYPEPHP_ON_VIOLATION`, `TYPEPHP_REPORT_FILE`, `TYPEPHP_FAIL_ON_REPORT`, `TYPEPHP_FAIL_ON_ZERO_FILES`, `TYPEPHP_REDACT_VALUES`.
 2. **`typephp.php` Config File:** Overrides `composer.json` settings if explicitly defined in `typephp.php`.
 3. **`composer.json` (`extra.typephp`):** Used when `typephp.php` does not explicitly set the option.
-4. **Base Defaults:** `auto_boot: true`, `on_violation: 'throw'`, `report_file: null`, `fail_on_report: false`, `redact_values: false`.
+4. **Base Defaults:** `auto_boot: true`, `on_violation: 'throw'`, `report_file: null`, `fail_on_report: false`, `fail_on_zero_files: false`, `redact_values: false`.
+
+---
+
+## Project Root & Config Discovery in Monorepos
+
+TypePHP resolves the project root and configuration file using a deterministic search order designed for standard projects, monorepos, and custom Composer directory structures:
+
+```
+1. getcwd() . '/typephp.php'             (Takes top priority if present where you run)
+                │ (Not found)
+                ▼
+2. Composer Root Package install_path    (Discovered via Composer\InstalledVersions)
+                │ (Not found)
+                ▼
+3. Upward directory walk (5 levels)      (Searching for typephp.php or composer.json)
+```
+
+### Subdirectory `composer.json` (e.g. `app/composer.json`)
+If your repository has `typephp.php` in the repository root (`/repo/typephp.php`), but `composer.json` lives in a subdirectory (`/repo/app/composer.json` with a custom `vendor-dir`), running tests or commands from `/repo` will **strictly prioritize `/repo/typephp.php`**.
+
+### Ambiguity Warning
+If a `typephp.php` file exists in your current working directory, but the project root was resolved to a subdirectory that lacks a configuration file, TypePHP emits a warning:
+```text
+[TypePHP Warning] Configuration file found at '/repo/typephp.php', but project root resolved to '/repo/app' (where no typephp.php exists). Using default configuration.
+```
 
 ---
 
@@ -357,7 +387,8 @@ $$\text{1. Environment Variables} \quad \longrightarrow \quad \text{2. } \mathbf
 | **`'auto_boot'`** | `true` | Controls whether TypePHP automatically registers its stream wrapper upon `vendor/autoload.php`. Set to `false` to disable auto-booting project-wide and initialize manually via `\TypePHP\TypePHP::boot()`. Can also be configured in `composer.json` (`extra.typephp.auto-boot`). |
 | **`'on_violation'`** | `'throw'` | Violation handling strategy: `'throw'` (immediately throws `TypeError`), `'report'` (silent audit mode exporting to JSON report), or `'warn'` (emits `E_USER_WARNING` to logs). Can also be set in `composer.json` (`extra.typephp.on-violation`) or via `TYPEPHP_ON_VIOLATION`. |
 | **`'report_file'`** | `null` | Output file path for JSON audit report when `'report'` mode is active. Can also be set in `composer.json` (`extra.typephp.report-file`) or via `TYPEPHP_REPORT_FILE`. |
-| **`'fail_on_report'`** | `false` | When `true`, terminates the process with exit code `1` at shutdown if the audit report contains violations. Can also be set in `composer.json` (`extra.typephp.fail-on-report`) or via `TYPEPHP_FAIL_ON_REPORT`. |
+| **`'fail_on_report'`** | `false` | When `true`, terminates the process with exit code `1` at shutdown if the audit report contains violations. Also enforces that at least one file was instrumented. Can also be set in `composer.json` (`extra.typephp.fail-on-report`) or via `TYPEPHP_FAIL_ON_REPORT`. |
+| **`'fail_on_zero_files'`** | `false` | When `true` (or when `fail_on_report` is enabled in CI), terminates the process with exit code `1` at shutdown if 0 application files were instrumented matching the configured `include` patterns. Prevents false-negative clean passes in CI pipelines when path globs match nothing. Can also be set in `composer.json` (`extra.typephp.fail-on-zero-files`) or via `TYPEPHP_FAIL_ON_ZERO_FILES`. |
 | **`'redact_values'`** | `false` | When `true`, redacts all raw argument, return, property, and variable values from `TypeError` exception messages and audit reports, displaying only their types (e.g. `'string given'` instead of `'secret_pwd'`). Essential for production logs and HIPAA/GDPR compliance. Can also be set in `composer.json` (`extra.typephp.redact-values`) or via `TYPEPHP_REDACT_VALUES`. |
 | **`'params'`** | `true` | Enforces parameter `@param` contracts on functions and methods. |
 | **`'returns'`** | `true` | Enforces return `@return` contracts on functions and methods. |
