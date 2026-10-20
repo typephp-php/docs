@@ -35,6 +35,29 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Eliminate Statically Proven Checks (Compile-Time Optimization)
+    |--------------------------------------------------------------------------
+    | When true (default), TypePHP analyzes AST expressions during file
+    | transformation and omits runtime assertions for code that is
+    | mathematically or logically proven to satisfy the DocBlock contract at
+    | compile time (e.g. literal returns, property defaults, empty arrays,
+    | constant wildcards, and exact non-generic object instantiations).
+    |
+    | Dynamic expressions, variables, and generic objects continue to be
+    | deferred to strict runtime checks.
+    |
+    | Set to false for deep debugging, tracing every single check in stack traces,
+    | or benchmarking unoptimized AST instrumentation.
+    |
+    | Can also be set via environment variable:
+    |   TYPEPHP_ELIMINATE_STATICALLY_PROVEN_CHECKS=false
+    | Can also be configured in root composer.json:
+    |   "extra": { "typephp": { "eliminate-statically-proven-checks": false } }
+    */
+    'eliminate_statically_proven_checks' => true,
+
+    /*
+    |--------------------------------------------------------------------------
     | Auto-Boot on Composer Autoload
     |--------------------------------------------------------------------------
     | When true (default), TypePHP automatically hooks into the stream wrapper
@@ -311,7 +334,7 @@ return [
 
 In addition to `typephp.php`, key project-level options can be configured directly inside your root `composer.json` file under the `"extra.typephp"` key. 
 
-This allows team repositories, monorepos, and packages to enforce project-level booting and reporting rules without requiring developers to create a separate `typephp.php` file:
+This allows team repositories, monorepos, and packages to enforce project-level booting, optimization, and reporting rules without requiring developers to create a separate `typephp.php` file:
 
 ```json
 {
@@ -322,6 +345,7 @@ This allows team repositories, monorepos, and packages to enforce project-level 
   "extra": {
     "typephp": {
       "auto-boot": false,
+      "eliminate-statically-proven-checks": true,
       "on-violation": "report",
       "report-file": "var/typephp-report.json",
       "fail-on-report": true,
@@ -335,6 +359,7 @@ This allows team repositories, monorepos, and packages to enforce project-level 
 ### Supported `composer.json` Options
 
 * **`"auto-boot"`**: Controls whether TypePHP automatically hooks into the stream wrapper on `vendor/autoload.php`. Set to `false` to require manual `\TypePHP\TypePHP::boot()` initialization (such as in `tests/bootstrap.php`).
+* **`"eliminate-statically-proven-checks"`**: Controls whether TypePHP analyzes AST expressions during file transformation to skip injecting assertions for code that is proven valid at compile time.
 * **`"on-violation"`**: Sets the violation handling mode (`"throw"`, `"report"`, or `"warn"`).
 * **`"report-file"`**: Sets the JSON report output file path.
 * **`"fail-on-report"`**: Enables CI gatekeeping (exits with status `1` at shutdown if the audit report contains violations).
@@ -347,35 +372,10 @@ TypePHP resolves configuration settings using a deterministic priority hierarchy
 
 $$\text{1. Environment Variables} \quad \longrightarrow \quad \text{2. } \mathbf{typephp.php} \quad \longrightarrow \quad \text{3. } \mathbf{composer.json \text{ (extra.typephp)}}$$
 
-1. **Environment Variables (Highest Priority):** `TYPEPHP_AUTO_BOOT`, `TYPEPHP_ON_VIOLATION`, `TYPEPHP_REPORT_FILE`, `TYPEPHP_FAIL_ON_REPORT`, `TYPEPHP_FAIL_ON_ZERO_FILES`, `TYPEPHP_REDACT_VALUES`.
+1. **Environment Variables (Highest Priority):** `TYPEPHP_AUTO_BOOT`, `TYPEPHP_ELIMINATE_STATICALLY_PROVEN_CHECKS`, `TYPEPHP_ON_VIOLATION`, `TYPEPHP_REPORT_FILE`, `TYPEPHP_FAIL_ON_REPORT`, `TYPEPHP_FAIL_ON_ZERO_FILES`, `TYPEPHP_REDACT_VALUES`.
 2. **`typephp.php` Config File:** Overrides `composer.json` settings if explicitly defined in `typephp.php`.
 3. **`composer.json` (`extra.typephp`):** Used when `typephp.php` does not explicitly set the option.
-4. **Base Defaults:** `auto_boot: true`, `on_violation: 'throw'`, `report_file: null`, `fail_on_report: false`, `fail_on_zero_files: false`, `redact_values: false`.
-
----
-
-## Project Root & Config Discovery in Monorepos
-
-TypePHP resolves the project root and configuration file using a deterministic search order designed for standard projects, monorepos, and custom Composer directory structures:
-
-```
-1. getcwd() . '/typephp.php'             (Takes top priority if present where you run)
-                │ (Not found)
-                ▼
-2. Composer Root Package install_path    (Discovered via Composer\InstalledVersions)
-                │ (Not found)
-                ▼
-3. Upward directory walk (5 levels)      (Searching for typephp.php or composer.json)
-```
-
-### Subdirectory `composer.json` (e.g. `app/composer.json`)
-If your repository has `typephp.php` in the repository root (`/repo/typephp.php`), but `composer.json` lives in a subdirectory (`/repo/app/composer.json` with a custom `vendor-dir`), running tests or commands from `/repo` will **strictly prioritize `/repo/typephp.php`**.
-
-### Ambiguity Warning
-If a `typephp.php` file exists in your current working directory, but the project root was resolved to a subdirectory that lacks a configuration file, TypePHP emits a warning:
-```text
-[TypePHP Warning] Configuration file found at '/repo/typephp.php', but project root resolved to '/repo/app' (where no typephp.php exists). Using default configuration.
-```
+4. **Base Defaults:** `eliminate_statically_proven_checks: true`, `auto_boot: true`, `on_violation: 'throw'`, `report_file: null`, `fail_on_report: false`, `fail_on_zero_files: false`, `redact_values: false`.
 
 ---
 
@@ -384,6 +384,7 @@ If a `typephp.php` file exists in your current working directory, but the projec
 | Configuration Option | Default | Description |
 | :--- | :--- | :--- |
 | **`'enabled'`** | `true` | Global master switch for runtime type enforcement. |
+| **`'eliminate_statically_proven_checks'`** | `true` | Enables compile-time AST check elimination. When enabled, TypePHP inspects AST expressions during file transformation and skips injecting runtime wrappers for statements mathematically or logically proven to be valid at compile time (e.g. literal returns, property defaults, empty arrays, constant wildcards, and exact non-generic class instantiations). Can also be configured in `composer.json` (`extra.typephp.eliminate-statically-proven-checks`) or via `TYPEPHP_ELIMINATE_STATICALLY_PROVEN_CHECKS`. |
 | **`'auto_boot'`** | `true` | Controls whether TypePHP automatically registers its stream wrapper upon `vendor/autoload.php`. Set to `false` to disable auto-booting project-wide and initialize manually via `\TypePHP\TypePHP::boot()`. Can also be configured in `composer.json` (`extra.typephp.auto-boot`). |
 | **`'on_violation'`** | `'throw'` | Violation handling strategy: `'throw'` (immediately throws `TypeError`), `'report'` (silent audit mode exporting to JSON report), or `'warn'` (emits `E_USER_WARNING` to logs). Can also be set in `composer.json` (`extra.typephp.on-violation`) or via `TYPEPHP_ON_VIOLATION`. |
 | **`'report_file'`** | `null` | Output file path for JSON audit report when `'report'` mode is active. Can also be set in `composer.json` (`extra.typephp.report-file`) or via `TYPEPHP_REPORT_FILE`. |
@@ -410,6 +411,69 @@ If a `typephp.php` file exists in your current working directory, but the projec
 | **`'inline_vars'`** | `[...]` | Fine-grained configuration for local `@var` variable validations. |
 | **`'include'`** | `[...]` | Path globs to intercept and type-check. |
 | **`'exclude'`** | `[...]` | Path globs to ignore and leave untouched. |
+
+---
+
+## Eliminate Statically Proven Checks (`eliminate_statically_proven_checks`)
+
+By default, TypePHP performs **compile-time AST analysis** during file transformation. If an expression is mathematically or logically proven to satisfy its DocBlock contract at AST transformation time, **TypePHP completely skips injecting runtime assertion wrappers for that statement**.
+
+This allows deterministic expressions to execute at **100% native PHP speed** with zero function call overhead and zero Zend VM opcodes added.
+
+### What Gets Statically Eliminated?
+
+| Expression Pattern | Target DocBlock Contract | Optimization Result |
+| :--- | :--- | :--- |
+| **Literal Scalars** | `return 42;` vs `@return positive-int`<br>`return 'admin';` vs `@return non-empty-string`<br>`return -5;` vs `@return negative-int` | Injected `checkReturn` call is **completely omitted**. Statement remains clean `return 'admin';`. |
+| **Integer Ranges & Bitmasks** | `return 50;` vs `@return int<1, 100>`<br>`return 0;` vs `@return int-mask-of<FLAG_*>` | Evaluated statically against range boundaries. Check is **omitted**. |
+| **Deterministic Concatenations** | `return 'user_' . $id;` vs `@return non-empty-string` | A concatenation with a non-empty string prefix has length $\ge 5$, mathematically guaranteeing `non-empty-string`. Check is **omitted**. |
+| **Empty Array Literals** | `return [];` vs `@return list<T>` or `array<K, V>` | In PHP, an empty array is always a valid list and array. Check is **omitted** (retained for `non-empty-*`). |
+| **Sequential List Literals** | `return [1, 2, 3];` vs `@return list<positive-int>` | All keys are verified sequential ($0, 1, 2$) and all elements statically satisfy the contract. Runtime loop is **bypassed**. |
+| **Literal Array Shapes** | `return ['id' => 1, 'name' => 'Alice'];` vs `array{id: int, name: string}` | All required keys present and values statically proven. Check is **omitted**. |
+| **Class Constants & Enums** | `return self::STATUS_PAID;` vs `@return self::STATUS_*`<br>`return StatusEnum::Active;` vs `@return StatusEnum::*` | Wildcard and case prefix matched directly at compile time. Check is **omitted**. |
+| **Exact Object Instantiations** | `return new User('Alice');` vs `@return User` | In PHP, `new Foo()` is guaranteed to produce an instance of `Foo`. Exact FQCN match eliminates the check with **zero reflection**. |
+| **Identity Returns** | `return $this;` vs `@return $this` or `@return self`<br>`return new static();` vs `@return static` | `$this === $this` is an identity truth. Check is **omitted**, allowing fluent method chaining to run at native speed. |
+| **Property Defaults** | `public int $timeout = 30;` vs `@var positive-int` | Default value is statically proven. **No constructor assertions are synthesized or injected.** |
+
+---
+
+### What Is Strictly Deferred to Runtime?
+
+To preserve TypePHP's strict guarantees and prevent false positives, TypePHP **never** eliminates checks in the following scenarios:
+
+1. **Reified Generics (`Collection<Dog>`):** Runtime checks on generic object instantiations perform the crucial side effect of stamping template bindings onto instances in `\WeakMap`. These checks are **always preserved**.
+2. **Polymorphic / LSP Boundaries:** Return checks on public methods in classes with inheritance (`extends`, `implements`, or `use Trait`) are preserved unless the method is `private` or declared in a standalone class with no inheritance, ensuring parent contracts cannot be bypassed.
+3. **Dynamic Expressions:** Variables (`$val`), method calls (`$this->get()`), function calls (`rand()`), or arrays containing any dynamic element are deferred to runtime.
+4. **Violations:** Expressions that are proven to violate the contract (e.g. `return -5;` against `positive-int`) are **never omitted**; they are wrapped so they trigger runtime errors with exact line numbers.
+
+---
+
+### Disabling Compile-Time Check Elimination
+
+If you are performing deep debugging, benchmarking the raw instrumentation engine, or want every single statement wrapped regardless of whether it is statically obvious, you can disable check elimination:
+
+#### 1. In `typephp.php`:
+```php
+return [
+    'eliminate_statically_proven_checks' => false,
+];
+```
+
+#### 2. In `composer.json`:
+```json
+{
+  "extra": {
+    "typephp": {
+      "eliminate-statically-proven-checks": false
+    }
+  }
+}
+```
+
+#### 3. Via Environment Variable:
+```bash
+export TYPEPHP_ELIMINATE_STATICALLY_PROVEN_CHECKS=false
+```
 
 ---
 

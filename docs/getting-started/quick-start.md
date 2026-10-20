@@ -43,6 +43,42 @@ TypePHP is **not a replacement** for static analysis tools like PHPStan, Psalm, 
 > **Recommended Workflow:** Use PHPStan or Psalm in your IDE to lint code syntax, and use TypePHP during Pest/PHPUnit test runs and CI pipelines to guarantee runtime data integrity.
 
 ---
+## Zero-Overhead on Proven Code (Compile-Time Check Elimination)
+
+A common concern with runtime type checking is execution overhead. To keep performance near native speeds, TypePHP does **not** blindly wrap every line of code with runtime assertion functions.
+
+During file transformation, TypePHP performs **compile-time AST analysis** (`eliminate_statically_proven_checks => true`). If a statement is mathematically or logically proven to satisfy its DocBlock contract at compile time, **TypePHP omits runtime checks entirely**:
+
+```php
+class UserService
+{
+    /** @var positive-int */
+    public int $timeout = 30; // Proven valid -> Zero constructor checks injected!
+
+    /** @return non-empty-string */
+    public function getVersion(): string
+    {
+        return '2.0.0'; // Literal string -> Injected check is completely omitted!
+    }
+
+    /** @return list<int> */
+    public function getEmptyDefaults(): array
+    {
+        return []; // Empty array -> Proven list<int> -> Check omitted!
+    }
+
+    /** @return $this */
+    public function enableFeature(): self
+    {
+        $this->active = true;
+        return $this; // $this identity -> Check omitted! Fluent chaining runs at native speed.
+    }
+}
+```
+
+* **Statically Proven Code:** Runs at **100% native PHP C-speed** with single `ZEND_RETURN` opcodes and zero runtime function calls.
+* **Dynamic Code:** Incoming API parameters, database query results, and variables containing runtime data are strictly intercepted and verified.
+---
 
 ## Execution & Framework Entry Points
 
