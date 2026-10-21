@@ -81,6 +81,7 @@ body {
 }
 
 @media (max-width: 639px) {
+
     .vp-doc div[class*='language-'],
     .vp-doc [class*='language-'] {
         margin: 16px 0 !important;
@@ -98,6 +99,53 @@ body {
         display: block !important;
         width: fit-content !important;
         min-width: 100% !important;
+    }
+
+    .blog-post-card {
+        padding: 18px 16px;
+        border-radius: 10px;
+    }
+
+    /* 1. Blog Feed Cards (Home Page): Safely stack the badge and info container */
+    .blog-post-card .blog-post-meta {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px !important;
+    }
+
+    .blog-post-info {
+        font-size: 12.5px;
+        gap: 6px;
+        white-space: normal;
+    }
+
+    /* 2. Blog Post Markdown Pages: Ditch flexbox, use natural block/inline text flow */
+    .vp-doc .blog-post-meta:not(.blog-post-card *) {
+        display: block !important;
+        text-align: left !important;
+        margin-bottom: 24px !important;
+    }
+
+    /* Make badge block-level (forces line break) but shrink to fit its text */
+    .vp-doc .blog-post-meta:not(.blog-post-card *) .blog-badge {
+        display: table !important; 
+        margin-bottom: 10px !important;
+    }
+
+    /* Let the Date, Dot, and Time flow naturally like a sentence */
+    .vp-doc .blog-post-meta:not(.blog-post-card *) span:not(.blog-badge) {
+        display: inline !important;
+        white-space: normal !important;
+        margin-right: 4px !important;
+    }
+
+    .blog-post-title {
+        font-size: 17px !important;
+        line-height: 1.35 !important;
+    }
+
+    .blog-post-excerpt {
+        font-size: 13.5px !important;
     }
 }
 
@@ -127,7 +175,7 @@ body {
 
 .VPDocAsideOutline .outline-item,
 .VPDocOutlineItem,
-.VPDocAsideOutline ul > li {
+.VPDocAsideOutline ul>li {
     margin-top: 6px !important;
     margin-bottom: 8px !important;
 }
@@ -148,6 +196,7 @@ body {
     .VPDoc.has-aside .aside {
         max-width: 270px !important;
     }
+
     .VPDoc.has-aside .aside-container {
         width: 270px !important;
     }
