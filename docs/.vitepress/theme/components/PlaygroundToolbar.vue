@@ -211,7 +211,7 @@ function onPresetChange(e: Event) {
 <style scoped>
 .playground-toolbar {
   position: relative;
-  z-index: 50; 
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -224,7 +224,6 @@ function onPresetChange(e: Event) {
   box-sizing: border-box;
 }
 
-/* Left Group */
 .toolbar-left {
   display: flex !important;
   align-items: center !important;
@@ -233,7 +232,6 @@ function onPresetChange(e: Event) {
   z-index: 1;
 }
 
-/* Document Title */
 .snippet-title-group {
   display: inline-flex;
   align-items: center;
@@ -275,9 +273,6 @@ function onPresetChange(e: Event) {
   font-weight: 500;
 }
 
-/* ========================================================
-   Presets Menu Button & Dropdown Popup (Dark & Light Mode Safe)
-   ======================================================== */
 .preset-select-wrapper {
   position: relative;
   display: inline-flex !important;
@@ -554,12 +549,58 @@ function onPresetChange(e: Event) {
 
 @keyframes pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
 
+@media (min-width: 861px) and (max-width: 1200px) {
+  .playground-toolbar {
+    padding: 0 10px !important;
+    gap: 8px !important;
+  }
+
+  .toolbar-center {
+    position: static !important;
+    transform: none !important;
+    margin: 0 auto !important;
+    gap: 6px !important;
+  }
+
+  .key-hint {
+    display: none !important;
+  }
+
+  .mode-label-desktop {
+    display: none !important;
+  }
+
+  .mode-label-mobile {
+    display: inline !important;
+  }
+
+  .snippet-title-input {
+    width: 130px !important;
+    max-width: 18vw !important;
+  }
+
+  .engine-badge {
+    display: none !important;
+  }
+}
+
+@media (min-width: 861px) and (max-width: 980px) {
+  .font-zoom-widget {
+    display: none !important;
+  }
+
+  .snippet-title-input {
+    width: 110px !important;
+  }
+}
+
 @media (max-width: 860px) {
   .playground-toolbar {
     height: auto !important;
     flex-wrap: wrap !important;
     padding: 6px 10px !important;
     gap: 8px !important;
+    justify-content: flex-start !important;
   }
 
   .toolbar-left {
@@ -587,6 +628,26 @@ function onPresetChange(e: Event) {
   .toolbar-center {
     position: static !important;
     transform: none !important;
+    margin: 0 !important;
+    width: auto !important;
+    justify-content: flex-start !important;
+  }
+
+  .toolbar-right {
+    margin: 0 !important;
+    width: auto !important;
+    justify-content: flex-start !important;
+  }
+
+  .config-btn-label {
+    display: none !important;
+  }
+
+  .config-trigger-btn {
+    padding: 0 !important;
+    width: 28px !important;
+    height: 28px !important;
+    justify-content: center !important;
   }
 
   .key-hint {

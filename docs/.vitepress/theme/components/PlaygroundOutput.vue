@@ -1,14 +1,11 @@
 <template>
   <!-- Floating tab when collapsed in side dock mode -->
-  <button
-    v-if="position === 'side' && isCollapsed"
-    class="floating-edge-tab"
-    title="Click to expand Console"
-    @click="toggleCollapse"
-  >
+  <button v-if="position === 'side' && isCollapsed" class="floating-edge-tab" title="Click to expand Console"
+    @click="toggleCollapse">
     <span class="tab-icon-wrapper">
       <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
-        <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zm-2-1h-6v-2h6v2zM7.5 17l-1.4-1.4 3.1-3.1-3.1-3.1L7.5 8l4.5 4.5-4.5 4.5z"/>
+        <path
+          d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zm-2-1h-6v-2h6v2zM7.5 17l-1.4-1.4 3.1-3.1-3.1-3.1L7.5 8l4.5 4.5-4.5 4.5z" />
       </svg>
     </span>
 
@@ -28,18 +25,11 @@
     </span>
   </button>
 
-  <div
-    v-show="!(position === 'side' && isCollapsed)"
-    :class="['drawer-container', `pos-${position}`, { collapsed: isCollapsed }]"
-    :style="containerStyle"
-  >
+  <div v-show="!(position === 'side' && isCollapsed)"
+    :class="['drawer-container', `pos-${position}`, { collapsed: isCollapsed }]" :style="containerStyle">
     <!-- Resizer Handle -->
-    <div
-      v-if="!isCollapsed"
-      class="resize-handle"
-      :title="position === 'bottom' ? 'Drag to resize height' : 'Drag to resize width'"
-      @mousedown="startResize"
-    >
+    <div v-if="!isCollapsed" class="resize-handle"
+      :title="position === 'bottom' ? 'Drag to resize height' : 'Drag to resize width'" @mousedown="startResize">
       <div class="resize-grip"></div>
     </div>
 
@@ -47,12 +37,10 @@
     <div class="drawer-header" @click="toggleCollapse">
       <div class="header-left" @click.stop>
         <!-- Tab 1: Terminal Console -->
-        <button
-          :class="['drawer-tab-btn', { active: activeTab === 'console' }]"
-          @click="activeTab = 'console'"
-        >
+        <button :class="['drawer-tab-btn', { active: activeTab === 'console' }]" @click="activeTab = 'console'">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
-            <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zm-2-1h-6v-2h6v2zM7.5 17l-1.4-1.4 3.1-3.1-3.1-3.1L7.5 8l4.5 4.5-4.5 4.5z"/>
+            <path
+              d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zm-2-1h-6v-2h6v2zM7.5 17l-1.4-1.4 3.1-3.1-3.1-3.1L7.5 8l4.5 4.5-4.5 4.5z" />
           </svg>
           <span>Console</span>
           <span v-if="exitCode !== null" :class="['exit-badge', exitCode === 0 ? 'success' : 'error']">
@@ -61,19 +49,17 @@
         </button>
 
         <!-- Tab 2: Audit Report -->
-        <button
-          v-if="report !== null || isReportModeActive"
-          :class="['drawer-tab-btn', { active: activeTab === 'report' }]"
-          @click="activeTab = 'report'"
-        >
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button v-if="report !== null || isReportModeActive"
+          :class="['drawer-tab-btn', { active: activeTab === 'report' }]" @click="activeTab = 'report'">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
             <polyline points="14 2 14 8 20 8"></polyline>
             <line x1="16" y1="13" x2="8" y2="13"></line>
             <line x1="16" y1="17" x2="8" y2="17"></line>
             <polyline points="10 9 9 9 8 9"></polyline>
           </svg>
-          <span>Audit Report</span>
+          <span><span class="hide-mobile">Audit </span>Report</span>
           <span v-if="totalReportViolations > 0" class="report-count-badge error">
             {{ totalReportViolations }}
           </span>
@@ -88,12 +74,10 @@
       <!-- Header Right Action Tools -->
       <div class="header-right" @click.stop>
         <!-- Dock Position Toggle -->
-        <button
-          class="icon-action-btn dock-btn"
-          :title="position === 'bottom' ? 'Dock to right sidebar' : 'Dock to bottom'"
-          @click="$emit('toggle-position')"
-        >
-          <svg v-if="position === 'bottom'" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+        <button class="icon-action-btn dock-btn"
+          :title="position === 'bottom' ? 'Dock to right sidebar' : 'Dock to bottom'" @click="$emit('toggle-position')">
+          <svg v-if="position === 'bottom'" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+            stroke-width="2">
             <rect x="3" y="3" width="18" height="18" rx="2" />
             <line x1="15" y1="3" x2="15" y2="21" />
           </svg>
@@ -104,13 +88,12 @@
         </button>
 
         <!-- Copy Output / Report Action -->
-        <button
-          v-if="(activeTab === 'console' && (stdout || stderr)) || (activeTab === 'report' && report)"
+        <button v-if="(activeTab === 'console' && (stdout || stderr)) || (activeTab === 'report' && report)"
           class="icon-action-btn"
           :title="copied ? 'Copied to clipboard' : (activeTab === 'report' ? 'Copy JSON Report' : 'Copy console output')"
-          @click="copyActiveContent"
-        >
-          <svg v-if="!copied" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+          @click="copyActiveContent">
+          <svg v-if="!copied" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor"
+            stroke-width="2">
             <rect x="9" y="9" width="13" height="13" rx="2" />
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
           </svg>
@@ -120,12 +103,9 @@
         </button>
 
         <!-- Clear Action -->
-        <button
-          v-if="(activeTab === 'console' && (stdout || stderr)) || (activeTab === 'report' && report)"
-          class="icon-action-btn"
-          :title="activeTab === 'report' ? 'Clear & Delete Report' : 'Clear console'"
-          @click="handleClear"
-        >
+        <button v-if="(activeTab === 'console' && (stdout || stderr)) || (activeTab === 'report' && report)"
+          class="icon-action-btn" :title="activeTab === 'report' ? 'Clear & Delete Report' : 'Clear console'"
+          @click="handleClear">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10" />
             <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
@@ -133,20 +113,10 @@
         </button>
 
         <!-- Collapse Toggle -->
-        <button
-          class="icon-action-btn collapse-toggle-btn"
-          :title="isCollapsed ? 'Expand' : 'Collapse'"
-          @click="toggleCollapse"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            width="14"
-            height="14"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            :class="{ rotated: !isCollapsed }"
-          >
+        <button class="icon-action-btn collapse-toggle-btn" :title="isCollapsed ? 'Expand' : 'Collapse'"
+          @click="toggleCollapse">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+            :class="{ rotated: !isCollapsed }">
             <polyline points="18 15 12 9 6 15" />
           </svg>
         </button>
@@ -165,12 +135,14 @@
 
         <!-- Segmented STDERR Output (Warnings in Amber, Fatal Errors in Red) -->
         <template v-for="(block, idx) in parsedStderrBlocks" :key="idx">
-          <pre :class="['stderr-stream', block.type === 'warning' ? 'is-warning' : 'is-error']">{{ block.content }}</pre>
+          <pre
+            :class="['stderr-stream', block.type === 'warning' ? 'is-warning' : 'is-error']">{{ block.content }}</pre>
         </template>
 
         <div v-if="!stdout && !stderr && !isRunning && exitCode === null" class="empty-state">
           <p class="empty-state-text">
-            Click <strong>Run</strong> <span class="hide-mobile">(or press <kbd>Ctrl</kbd> + <kbd>Enter</kbd>)</span> to execute.
+            Click <strong>Run</strong> <span class="hide-mobile">(or press <kbd>Ctrl</kbd> + <kbd>Enter</kbd>)</span> to
+            execute.
           </p>
         </div>
       </div>
@@ -182,7 +154,7 @@
           <div class="report-summary-bar">
             <div class="summary-stats">
               <div class="summary-chip">
-                <span class="stat-label">Total Violations:</span>
+                <span class="stat-label"><span class="hide-mobile">Total </span>Violations:</span>
                 <span class="stat-val error">{{ report.summary.total_violations }}</span>
               </div>
               <div class="summary-chip hide-mobile">
@@ -195,23 +167,17 @@
             <div class="summary-actions">
               <!-- Cards vs JSON Toggle -->
               <div class="report-subview-toggle">
-                <button
-                  :class="['subview-btn', { active: reportViewMode === 'cards' }]"
-                  @click="$emit('update:reportViewMode', 'cards')"
-                >Cards</button>
-                <button
-                  :class="['subview-btn', { active: reportViewMode === 'json' }]"
-                  @click="$emit('update:reportViewMode', 'json')"
-                >JSON</button>
+                <button :class="['subview-btn', { active: reportViewMode === 'cards' }]"
+                  @click="$emit('update:reportViewMode', 'cards')">Cards</button>
+                <button :class="['subview-btn', { active: reportViewMode === 'json' }]"
+                  @click="$emit('update:reportViewMode', 'json')">JSON</button>
               </div>
 
               <!-- Dedicated Copy JSON Button -->
-              <button
-                :class="['report-action-btn', { success: copiedReportJson }]"
-                :title="copiedReportJson ? 'JSON Copied!' : 'Copy raw JSON report'"
-                @click="copyReportJson"
-              >
-                <svg v-if="!copiedReportJson" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+              <button :class="['report-action-btn', { success: copiedReportJson }]"
+                :title="copiedReportJson ? 'JSON Copied!' : 'Copy raw JSON report'" @click="copyReportJson">
+                <svg v-if="!copiedReportJson" viewBox="0 0 24 24" width="12" height="12" fill="none"
+                  stroke="currentColor" stroke-width="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" />
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                 </svg>
@@ -222,12 +188,9 @@
               </button>
 
               <!-- Dedicated Download JSON Button -->
-              <button
-                class="report-action-btn"
-                title="Download typephp-report.json file"
-                @click="downloadReportJson"
-              >
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <button class="report-action-btn" title="Download typephp-report.json file" @click="downloadReportJson">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                   <polyline points="7 10 12 15 17 10"></polyline>
                   <line x1="12" y1="15" x2="12" y2="3"></line>
@@ -239,11 +202,7 @@
 
           <!-- Cards View -->
           <div v-if="reportViewMode === 'cards'" class="violation-cards-scroll">
-            <div
-              v-for="(v, idx) in report.violations"
-              :key="idx"
-              class="violation-card"
-            >
+            <div v-for="(v, idx) in report.violations" :key="idx" class="violation-card">
               <div class="card-meta-line">
                 <span class="badge-pill line-badge">Line {{ v.line }}</span>
                 <span class="badge-pill kind-badge">{{ v.kind }}</span>
@@ -281,7 +240,9 @@
           </div>
           <span class="clean-report-title">No Contract Violations</span>
           <p class="clean-report-desc">
-            All data structures, parameter inputs, and function return boundaries satisfied their type contracts cleanly in audit mode.
+            All data structures, parameter inputs, and function return boundaries satisfied their type contracts cleanly
+            in
+            audit mode.
           </p>
         </div>
       </div>
@@ -321,7 +282,11 @@ const emit = defineEmits<{
 const activeTab = ref<'console' | 'report'>('console');
 const isCollapsed = ref<boolean>(false);
 const drawerHeight = ref<number>(240);
-const drawerWidth = ref<number>(620);
+const drawerWidth = ref<number>(
+  typeof window !== 'undefined'
+    ? Math.min(560, Math.max(300, Math.round(window.innerWidth * 0.42)))
+    : 480
+);
 const copied = ref<boolean>(false);
 const copiedReportJson = ref<boolean>(false);
 
@@ -382,7 +347,6 @@ const parsedStderrBlocks = computed<StderrBlock[]>(() => {
   return blocks;
 });
 
-// 1. Synchronize active tab when switching modes or when report data changes
 watch(
   [() => props.isReportModeActive, () => props.report],
   ([isReportMode, newReport]) => {
@@ -395,7 +359,6 @@ watch(
   { immediate: true }
 );
 
-// 2. When a new run initiates in non-report mode, guarantee console view is active
 watch(() => props.isRunning, (running) => {
   if (running && !props.isReportModeActive) {
     activeTab.value = 'console';
@@ -413,6 +376,8 @@ const containerStyle = computed(() => {
   return {
     height: '100%',
     width: `${drawerWidth.value}px`,
+    maxWidth: '50vw',
+    minWidth: '280px',
   };
 });
 
@@ -609,6 +574,8 @@ defineExpose({
 
 .drawer-container.pos-side {
   border-left: 1px solid var(--vp-c-divider);
+  max-width: 50vw;
+  min-width: 280px;
 }
 
 .drawer-container.pos-side .resize-handle {
@@ -670,6 +637,8 @@ defineExpose({
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap !important;
+  flex-shrink: 0;
 }
 
 .drawer-tab-btn:hover {
@@ -683,7 +652,8 @@ defineExpose({
   border-color: var(--vp-c-divider);
 }
 
-.exit-badge, .report-count-badge {
+.exit-badge,
+.report-count-badge {
   font-size: 10px;
   font-weight: 700;
   padding: 1px 5px;
@@ -691,12 +661,14 @@ defineExpose({
   font-family: var(--vp-font-family-mono);
 }
 
-.exit-badge.success, .report-count-badge.success {
+.exit-badge.success,
+.report-count-badge.success {
   background: rgba(16, 185, 129, 0.15);
   color: #10b981;
 }
 
-.exit-badge.error, .report-count-badge.error {
+.exit-badge.error,
+.report-count-badge.error {
   background: rgba(239, 68, 68, 0.15);
   color: #ef4444;
 }
@@ -824,9 +796,6 @@ defineExpose({
   animation: spin 0.8s linear infinite;
 }
 
-/* ========================================================
-   Audit Report Layout & Cards View
-   ======================================================== */
 .report-view {
   display: flex;
   flex-direction: column;
@@ -1097,7 +1066,11 @@ defineExpose({
   font-family: var(--vp-font-family-base);
 }
 
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 @media (max-width: 960px) {
   .dock-btn {
@@ -1116,6 +1089,26 @@ defineExpose({
 
   .report-action-btn {
     padding: 2px 5px;
+  }
+
+  .drawer-tab-btn {
+    padding: 3px 6px;
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  .report-layout {
+    gap: 6px;
+    padding: 6px 8px;
+  }
+
+  .report-summary-bar {
+    padding: 4px 8px;
+  }
+
+  .raw-json-stream {
+    padding: 8px 10px;
+    font-size: 11px;
   }
 }
 </style>

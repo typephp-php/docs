@@ -336,7 +336,7 @@ onUnmounted(() => {
 .config-popover-wrapper {
   position: relative;
   display: inline-flex;
-  z-index: 50;
+  z-index: 12;
 }
 
 .config-trigger-btn {
@@ -361,7 +361,7 @@ onUnmounted(() => {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  z-index: 100;
+  z-index: 25;
   width: 580px;
   max-width: calc(100vw - 24px);
   max-height: calc(100vh - 120px); 

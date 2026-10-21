@@ -277,7 +277,6 @@ onMounted(() => {
     }
   }
 
-  // 2. If no hash, restore from persistent localStorage draft
   if (!restoredFromHash) {
     try {
       const savedDraftCode = localStorage.getItem(DRAFT_CODE_KEY);
@@ -498,7 +497,7 @@ function shareSnippet() {
     title: snippetTitle.value || 'Custom Snippet',
     code: code.value,
     config: config.value,
-    reportViewMode: reportViewMode.value, // Persist Cards vs JSON subview in share link
+    reportViewMode: reportViewMode.value, 
   };
   const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(payload));
   const shareUrl = `${window.location.origin}${window.location.pathname}#code=${compressed}`;
@@ -533,9 +532,9 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: calc(100vh - var(--vp-nav-height) - 1px);
-  width: 100vw;
-  margin-left: calc(-50vw + 50%);
-  margin-right: calc(-50vw + 50%);
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
   overflow: hidden;
   background-color: var(--vp-c-bg);
 }
@@ -552,10 +551,10 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
-.playground-workspace.layout-bottom .editor-pane {
+.playground-workspace.layout-side .editor-pane {
   flex: 1;
-  min-height: 0;
-  width: 100%;
+  min-width: 50%; 
+  height: 100%;
   position: relative;
   overflow: hidden;
 }
@@ -578,8 +577,16 @@ onUnmounted(() => {
   }
 
   .editor-pane {
-    height: 55% !important;
+    flex: 1 1 auto !important;
+    height: auto !important;
+    min-height: 140px !important;
     width: 100% !important;
+  }
+
+  .playground-workspace :deep(.drawer-container.pos-bottom:not(.collapsed)) {
+    height: 50% !important;
+    min-height: 200px !important;
+    max-height: 60% !important;
   }
 }
 </style>

@@ -57,6 +57,7 @@ onMounted(async () => {
     text-decoration: none;
     transition: all 0.25s ease;
     margin-left: 12px;
+    flex-shrink: 0;
 }
 
 .github-star-btn:hover {
@@ -80,5 +81,22 @@ onMounted(async () => {
     font-size: 11px;
     font-weight: 700;
     color: var(--vp-c-text-2);
+}
+
+@media (max-width: 768px) {
+    .github-star-btn {
+        margin-left: 6px;
+        padding: 4px 8px;
+    }
+
+    .star-count {
+        display: none;
+    }
+}
+
+@media (max-width: 360px) {
+    .github-star-btn {
+        display: none;
+    }
 }
 </style>
