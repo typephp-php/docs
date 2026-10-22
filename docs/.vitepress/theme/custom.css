@@ -12,19 +12,6 @@ body {
     max-width: 100% !important;
 }
 
-.VPContent {
-    padding-top: var(--vp-nav-height) !important;
-}
-
-.VPNav {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    width: 100% !important;
-    z-index: var(--vp-z-index-nav, 30) !important;
-}
-
 .VPNavScreen {
     z-index: 100 !important;
     background-color: var(--vp-c-bg) !important;
@@ -106,33 +93,23 @@ body {
         border-radius: 10px;
     }
 
-    /* 1. Blog Feed Cards (Home Page): Safely stack the badge and info container */
     .blog-post-card .blog-post-meta {
         flex-direction: column;
         align-items: flex-start;
         gap: 6px !important;
     }
 
-    .blog-post-info {
-        font-size: 12.5px;
-        gap: 6px;
-        white-space: normal;
-    }
-
-    /* 2. Blog Post Markdown Pages: Ditch flexbox, use natural block/inline text flow */
     .vp-doc .blog-post-meta:not(.blog-post-card *) {
         display: block !important;
         text-align: left !important;
         margin-bottom: 24px !important;
     }
 
-    /* Make badge block-level (forces line break) but shrink to fit its text */
     .vp-doc .blog-post-meta:not(.blog-post-card *) .blog-badge {
-        display: table !important; 
+        display: table !important;
         margin-bottom: 10px !important;
     }
 
-    /* Let the Date, Dot, and Time flow naturally like a sentence */
     .vp-doc .blog-post-meta:not(.blog-post-card *) span:not(.blog-badge) {
         display: inline !important;
         white-space: normal !important;
@@ -229,7 +206,8 @@ body {
 .blog-post-meta {
     display: flex;
     align-items: center;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: 8px;
     font-size: 13px;
     color: var(--vp-c-text-2);
     margin-bottom: 12px;
@@ -238,8 +216,13 @@ body {
 .blog-post-info {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
     white-space: nowrap;
+}
+
+.dot {
+    margin: 0 6px !important;
+    opacity: 0.7;
+    display: inline-block;
 }
 
 .blog-badge {
@@ -365,34 +348,6 @@ body {
     background: var(--vp-c-brand-1);
     color: #fff;
     border-color: var(--vp-c-brand-1);
-}
-
-@media (max-width: 639px) {
-    .blog-post-card {
-        padding: 18px 16px;
-        border-radius: 10px;
-    }
-
-    .blog-post-meta {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 6px !important;
-    }
-
-    .blog-post-info {
-        font-size: 12.5px;
-        gap: 6px;
-        white-space: nowrap;
-    }
-
-    .blog-post-title {
-        font-size: 17px !important;
-        line-height: 1.35 !important;
-    }
-
-    .blog-post-excerpt {
-        font-size: 13.5px !important;
-    }
 }
 
 .vp-doc table {

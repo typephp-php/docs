@@ -685,20 +685,21 @@ onUnmounted(() => {
 
 @media (max-width: 768px) {
   .config-popover {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: min(340px, calc(100vw - 32px));
-    max-width: calc(100vw - 32px);
-    max-height: 85vh;
-    border-radius: 12px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45), 0 0 0 100vmax rgba(0, 0, 0, 0.4);
+    position: fixed !important;
+    top: calc(var(--vp-nav-height, 64px) + 12px) !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    width: min(380px, calc(100vw - 24px)) !important;
+    max-width: calc(100vw - 24px) !important;
+    max-height: calc(100vh - var(--vp-nav-height, 64px) - 24px) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 0 100vmax rgba(0, 0, 0, 0.5) !important;
+    z-index: 100 !important;
   }
 
   .config-grid {
-    grid-template-columns: 1fr;
-    gap: 6px;
+    grid-template-columns: 1fr !important;
+    gap: 6px !important;
   }
 }
 </style>
