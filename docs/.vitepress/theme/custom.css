@@ -1,3 +1,18 @@
+html.playground-active,
+html.playground-active body {
+  overflow: hidden !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+}
+
+html.playground-active #app,
+html.playground-active .VPApp,
+html.playground-active .VPContent {
+  height: 100vh !important;
+  max-height: 100vh !important;
+  overflow: hidden !important;
+}
+
 html,
 body {
     overflow-x: hidden;

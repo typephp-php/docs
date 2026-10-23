@@ -1,11 +1,16 @@
 <template>
   <!-- Floating tab when collapsed in side dock mode -->
-  <button v-if="position === 'side' && isCollapsed" class="floating-edge-tab" title="Click to expand Console"
-    @click="toggleCollapse">
+  <button
+    v-if="position === 'side' && isCollapsed"
+    class="floating-edge-tab"
+    title="Click to expand Console"
+    @click="toggleCollapse"
+  >
     <span class="tab-icon-wrapper">
       <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
         <path
-          d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zm-2-1h-6v-2h6v2zM7.5 17l-1.4-1.4 3.1-3.1-3.1-3.1L7.5 8l4.5 4.5-4.5 4.5z" />
+          d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zm-2-1h-6v-2h6v2zM7.5 17l-1.4-1.4 3.1-3.1-3.1-3.1L7.5 8l4.5 4.5-4.5 4.5z"
+        />
       </svg>
     </span>
 
@@ -25,11 +30,23 @@
     </span>
   </button>
 
-  <div v-show="!(position === 'side' && isCollapsed)"
-    :class="['drawer-container', `pos-${position}`, { collapsed: isCollapsed }]" :style="containerStyle">
-    <!-- Resizer Handle -->
-    <div v-if="!isCollapsed" class="resize-handle"
-      :title="position === 'bottom' ? 'Drag to resize height' : 'Drag to resize width'" @mousedown="startResize">
+  <div
+    v-show="!(position === 'side' && isCollapsed)"
+    :class="[
+      'drawer-container',
+      `pos-${position}`,
+      { collapsed: isCollapsed, 'is-maximized': isMaximized, 'is-resizing': isResizing }
+    ]"
+    :style="containerStyle"
+  >
+    <!-- Resizer Handle with Mouse and Touch Support -->
+    <div
+      v-if="!isCollapsed && !isMaximized"
+      class="resize-handle"
+      :title="position === 'bottom' ? 'Drag to resize height' : 'Drag to resize width'"
+      @mousedown="startResize"
+      @touchstart="startTouchResize"
+    >
       <div class="resize-grip"></div>
     </div>
 
@@ -37,10 +54,14 @@
     <div class="drawer-header" @click="toggleCollapse">
       <div class="header-left" @click.stop>
         <!-- Tab 1: Terminal Console -->
-        <button :class="['drawer-tab-btn', { active: activeTab === 'console' }]" @click="activeTab = 'console'">
+        <button
+          :class="['drawer-tab-btn', { active: activeTab === 'console' }]"
+          @click="selectTab('console')"
+        >
           <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
             <path
-              d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zm-2-1h-6v-2h6v2zM7.5 17l-1.4-1.4 3.1-3.1-3.1-3.1L7.5 8l4.5 4.5-4.5 4.5z" />
+              d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zm-2-1h-6v-2h6v2zM7.5 17l-1.4-1.4 3.1-3.1-3.1-3.1L7.5 8l4.5 4.5-4.5 4.5z"
+            />
           </svg>
           <span>Console</span>
           <span v-if="exitCode !== null" :class="['exit-badge', exitCode === 0 ? 'success' : 'error']">
@@ -49,10 +70,12 @@
         </button>
 
         <!-- Tab 2: Audit Report -->
-        <button v-if="report !== null || isReportModeActive"
-          :class="['drawer-tab-btn', { active: activeTab === 'report' }]" @click="activeTab = 'report'">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round">
+        <button
+          v-if="report !== null || isReportModeActive"
+          :class="['drawer-tab-btn', { active: activeTab === 'report' }]"
+          @click="selectTab('report')"
+        >
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
             <polyline points="14 2 14 8 20 8"></polyline>
             <line x1="16" y1="13" x2="8" y2="13"></line>
@@ -73,11 +96,36 @@
 
       <!-- Header Right Action Tools -->
       <div class="header-right" @click.stop>
+        <!-- Maximize / Restore Toggle Button -->
+        <button
+          v-if="!isCollapsed"
+          class="icon-action-btn maximize-btn"
+          :title="isMaximized ? 'Restore height' : 'Maximize (Full screen)'"
+          @click="toggleMaximize"
+        >
+          <!-- Restore icon (when maximized) -->
+          <svg v-if="isMaximized" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="4 14 10 14 10 20" />
+            <polyline points="20 10 14 10 14 4" />
+            <line x1="14" y1="10" x2="21" y2="3" />
+            <line x1="3" y1="21" x2="10" y2="14" />
+          </svg>
+          <!-- Maximize icon (when normal) -->
+          <svg v-else viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 3 21 3 21 9" />
+            <polyline points="9 21 3 21 3 15" />
+            <line x1="21" y1="3" x2="14" y2="10" />
+            <line x1="3" y1="21" x2="10" y2="14" />
+          </svg>
+        </button>
+
         <!-- Dock Position Toggle -->
-        <button class="icon-action-btn dock-btn"
-          :title="position === 'bottom' ? 'Dock to right sidebar' : 'Dock to bottom'" @click="$emit('toggle-position')">
-          <svg v-if="position === 'bottom'" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
-            stroke-width="2">
+        <button
+          class="icon-action-btn dock-btn"
+          :title="position === 'bottom' ? 'Dock to right sidebar' : 'Dock to bottom'"
+          @click="$emit('toggle-position')"
+        >
+          <svg v-if="position === 'bottom'" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="3" width="18" height="18" rx="2" />
             <line x1="15" y1="3" x2="15" y2="21" />
           </svg>
@@ -88,24 +136,28 @@
         </button>
 
         <!-- Copy Output / Report Action -->
-        <button v-if="(activeTab === 'console' && (stdout || stderr)) || (activeTab === 'report' && report)"
+        <button
+          v-if="(activeTab === 'console' && (stdout || stderr)) || (activeTab === 'report' && report)"
           class="icon-action-btn"
           :title="copied ? 'Copied to clipboard' : (activeTab === 'report' ? 'Copy JSON Report' : 'Copy console output')"
-          @click="copyActiveContent">
-          <svg v-if="!copied" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor"
-            stroke-width="2">
+          @click="copyActiveContent"
+        >
+          <svg v-if="!copied" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="9" y="9" width="13" height="13" rx="2" />
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
           </svg>
-          <svg v-else viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#10b981" stroke-width="2">
+          <svg v-else viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#10b981" stroke-width="2.5">
             <polyline points="20 6 9 17 4 12" />
           </svg>
         </button>
 
         <!-- Clear Action -->
-        <button v-if="(activeTab === 'console' && (stdout || stderr)) || (activeTab === 'report' && report)"
-          class="icon-action-btn" :title="activeTab === 'report' ? 'Clear & Delete Report' : 'Clear console'"
-          @click="handleClear">
+        <button
+          v-if="(activeTab === 'console' && (stdout || stderr)) || (activeTab === 'report' && report)"
+          class="icon-action-btn"
+          :title="activeTab === 'report' ? 'Clear & Delete Report' : 'Clear console'"
+          @click="handleClear"
+        >
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10" />
             <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
@@ -113,10 +165,12 @@
         </button>
 
         <!-- Collapse Toggle -->
-        <button class="icon-action-btn collapse-toggle-btn" :title="isCollapsed ? 'Expand' : 'Collapse'"
-          @click="toggleCollapse">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
-            :class="{ rotated: !isCollapsed }">
+        <button
+          class="icon-action-btn collapse-toggle-btn"
+          :title="isCollapsed ? 'Expand' : 'Collapse'"
+          @click="toggleCollapse"
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" :class="{ rotated: !isCollapsed }">
             <polyline points="18 15 12 9 6 15" />
           </svg>
         </button>
@@ -135,14 +189,12 @@
 
         <!-- Segmented STDERR Output (Warnings in Amber, Fatal Errors in Red) -->
         <template v-for="(block, idx) in parsedStderrBlocks" :key="idx">
-          <pre
-            :class="['stderr-stream', block.type === 'warning' ? 'is-warning' : 'is-error']">{{ block.content }}</pre>
+          <pre :class="['stderr-stream', block.type === 'warning' ? 'is-warning' : 'is-error']">{{ block.content }}</pre>
         </template>
 
         <div v-if="!stdout && !stderr && !isRunning && exitCode === null" class="empty-state">
           <p class="empty-state-text">
-            Click <strong>Run</strong> <span class="hide-mobile">(or press <kbd>Ctrl</kbd> + <kbd>Enter</kbd>)</span> to
-            execute.
+            Click <strong>Run</strong> <span class="hide-mobile">(or press <kbd>Ctrl</kbd> + <kbd>Enter</kbd>)</span> to execute.
           </p>
         </div>
       </div>
@@ -167,17 +219,13 @@
             <div class="summary-actions">
               <!-- Cards vs JSON Toggle -->
               <div class="report-subview-toggle">
-                <button :class="['subview-btn', { active: reportViewMode === 'cards' }]"
-                  @click="$emit('update:reportViewMode', 'cards')">Cards</button>
-                <button :class="['subview-btn', { active: reportViewMode === 'json' }]"
-                  @click="$emit('update:reportViewMode', 'json')">JSON</button>
+                <button :class="['subview-btn', { active: reportViewMode === 'cards' }]" @click="$emit('update:reportViewMode', 'cards')">Cards</button>
+                <button :class="['subview-btn', { active: reportViewMode === 'json' }]" @click="$emit('update:reportViewMode', 'json')">JSON</button>
               </div>
 
               <!-- Dedicated Copy JSON Button -->
-              <button :class="['report-action-btn', { success: copiedReportJson }]"
-                :title="copiedReportJson ? 'JSON Copied!' : 'Copy raw JSON report'" @click="copyReportJson">
-                <svg v-if="!copiedReportJson" viewBox="0 0 24 24" width="12" height="12" fill="none"
-                  stroke="currentColor" stroke-width="2">
+              <button :class="['report-action-btn', { success: copiedReportJson }]" :title="copiedReportJson ? 'JSON Copied!' : 'Copy raw JSON report'" @click="copyReportJson">
+                <svg v-if="!copiedReportJson" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" />
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                 </svg>
@@ -189,8 +237,7 @@
 
               <!-- Dedicated Download JSON Button -->
               <button class="report-action-btn" title="Download typephp-report.json file" @click="downloadReportJson">
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"
-                  stroke-linecap="round" stroke-linejoin="round">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                   <polyline points="7 10 12 15 17 10"></polyline>
                   <line x1="12" y1="15" x2="12" y2="3"></line>
@@ -240,9 +287,7 @@
           </div>
           <span class="clean-report-title">No Contract Violations</span>
           <p class="clean-report-desc">
-            All data structures, parameter inputs, and function return boundaries satisfied their type contracts cleanly
-            in
-            audit mode.
+            All data structures, parameter inputs, and function return boundaries satisfied their type contracts cleanly in audit mode.
           </p>
         </div>
       </div>
@@ -281,6 +326,8 @@ const emit = defineEmits<{
 
 const activeTab = ref<'console' | 'report'>('console');
 const isCollapsed = ref<boolean>(false);
+const isMaximized = ref<boolean>(false);
+const isResizing = ref<boolean>(false);
 const drawerHeight = ref<number>(240);
 const drawerWidth = ref<number>(
   typeof window !== 'undefined'
@@ -367,22 +414,55 @@ watch(() => props.isRunning, (running) => {
 
 const containerStyle = computed(() => {
   if (props.position === 'bottom') {
+    let targetHeight = `${drawerHeight.value}px`;
+    if (isCollapsed.value) {
+      targetHeight = '38px';
+    } else if (isMaximized.value) {
+      targetHeight = '100%';
+    }
+
     return {
-      height: isCollapsed.value ? '38px' : `${drawerHeight.value}px`,
+      height: targetHeight,
       width: '100%',
+      flexShrink: 0,
     };
+  }
+
+  let targetWidth = `${drawerWidth.value}px`;
+  if (isMaximized.value) {
+    targetWidth = '80vw';
   }
 
   return {
     height: '100%',
-    width: `${drawerWidth.value}px`,
-    maxWidth: '50vw',
+    width: targetWidth,
+    maxWidth: isMaximized.value ? '95vw' : '50vw',
     minWidth: '280px',
+    flexShrink: 0,
   };
 });
 
 function toggleCollapse() {
-  isCollapsed.value = !isCollapsed.value;
+  if (isCollapsed.value) {
+    isCollapsed.value = false;
+  } else {
+    isCollapsed.value = true;
+    isMaximized.value = false;
+  }
+}
+
+function toggleMaximize() {
+  if (isCollapsed.value) {
+    isCollapsed.value = false;
+  }
+  isMaximized.value = !isMaximized.value;
+}
+
+function selectTab(tab: 'console' | 'report') {
+  activeTab.value = tab;
+  if (isCollapsed.value) {
+    isCollapsed.value = false;
+  }
 }
 
 function handleClear() {
@@ -438,17 +518,26 @@ function downloadReportJson() {
 
 function startResize(e: MouseEvent) {
   e.preventDefault();
+  if (isCollapsed.value || isMaximized.value) return;
+
+  isResizing.value = true;
+  document.body.style.userSelect = 'none';
 
   if (props.position === 'bottom') {
+    document.body.style.cursor = 'ns-resize';
     const startY = e.clientY;
     const startHeight = drawerHeight.value;
 
     function onMouseMove(moveEvent: MouseEvent) {
       const delta = startY - moveEvent.clientY;
-      drawerHeight.value = Math.max(100, Math.min(window.innerHeight * 0.75, startHeight + delta));
+      const maxHeight = Math.max(120, window.innerHeight - 130);
+      drawerHeight.value = Math.max(80, Math.min(maxHeight, startHeight + delta));
     }
 
     function onMouseUp() {
+      isResizing.value = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     }
@@ -456,21 +545,78 @@ function startResize(e: MouseEvent) {
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
   } else {
+    document.body.style.cursor = 'ew-resize';
     const startX = e.clientX;
     const startWidth = drawerWidth.value;
 
     function onMouseMove(moveEvent: MouseEvent) {
       const delta = startX - moveEvent.clientX;
-      drawerWidth.value = Math.max(260, Math.min(window.innerWidth * 0.65, startWidth + delta));
+      const maxWidth = Math.max(280, window.innerWidth * 0.7);
+      drawerWidth.value = Math.max(260, Math.min(maxWidth, startWidth + delta));
     }
 
     function onMouseUp() {
+      isResizing.value = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     }
 
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
+  }
+}
+
+function startTouchResize(e: TouchEvent) {
+  if (e.touches.length !== 1 || isCollapsed.value || isMaximized.value) return;
+
+  isResizing.value = true;
+
+  if (props.position === 'bottom') {
+    const startY = e.touches[0].clientY;
+    const startHeight = drawerHeight.value;
+
+    function onTouchMove(moveEvent: TouchEvent) {
+      if (moveEvent.touches.length !== 1) return;
+      const currentY = moveEvent.touches[0].clientY;
+      const delta = startY - currentY;
+      const maxHeight = Math.max(120, window.innerHeight - 110);
+      drawerHeight.value = Math.max(80, Math.min(maxHeight, startHeight + delta));
+    }
+
+    function onTouchEnd() {
+      isResizing.value = false;
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchEnd);
+    }
+
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('touchcancel', onTouchEnd);
+  } else {
+    const startX = e.touches[0].clientX;
+    const startWidth = drawerWidth.value;
+
+    function onTouchMove(moveEvent: TouchEvent) {
+      if (moveEvent.touches.length !== 1) return;
+      const currentX = e.touches[0].clientX;
+      const delta = startX - currentX;
+      const maxWidth = Math.max(260, window.innerWidth * 0.85);
+      drawerWidth.value = Math.max(200, Math.min(maxWidth, startWidth + delta));
+    }
+
+    function onTouchEnd() {
+      isResizing.value = false;
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchEnd);
+    }
+
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('touchcancel', onTouchEnd);
   }
 }
 
@@ -545,33 +691,67 @@ defineExpose({
   background: var(--vp-c-bg-soft);
   position: relative;
   overflow: hidden;
-  transition: height 0.15s ease-out;
+  flex-shrink: 0;
+  transition: height 0.15s ease-out, width 0.15s ease-out;
+}
+
+.drawer-container.is-resizing {
+  transition: none !important;
 }
 
 .drawer-container.pos-bottom {
   border-top: 1px solid var(--vp-c-divider);
 }
 
+.drawer-container.pos-bottom.collapsed {
+  height: 38px !important;
+  min-height: 38px !important;
+  max-height: 38px !important;
+}
+
+/* Maximized mode */
+.drawer-container.pos-bottom.is-maximized {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 100% !important;
+  max-height: 100% !important;
+  z-index: 35;
+}
+
+.drawer-container.pos-side.is-maximized {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  z-index: 35;
+}
+
+/* Bottom Resize Handle: optimized for both mouse and touch */
 .drawer-container.pos-bottom .resize-handle {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 6px;
+  height: 12px;
   cursor: ns-resize;
-  z-index: 20;
+  z-index: 25;
   display: flex;
   align-items: center;
   justify-content: center;
+  touch-action: none;
 }
 
 .drawer-container.pos-bottom .resize-grip {
-  width: 36px;
-  height: 2px;
+  width: 44px;
+  height: 3px;
   border-radius: 2px;
   background: var(--vp-c-divider);
+  transition: background-color 0.15s ease, height 0.15s ease;
 }
 
+/* Side dock rules */
 .drawer-container.pos-side {
   border-left: 1px solid var(--vp-c-divider);
   max-width: 50vw;
@@ -583,19 +763,21 @@ defineExpose({
   top: 0;
   bottom: 0;
   left: 0;
-  width: 6px;
+  width: 10px;
   cursor: ew-resize;
-  z-index: 20;
+  z-index: 25;
   display: flex;
   align-items: center;
   justify-content: center;
+  touch-action: none;
 }
 
 .drawer-container.pos-side .resize-grip {
-  width: 2px;
-  height: 36px;
+  width: 3px;
+  height: 44px;
   border-radius: 2px;
   background: var(--vp-c-divider);
+  transition: background-color 0.15s ease, width 0.15s ease;
 }
 
 .resize-handle:hover .resize-grip {
@@ -623,7 +805,6 @@ defineExpose({
   flex: 1;
 }
 
-/* Tab buttons inside header */
 .drawer-tab-btn {
   display: inline-flex;
   align-items: center;
@@ -716,11 +897,32 @@ defineExpose({
 
 .drawer-body {
   flex: 1;
-  overflow: auto;
+  min-height: 0;
+  overflow-y: auto; 
+  overflow-x: hidden; 
   font-family: var(--vp-font-family-mono);
   font-size: var(--playground-font-size, 13px);
   line-height: 1.5;
   background: var(--vp-c-bg-soft);
+  scrollbar-width: thin;
+  scrollbar-color: var(--vp-c-divider) transparent;
+}
+
+.drawer-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.drawer-body::-webkit-scrollbar-track {
+  background: transparent; 
+}
+
+.drawer-body::-webkit-scrollbar-thumb {
+  background: var(--vp-c-divider);
+  border-radius: 3px;
+}
+
+.drawer-body::-webkit-scrollbar-thumb:hover {
+  background: var(--vp-c-text-3);
 }
 
 .console-view {
@@ -848,7 +1050,6 @@ defineExpose({
   color: #ef4444;
 }
 
-/* Actions Group inside Summary Bar */
 .summary-actions {
   display: flex;
   align-items: center;
@@ -880,7 +1081,6 @@ defineExpose({
   color: #fff;
 }
 
-/* Dedicated Copy & Download Action Buttons */
 .report-action-btn {
   display: inline-flex;
   align-items: center;
@@ -1029,7 +1229,6 @@ defineExpose({
   word-break: break-word;
 }
 
-/* Empty Clean Report View */
 .empty-report-state {
   display: flex;
   flex-direction: column;

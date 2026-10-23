@@ -1,73 +1,29 @@
 <template>
-  <div
-    class="playground-root"
-    :style="{ '--playground-font-size': `${fontSize}px` }"
-  >
+  <div class="playground-root" :style="{ '--playground-font-size': `${fontSize}px` }">
     <!-- Top Action Toolbar Partial -->
-    <PlaygroundToolbar
-      :presets="presets"
-      :selected-preset-id="selectedPresetId"
-      :snippet-title="snippetTitle"
-      :view-mode="viewMode"
-      :font-size="fontSize"
-      :is-ready="isReady"
-      :is-running="isRunning"
-      :init-error="initError"
-      :worker-status="workerStatus"
-      :config="config"
-      :has-custom-config="hasCustomConfig"
-      :copied-code="copiedCode"
-      :copied-link="copiedLink"
-      @select-preset="onSelectPreset"
-      @update:snippet-title="onTitleUpdate"
-      @run="runCode"
-      @update:view-mode="viewMode = $event"
-      @adjust-font-size="adjustFontSize"
-      @copy-code="copyEditorCode"
-      @format="formatCode"
-      @share="shareSnippet"
-      @update:config="config = $event"
-      @reset-config="resetConfig"
-    />
+    <PlaygroundToolbar :presets="presets" :selected-preset-id="selectedPresetId" :snippet-title="snippetTitle"
+      :view-mode="viewMode" :font-size="fontSize" :is-ready="isReady" :is-running="isRunning" :init-error="initError"
+      :worker-status="workerStatus" :config="config" :has-custom-config="hasCustomConfig" :copied-code="copiedCode"
+      :copied-link="copiedLink" @select-preset="onSelectPreset" @update:snippet-title="onTitleUpdate" @run="runCode"
+      @update:view-mode="viewMode = $event" @adjust-font-size="adjustFontSize" @copy-code="copyEditorCode"
+      @format="formatCode" @share="shareSnippet" @update:config="config = $event" @reset-config="resetConfig" />
 
     <!-- Main Workspace -->
     <main :class="['playground-workspace', `layout-${effectivePosition}`]">
       <div class="editor-pane">
         <!-- Editor Loading Overlay Partial -->
-        <PlaygroundLoadingOverlay
-          :is-ready="isReady"
-          :init-error="initError"
-          :status="workerStatus"
-        />
+        <PlaygroundLoadingOverlay :is-ready="isReady" :init-error="initError" :status="workerStatus" />
 
-        <PlaygroundEditor
-          ref="editorRef"
-          :model-value="viewMode === 'source' ? code : transformedCode"
-          :read-only="viewMode === 'xray'"
-          :font-size="fontSize"
-          @update:model-value="onCodeUpdate"
-          @run="runCode"
-        />
+        <PlaygroundEditor ref="editorRef" :model-value="viewMode === 'source' ? code : transformedCode"
+          :read-only="viewMode === 'xray'" :font-size="fontSize" @update:model-value="onCodeUpdate" @run="runCode" />
       </div>
 
       <!-- Output Console & Audit Report Partial -->
-      <PlaygroundOutput
-        ref="outputDrawerRef"
-        :position="effectivePosition"
-        :stdout="stdout"
-        :stderr="stderr"
-        :exit-code="exitCode"
-        :duration="duration"
-        :status-message="workerStatus"
-        :is-running="isRunning"
-        :report="report"
-        :is-report-mode-active="config.onViolation === 'report'"
-        :report-view-mode="reportViewMode"
-        @clear="clearConsole"
-        @clear-report="clearReport"
-        @update:report-view-mode="onReportViewModeUpdate"
-        @toggle-position="toggleLayoutPosition"
-      />
+      <PlaygroundOutput ref="outputDrawerRef" :position="effectivePosition" :stdout="stdout" :stderr="stderr"
+        :exit-code="exitCode" :duration="duration" :status-message="workerStatus" :is-running="isRunning"
+        :report="report" :is-report-mode-active="config.onViolation === 'report'" :report-view-mode="reportViewMode"
+        @clear="clearConsole" @clear-report="clearReport" @update:report-view-mode="onReportViewModeUpdate"
+        @toggle-position="toggleLayoutPosition" />
     </main>
   </div>
 </template>
@@ -179,7 +135,7 @@ function persistDraft() {
       localStorage.setItem(DRAFT_CODE_KEY, code.value);
       localStorage.setItem(DRAFT_TITLE_KEY, snippetTitle.value);
       localStorage.setItem(DRAFT_PRESET_KEY, selectedPresetId.value);
-    } catch {}
+    } catch { }
   }, 350);
 }
 
@@ -187,10 +143,14 @@ function onReportViewModeUpdate(mode: 'cards' | 'json') {
   reportViewMode.value = mode;
   try {
     localStorage.setItem(DRAFT_REPORT_VIEW_KEY, mode);
-  } catch {}
+  } catch { }
 }
 
 onMounted(() => {
+  if (typeof document !== 'undefined') {
+    document.documentElement.classList.add('playground-active');
+  }
+
   window.addEventListener('resize', handleWindowResize);
   window.addEventListener('keydown', handleGlobalKeyDown);
 
@@ -229,7 +189,7 @@ onMounted(() => {
     if (savedReportView === 'cards' || savedReportView === 'json') {
       reportViewMode.value = savedReportView;
     }
-  } catch {}
+  } catch { }
 
   let restoredFromHash = false;
   const hash = window.location.hash;
@@ -285,7 +245,7 @@ onMounted(() => {
         snippetTitle.value = localStorage.getItem(DRAFT_TITLE_KEY) || snippetTitle.value;
         selectedPresetId.value = localStorage.getItem(DRAFT_PRESET_KEY) || 'custom';
       }
-    } catch {}
+    } catch { }
   }
 
   try {
@@ -358,7 +318,7 @@ onMounted(() => {
 watch(config, (newConf) => {
   try {
     localStorage.setItem('typephp_playground_config', JSON.stringify(newConf));
-  } catch {}
+  } catch { }
   triggerTransform();
 }, { deep: true });
 
@@ -374,7 +334,7 @@ function toggleLayoutPosition() {
   layoutPosition.value = newPos;
   try {
     localStorage.setItem('typephp_playground_dock', newPos);
-  } catch {}
+  } catch { }
 }
 
 function adjustFontSize(delta: number) {
@@ -382,7 +342,7 @@ function adjustFontSize(delta: number) {
   fontSize.value = newSize;
   try {
     localStorage.setItem('typephp_playground_fontsize', newSize.toString());
-  } catch {}
+  } catch { }
 }
 
 function formatCode() {
@@ -391,12 +351,12 @@ function formatCode() {
 
 function onCodeUpdate(newCode: string) {
   code.value = newCode;
-  
+
   const matched = presets.find((p) => p.id === selectedPresetId.value);
   if (matched && matched.code !== newCode) {
     selectedPresetId.value = 'custom';
   }
-  
+
   persistDraft();
   triggerTransform();
 }
@@ -423,12 +383,12 @@ function onSelectPreset(presetId: string) {
       };
     }
     viewMode.value = 'source';
-    
+
     // Clear URL hash when switching to an official preset
     if (window.location.hash) {
       history.replaceState(null, '', window.location.pathname + window.location.search);
     }
-    
+
     persistDraft();
     clearConsole();
     report.value = null;
@@ -497,11 +457,11 @@ function shareSnippet() {
     title: snippetTitle.value || 'Custom Snippet',
     code: code.value,
     config: config.value,
-    reportViewMode: reportViewMode.value, 
+    reportViewMode: reportViewMode.value,
   };
   const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(payload));
   const shareUrl = `${window.location.origin}${window.location.pathname}#code=${compressed}`;
-  
+
   if (window.history && window.history.replaceState) {
     window.history.replaceState(null, '', shareUrl);
   }
@@ -515,6 +475,10 @@ function shareSnippet() {
 }
 
 onUnmounted(() => {
+  if (typeof document !== 'undefined') {
+    document.documentElement.classList.remove('playground-active');
+  }
+
   if (saveDraftTimer) clearTimeout(saveDraftTimer);
   if (typeof window !== 'undefined') {
     window.removeEventListener('resize', handleWindowResize);
@@ -543,6 +507,15 @@ onUnmounted(() => {
   display: flex;
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.editor-pane {
+  flex: 1 1 0%;
+  min-width: 0;
+  min-height: 0;
   position: relative;
   overflow: hidden;
 }
@@ -551,12 +524,9 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
-.playground-workspace.layout-side .editor-pane {
-  flex: 1;
-  min-width: 50%; 
-  height: 100%;
-  position: relative;
-  overflow: hidden;
+.playground-workspace.layout-bottom .editor-pane {
+  width: 100%;
+  height: 0;
 }
 
 .playground-workspace.layout-side {
@@ -564,11 +534,8 @@ onUnmounted(() => {
 }
 
 .playground-workspace.layout-side .editor-pane {
-  flex: 1;
-  min-width: 0;
   height: 100%;
-  position: relative;
-  overflow: hidden;
+  width: 0;
 }
 
 @media (max-width: 960px) {
@@ -578,15 +545,14 @@ onUnmounted(() => {
 
   .editor-pane {
     flex: 1 1 auto !important;
-    height: auto !important;
-    min-height: 140px !important;
+    min-height: 120px !important;
     width: 100% !important;
   }
 
-  .playground-workspace :deep(.drawer-container.pos-bottom:not(.collapsed)) {
-    height: 50% !important;
-    min-height: 200px !important;
-    max-height: 60% !important;
+  .playground-workspace :deep(.drawer-container.pos-bottom.collapsed) {
+    height: 38px !important;
+    min-height: 38px !important;
+    max-height: 38px !important;
   }
 }
 </style>
