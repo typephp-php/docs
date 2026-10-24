@@ -12,8 +12,8 @@
       </div>
 
       <div class="header-right">
-        <!-- View Switcher -->
-        <div class="view-pill-group">
+        <!-- View Switcher (Hidden if hideToggle is true) -->
+        <div v-if="!hideToggle" class="view-pill-group">
           <button
             :class="['view-pill-btn', { active: currentView === 'source' }]"
             @click="currentView = 'source'"
@@ -66,10 +66,16 @@
       <!-- 2. Transformed View (Synchronized 1:1 with Source) -->
       <div v-show="currentView === 'transformed'" class="transformed-block">
         <span class="lang-badge">php</span>
-        <div class="line-numbers-wrapper" aria-hidden="true">
+        <div v-if="transformedLineCount > 0" class="line-numbers-wrapper" aria-hidden="true">
           <span v-for="n in transformedLineCount" :key="n" class="line-number">{{ n }}</span>
         </div>
-        <pre class="snippet-pre"><code v-html="highlightedTransformedCode || 'Generating AST transformation...'"></code></pre>
+
+        <div v-if="isTransforming && !transformedCode" class="transform-loading-state">
+          <span class="spinner dark"></span>
+          <span>Generating AST transformation...</span>
+        </div>
+
+        <pre v-else class="snippet-pre"><code v-html="highlightedTransformedCode || 'Generating AST transformation...'"></code></pre>
       </div>
     </div>
 
@@ -94,7 +100,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useData } from 'vitepress';
 import { getTypePHPEngine, type RunResult } from '../utils/typephp-engine';
 
@@ -102,18 +108,23 @@ const props = withDefaults(defineProps<{
   code?: string;
   title?: string;
   config?: Record<string, any>;
+  defaultView?: 'source' | 'transformed';
+  hideToggle?: boolean;
 }>(), {
   code: '',
   title: 'TypePHP Example',
   config: () => ({}),
+  defaultView: 'source',
+  hideToggle: false,
 });
 
 const { site } = useData();
 const slotWrapper = ref<HTMLDivElement | null>(null);
 
-const currentView = ref<'source' | 'transformed'>('source');
+const currentView = ref<'source' | 'transformed'>(props.defaultView);
 const transformedCode = ref<string>('');
 const isRunning = ref<boolean>(false);
+const isTransforming = ref<boolean>(false);
 const hasRun = ref<boolean>(false);
 const copied = ref<boolean>(false);
 
@@ -255,17 +266,20 @@ async function runSnippet() {
 
 async function toggleTransformedView() {
   currentView.value = 'transformed';
-  if (transformedCode.value) return;
+  if (transformedCode.value || isTransforming.value) return;
 
   const codeToTransform = extractCode();
   if (!codeToTransform) return;
 
+  isTransforming.value = true;
   const engine = getTypePHPEngine(site.value.base || '/docs/');
   try {
     const res = await engine.transform(codeToTransform, props.config);
     transformedCode.value = res.transformedCode;
   } catch (err: any) {
     transformedCode.value = `// AST Transformation Error: ${err?.message || err}`;
+  } finally {
+    isTransforming.value = false;
   }
 }
 
@@ -276,6 +290,12 @@ function copyCode() {
     setTimeout(() => { copied.value = false; }, 2000);
   });
 }
+
+onMounted(() => {
+  if (props.defaultView === 'transformed') {
+    toggleTransformedView();
+  }
+});
 </script>
 
 <style>
@@ -444,6 +464,16 @@ html.dark .typephp-snippet-card {
   background: transparent !important;
 }
 
+.transform-loading-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 24px 20px 56px;
+  font-size: 12px;
+  color: var(--vp-c-text-3);
+  font-family: var(--vp-font-family-mono);
+}
+
 /* Language Badge */
 .lang-badge {
   position: absolute;
@@ -509,6 +539,54 @@ html.dark .typephp-snippet-card {
   .snippet-pre {
     padding: 16px 16px 16px 48px !important;
   }
+}
+
+/* Sleek VS Code-style scrollbar for snippet code and console output */
+.snippet-pre,
+.console-output,
+:deep(div[class*='language-']),
+:deep(div[class*='language-'] pre) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--vp-c-divider) transparent;
+}
+
+.snippet-pre::-webkit-scrollbar,
+.console-output::-webkit-scrollbar,
+:deep(div[class*='language-'])::-webkit-scrollbar,
+:deep(div[class*='language-'] pre)::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.snippet-pre::-webkit-scrollbar-button,
+.console-output::-webkit-scrollbar-button,
+:deep(div[class*='language-'])::-webkit-scrollbar-button,
+:deep(div[class*='language-'] pre)::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.snippet-pre::-webkit-scrollbar-track,
+.console-output::-webkit-scrollbar-track,
+:deep(div[class*='language-'])::-webkit-scrollbar-track,
+:deep(div[class*='language-'] pre)::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+.snippet-pre::-webkit-scrollbar-thumb,
+.console-output::-webkit-scrollbar-thumb,
+:deep(div[class*='language-'])::-webkit-scrollbar-thumb,
+:deep(div[class*='language-'] pre)::-webkit-scrollbar-thumb {
+  background: var(--vp-c-divider) !important;
+  border-radius: 4px;
+}
+
+.snippet-pre::-webkit-scrollbar-thumb:hover,
+.console-output::-webkit-scrollbar-thumb:hover,
+:deep(div[class*='language-'])::-webkit-scrollbar-thumb:hover,
+:deep(div[class*='language-'] pre)::-webkit-scrollbar-thumb:hover {
+  background: var(--vp-c-text-3) !important;
 }
 
 /* Syntax Token Colors (Using CSS Variables) */
@@ -611,6 +689,11 @@ html.dark .typephp-snippet-card {
   border-top-color: #fff;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
+}
+
+.spinner.dark {
+  border-color: rgba(59, 130, 246, 0.2);
+  border-top-color: var(--vp-c-brand-1);
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }

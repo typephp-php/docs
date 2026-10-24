@@ -1,0 +1,52 @@
+
+html.playground-active,
+html.playground-active body {
+    overflow: hidden !important;
+    height: 100% !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+html.playground-active #app,
+html.playground-active .VPApp {
+    height: 100% !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
+}
+
+html.playground-active .VPContent {
+    padding-top: var(--vp-nav-height) !important;
+    padding-bottom: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin: 0 !important;
+    height: 100% !important;
+    height: 100dvh !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+}
+
+html.playground-active .VPPage,
+html.playground-active .VPContent .container,
+html.playground-active .VPContent .content,
+html.playground-active .VPContent .vp-doc {
+    padding: 0 !important;
+    padding-bottom: 0 !important;
+    margin: 0 !important;
+    margin-bottom: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    height: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.playground-page .VPNavBar .container {
+    padding: 0 16px !important;
+}
+
+.playground-toolbar {
+    padding: 0 16px !important;
+}
