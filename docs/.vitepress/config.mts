@@ -6,6 +6,8 @@ export default defineConfig({
   base: '/docs/',
   cleanUrls: true,
   head: [
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/docs/favicon.svg' }],
+    ['link', { rel: 'alternate icon', href: '/docs/favicon.ico' }],
     ['link', { rel: 'preload', href: '/docs/wasm/typephp-runtime.json.gz', as: 'fetch', crossorigin: 'anonymous' }],
     ['link', { rel: 'prefetch', href: '/docs/wasm/typephp-runtime.json', as: 'fetch' }]
   ],
@@ -37,6 +39,7 @@ export default defineConfig({
 
   themeConfig: {
     siteTitle: "TypePHP",
+    logo: '/favicon.svg',
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Documentation', link: '/getting-started/installation' },
