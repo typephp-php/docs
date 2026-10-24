@@ -493,14 +493,22 @@ onUnmounted(() => {
 
 <style scoped>
 .playground-root {
+  position: fixed;
+  top: var(--vp-nav-height, 64px);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw !important;
+  max-width: 100vw !important;
+  height: calc(100vh - var(--vp-nav-height, 64px)) !important;
+  height: calc(100dvh - var(--vp-nav-height, 64px)) !important;
+  margin: 0 !important;
+  padding: 0 !important;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - var(--vp-nav-height) - 1px);
-  width: 100% !important;
-  max-width: 100% !important;
-  margin: 0 !important;
   overflow: hidden;
   background-color: var(--vp-c-bg);
+  z-index: 10;
 }
 
 .playground-workspace {
@@ -544,8 +552,9 @@ onUnmounted(() => {
   }
 
   .editor-pane {
-    flex: 1 1 auto !important;
-    min-height: 120px !important;
+    flex: 1 1 0% !important;
+    height: 0 !important;
+    min-height: 100px !important;
     width: 100% !important;
   }
 
