@@ -101,10 +101,11 @@ class TypePHPEngine {
 
   public async run(code: string, config: any = {}): Promise<RunResult> {
     await this.init();
+    const cleanConfig = JSON.parse(JSON.stringify(config || {}));
     return new Promise((resolve, reject) => {
       this.queue.push({
         action: 'RUN',
-        payload: { code, config },
+        payload: { code, config: cleanConfig },
         resolve,
         reject,
       });
@@ -114,10 +115,11 @@ class TypePHPEngine {
 
   public async transform(code: string, config: any = {}): Promise<TransformResult> {
     await this.init();
+    const cleanConfig = JSON.parse(JSON.stringify(config || {}));
     return new Promise((resolve, reject) => {
       this.queue.push({
         action: 'TRANSFORM',
-        payload: { code, config },
+        payload: { code, config: cleanConfig },
         resolve,
         reject,
       });
@@ -149,7 +151,7 @@ export function getTypePHPEngine(baseUrl?: string): TypePHPEngine {
     engineInstance = new TypePHPEngine();
   }
   if (baseUrl && typeof window !== 'undefined') {
-    engineInstance.init(baseUrl).catch(() => {});
+    engineInstance.init(baseUrl).catch(() => { });
   }
   return engineInstance;
 }

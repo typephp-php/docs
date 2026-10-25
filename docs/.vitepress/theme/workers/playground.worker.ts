@@ -152,6 +152,7 @@ if (file_exists('/workspace/config.json')) {
 }
 
 $isEnabled = (bool) ($userConfig['enabled'] ?? true);
+$eliminateProven = (bool) ($userConfig['eliminateStaticallyProvenChecks'] ?? $userConfig['eliminate_statically_proven_checks'] ?? true);
 $onViolation = $userConfig['onViolation'] ?? 'throw';
 $redactValues = (bool) ($userConfig['redactValues'] ?? false);
 $ignoreDepth = isset($userConfig['ignoreTraceDepth']) ? max(1, (int) $userConfig['ignoreTraceDepth']) : 25;
@@ -160,6 +161,7 @@ $userInlineVars = $userConfig['inlineVars'] ?? [];
 
 Config::set([
     'enabled' => $isEnabled,
+    'eliminate_statically_proven_checks' => $eliminateProven,
     'on_violation' => $onViolation,
     'report_file' => '/workspace/report.json',
     'fail_on_report' => false,
@@ -173,8 +175,8 @@ Config::set([
         'write' => true,
         'read' => $magicPropertyReads,
     ],
-    'array_validation' => $userConfig['arrayValidation'] ?? 'full',
-    'strict_return_generic_invariance' => (bool) ($userConfig['strictReturnGenericInvariance'] ?? true),
+    'array_validation' => $userConfig['arrayValidation'] ?? $userConfig['array_validation'] ?? 'full',
+    'strict_return_generic_invariance' => (bool) ($userConfig['strictReturnGenericInvariance'] ?? $userConfig['strict_return_generic_invariance'] ?? true),
     'respect_native_nullability' => (bool) ($userConfig['respectNativeNullability'] ?? true),
     'respect_ignore_tags' => (bool) ($userConfig['respectIgnoreTags'] ?? true),
     'inline_vars' => [
@@ -278,11 +280,16 @@ if (!$isEnabled) {
     exit(0);
 }
 
+$eliminateProven = (bool) ($userConfig['eliminateStaticallyProvenChecks'] ?? $userConfig['eliminate_statically_proven_checks'] ?? true);
+$strictReturnGenericInvariance = (bool) ($userConfig['strictReturnGenericInvariance'] ?? $userConfig['strict_return_generic_invariance'] ?? true);
 $magicPropertyReads = (bool) ($userConfig['magicPropertyReads'] ?? false);
 $userInlineVars = $userConfig['inlineVars'] ?? [];
 
 Config::set([
     'cache' => false,
+    'eliminate_statically_proven_checks' => $eliminateProven,
+    'strict_return_generic_invariance' => $strictReturnGenericInvariance,
+    'array_validation' => $userConfig['arrayValidation'] ?? $userConfig['array_validation'] ?? 'full',
     'magic_properties' => [
         'write' => true,
         'read' => $magicPropertyReads,
@@ -489,7 +496,7 @@ async function clearReport() {
     if (php.fileExists('/workspace/report.json')) {
       php.unlink('/workspace/report.json');
     }
-  } catch { }
+  } catch {}
 
   self.postMessage({
     type: 'REPORT_CLEARED',

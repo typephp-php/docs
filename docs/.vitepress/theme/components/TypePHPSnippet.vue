@@ -1,18 +1,26 @@
-<!-- docs/.vitepress/theme/components/TypePHPSnippet.vue -->
 <template>
   <div class="typephp-snippet-card">
     <!-- Header Toolbar -->
     <div class="snippet-header">
       <div class="header-left">
-        <svg class="php-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-          <polyline points="14 2 14 8 20 8" />
-        </svg>
-        <span class="snippet-title">{{ title || 'TypePHP Interactive' }}</span>
+        <div class="title-cluster">
+          <svg class="php-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+          </svg>
+          <span class="snippet-title" :title="title || 'TypePHP Interactive'">{{ title || 'TypePHP Interactive' }}</span>
+        </div>
+
+        <!-- Active Config Badges -->
+        <div v-if="activeConfigBadges.length > 0" class="snippet-config-badges">
+          <span v-for="badge in activeConfigBadges" :key="badge" class="config-badge-pill">
+            {{ badge }}
+          </span>
+        </div>
       </div>
 
       <div class="header-right">
-        <!-- View Switcher (Hidden if hideToggle is true) -->
+        <!-- View Switcher -->
         <div v-if="!hideToggle" class="view-pill-group">
           <button
             :class="['view-pill-btn', { active: currentView === 'source' }]"
@@ -28,44 +36,54 @@
           </button>
         </div>
 
-        <!-- Copy Button -->
-        <button class="icon-btn" :title="copied ? 'Copied!' : 'Copy Code'" @click="copyCode">
-          <svg v-if="!copied" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="9" y="9" width="13" height="13" rx="2" />
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-          </svg>
-          <svg v-else viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#10b981" stroke-width="2.5">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-        </button>
+        <!-- Action Tools Cluster -->
+        <div class="actions-cluster">
+          <!-- Reusable Full Engine Config Popover -->
+          <PlaygroundConfigPopover
+            v-model="localConfig"
+            :has-custom-config="hasCustomConfig"
+            :compact="true"
+            @reset="resetToSnippetDefaults"
+          />
 
-        <!-- Run Button -->
-        <button
-          class="run-snippet-btn"
-          :disabled="isRunning"
-          @click="runSnippet"
-        >
-          <span v-if="isRunning" class="spinner"></span>
-          <svg v-else viewBox="0 0 24 24" width="11" height="11" fill="currentColor">
-            <path d="M8 5v14l11-7z" />
-          </svg>
-          <span>{{ isRunning ? 'Running...' : 'Run' }}</span>
-        </button>
+          <!-- Copy Button -->
+          <button class="icon-btn" :title="copied ? 'Copied!' : 'Copy Code'" @click="copyCode">
+            <svg v-if="!copied" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+            <svg v-else viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#10b981" stroke-width="2.5">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </button>
+
+          <!-- Run Button -->
+          <button
+            class="run-snippet-btn"
+            :disabled="isRunning"
+            @click="runSnippet"
+          >
+            <span v-if="isRunning" class="spinner"></span>
+            <svg v-else viewBox="0 0 24 24" width="11" height="11" fill="currentColor">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+            <span>{{ isRunning ? '...' : 'Run' }}</span>
+          </button>
+        </div>
       </div>
     </div>
 
     <!-- Code Block Body -->
     <div class="snippet-body">
-      <!-- 1. Source View (VitePress Slot) -->
+      <!-- 1. Source View -->
       <div v-show="currentView === 'source'" ref="slotWrapper" class="slot-content">
         <slot>
           <pre class="snippet-pre"><code>{{ code }}</code></pre>
         </slot>
       </div>
 
-      <!-- 2. Transformed View (Synchronized 1:1 with Source) -->
+      <!-- 2. Transformed View -->
       <div v-show="currentView === 'transformed'" class="transformed-block">
-        <span class="lang-badge">php</span>
         <div v-if="transformedLineCount > 0" class="line-numbers-wrapper" aria-hidden="true">
           <span v-for="n in transformedLineCount" :key="n" class="line-number">{{ n }}</span>
         </div>
@@ -100,19 +118,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useData } from 'vitepress';
 import { getTypePHPEngine, type RunResult } from '../utils/typephp-engine';
+import { DEFAULT_PLAYGROUND_CONFIG, type PlaygroundConfig } from '../presets';
+import PlaygroundConfigPopover from './PlaygroundConfigPopover.vue';
 
 const props = withDefaults(defineProps<{
   code?: string;
   title?: string;
-  config?: Record<string, any>;
+  config?: Partial<PlaygroundConfig>;
   defaultView?: 'source' | 'transformed';
   hideToggle?: boolean;
 }>(), {
   code: '',
-  title: 'TypePHP Example',
+  title: 'TypePHP Interactive',
   config: () => ({}),
   defaultView: 'source',
   hideToggle: false,
@@ -133,6 +153,69 @@ const stderr = ref<string>('');
 const exitCode = ref<number | null>(null);
 const duration = ref<string>('');
 
+const localConfig = ref<PlaygroundConfig>({
+  ...DEFAULT_PLAYGROUND_CONFIG,
+  ...props.config,
+});
+
+watch(() => props.config, (newConf) => {
+  localConfig.value = {
+    ...DEFAULT_PLAYGROUND_CONFIG,
+    ...newConf,
+  };
+}, { deep: true });
+
+watch(localConfig, () => {
+  transformedCode.value = '';
+  if (currentView.value === 'transformed') {
+    toggleTransformedView();
+  }
+  if (hasRun.value) {
+    runSnippet();
+  }
+}, { deep: true });
+
+const hasCustomConfig = computed(() => {
+  return (
+    localConfig.value.enabled !== DEFAULT_PLAYGROUND_CONFIG.enabled ||
+    localConfig.value.eliminateStaticallyProvenChecks !== DEFAULT_PLAYGROUND_CONFIG.eliminateStaticallyProvenChecks ||
+    localConfig.value.strictReturnGenericInvariance !== DEFAULT_PLAYGROUND_CONFIG.strictReturnGenericInvariance ||
+    localConfig.value.magicPropertyReads !== DEFAULT_PLAYGROUND_CONFIG.magicPropertyReads ||
+    localConfig.value.arrayValidation !== DEFAULT_PLAYGROUND_CONFIG.arrayValidation ||
+    localConfig.value.redactValues !== DEFAULT_PLAYGROUND_CONFIG.redactValues ||
+    localConfig.value.onViolation !== DEFAULT_PLAYGROUND_CONFIG.onViolation
+  );
+});
+
+const activeConfigBadges = computed(() => {
+  const badges: string[] = [];
+  if (!localConfig.value.strictReturnGenericInvariance) {
+    badges.push('Pragmatic Returns');
+  }
+  if (!localConfig.value.eliminateStaticallyProvenChecks) {
+    badges.push('No AST Elimination');
+  }
+  if (localConfig.value.magicPropertyReads) {
+    badges.push('Strict __get');
+  }
+  if (localConfig.value.arrayValidation === 'hybrid') {
+    badges.push('Hybrid Array');
+  }
+  if (localConfig.value.onViolation === 'warn') {
+    badges.push('Warn Mode');
+  } else if (localConfig.value.onViolation === 'report') {
+    badges.push('Report Mode');
+  }
+  return badges;
+});
+
+function resetToSnippetDefaults() {
+  localConfig.value = {
+    ...DEFAULT_PLAYGROUND_CONFIG,
+    ...props.config,
+  };
+}
+
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, '&amp;')
@@ -145,21 +228,13 @@ function escapeHtml(str: string): string {
 function highlightPhp(code: string): string {
   const TOKEN_REGEX = new RegExp(
     [
-      // 1. Comments & DocBlocks
       '(/\\*\\*[\\s\\S]*?\\*/|/\\*[\\s\\S]*?\\*/|//.*|#.*)',
-      // 2. Strings
       `('(?:\\\\.|[^'\\\\])*'|"(?:\\\\.|[^"\\\\])*")`,
-      // 3. PHP Open/Close Tags
       '(<\\?(?:php|=)?|\\?>)',
-      // 4. Variables
       '(\\$[a-zA-Z_\\x7f-\\xff][a-zA-Z0-9_\\x7f-\\xff]*)',
-      // 5. Function calls (e.g. add(), get_class())
       '(\\b[a-zA-Z_\\x7f-\\xff][a-zA-Z0-9_\\x7f-\\xff]*(?=\\s*\\())',
-      // 6. Keywords
-      '(\\b(?:declare|use|class|interface|trait|extends|implements|public|protected|private|static|readonly|function|fn|return|new|if|else|elseif|isset|empty|throw|try|catch|finally|match|switch|case|break|continue|foreach|for|while|as|yield|echo|print)\\b)',
-      // 7. Types, Builtins, Namespaces, Constants
+      '(\\b(?:declare|use|class|interface|trait|enum|extends|implements|public|protected|private|static|readonly|function|fn|return|new|if|else|elseif|isset|empty|throw|try|catch|finally|match|switch|case|break|continue|foreach|for|while|as|yield|echo|print)\\b)',
       '(\\\\?[A-Z][a-zA-Z0-9_]*(?:\\\\[a-zA-Z0-9_]+)*\\b|\\b(?:int|string|bool|boolean|float|double|array|void|never|mixed|object|callable|iterable|true|false|null|self|parent|PHP_EOL|strict_types)\\b)',
-      // 8. Numbers
       '(\\b\\d+(?:\\.\\d+)?\\b)',
     ].join('|'),
     'g'
@@ -175,21 +250,13 @@ function highlightPhp(code: string): string {
     }
 
     const [
-      full,
-      comment,
-      str,
-      phpTag,
-      variable,
-      fnCall,
-      keyword,
-      typeOrClass,
-      number,
+      full, comment, str, phpTag, variable, fnCall, keyword, typeOrClass, number,
     ] = match;
 
     if (comment) {
       let c = escapeHtml(comment);
       c = c.replace(/(@[a-zA-Z0-9_\-]+)/g, '<span class="tok-tag">$1</span>');
-      c = c.replace(/\b([A-Z][a-zA-Z0-9_]*|positive-int|non-empty-string|string|int|array|mixed)\b/g, '<span class="tok-type">$1</span>');
+      c = c.replace(/\b([A-Z][a-zA-Z0-9_]*|positive-int|negative-int|non-empty-string|string|int|array|mixed)\b/g, '<span class="tok-type">$1</span>');
       html += `<span class="tok-comment">${c}</span>`;
     } else if (str) {
       html += `<span class="tok-string">${escapeHtml(str)}</span>`;
@@ -251,7 +318,8 @@ async function runSnippet() {
   const engine = getTypePHPEngine(site.value.base || '/docs/');
 
   try {
-    const res: RunResult = await engine.run(codeToRun, props.config);
+    const cleanConfig = JSON.parse(JSON.stringify(localConfig.value));
+    const res: RunResult = await engine.run(codeToRun, cleanConfig);
     stdout.value = res.stdout;
     stderr.value = res.stderr;
     exitCode.value = res.exitCode;
@@ -274,7 +342,8 @@ async function toggleTransformedView() {
   isTransforming.value = true;
   const engine = getTypePHPEngine(site.value.base || '/docs/');
   try {
-    const res = await engine.transform(codeToTransform, props.config);
+    const cleanConfig = JSON.parse(JSON.stringify(localConfig.value));
+    const res = await engine.transform(codeToTransform, cleanConfig);
     transformedCode.value = res.transformedCode;
   } catch (err: any) {
     transformedCode.value = `// AST Transformation Error: ${err?.message || err}`;
@@ -331,25 +400,39 @@ html.dark .typephp-snippet-card {
   border: 1px solid var(--vp-c-divider);
   border-radius: 8px;
   background: var(--vp-code-block-bg, var(--vp-c-bg-soft));
-  overflow: hidden;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+  position: relative;
 }
 
+/* Header Base (Desktop: 1 Line) */
 .snippet-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 6px 12px;
   background: var(--vp-c-bg-mute);
+  border-top-left-radius: 7px;
+  border-top-right-radius: 7px;
   border-bottom: 1px solid var(--vp-c-divider);
   gap: 8px;
+  min-height: 38px;
+  box-sizing: border-box;
 }
 
 .header-left {
   display: flex;
   align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.title-cluster {
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
   min-width: 0;
+  overflow: hidden;
 }
 
 .php-icon {
@@ -358,7 +441,7 @@ html.dark .typephp-snippet-card {
 }
 
 .snippet-title {
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--vp-c-text-2);
   white-space: nowrap;
@@ -367,11 +450,36 @@ html.dark .typephp-snippet-card {
   font-family: var(--vp-font-family-mono);
 }
 
+.snippet-config-badges {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.config-badge-pill {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--vp-c-brand-1);
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 4px;
+  padding: 1px 5px;
+  white-space: nowrap;
+  font-family: var(--vp-font-family-mono);
+}
+
 .header-right {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
+}
+
+.actions-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .view-pill-group {
@@ -409,6 +517,7 @@ html.dark .typephp-snippet-card {
   background: var(--vp-c-bg);
   color: var(--vp-c-text-2);
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .icon-btn:hover {
@@ -420,7 +529,8 @@ html.dark .typephp-snippet-card {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 8px;
+  padding: 2px 9px;
+  height: 24px;
   font-size: 11px;
   font-weight: 600;
   border-radius: 4px;
@@ -440,12 +550,17 @@ html.dark .typephp-snippet-card {
   cursor: not-allowed;
 }
 
+/* Snippet Code Body */
 .snippet-body {
   position: relative;
   background: var(--vp-code-block-bg, var(--vp-c-bg-soft));
+  overflow: hidden;
+  border-bottom-left-radius: 7px;
+  border-bottom-right-radius: 7px;
 }
 
-.slot-content :deep(div[class*='language-']) {
+.slot-content :deep(div[class*='language-']),
+.vp-doc .typephp-snippet-card div[class*='language-'] {
   margin: 0 !important;
   border-radius: 0 !important;
   border: none !important;
@@ -453,6 +568,11 @@ html.dark .typephp-snippet-card {
 }
 
 .slot-content :deep(button.copy) {
+  display: none !important;
+}
+
+.typephp-snippet-card :deep(span.lang),
+.typephp-snippet-card .lang-badge {
   display: none !important;
 }
 
@@ -468,26 +588,13 @@ html.dark .typephp-snippet-card {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 20px 24px 20px 56px;
+  padding: 16px 20px 16px 48px;
   font-size: 12px;
   color: var(--vp-c-text-3);
   font-family: var(--vp-font-family-mono);
 }
 
-/* Language Badge */
-.lang-badge {
-  position: absolute;
-  top: 8px;
-  right: 12px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--vp-code-lang-color, var(--vp-c-text-3));
-  font-family: var(--vp-font-family-mono);
-  user-select: none;
-  z-index: 2;
-}
-
-/* Line Numbers Gutter: Solid 32px on desktop and mobile */
+/* Line Numbers Gutter: Fixed 32px width */
 .line-numbers-wrapper {
   position: absolute;
   top: 0;
@@ -496,7 +603,7 @@ html.dark .typephp-snippet-card {
   z-index: 5;
   width: 32px !important;
   text-align: center;
-  padding: 20px 0 !important;
+  padding: 18px 0 !important;
   font-family: var(--vp-font-family-mono);
   font-size: var(--vp-code-font-size, 14px);
   line-height: var(--vp-code-line-height, 1.7);
@@ -511,10 +618,10 @@ html.dark .typephp-snippet-card {
   display: block;
 }
 
-/* Desktop: 32px gutter + 24px padding = 56px left offset */
+/* Desktop Code Area */
 .snippet-pre {
   margin: 0 !important;
-  padding: 20px 24px 20px 56px !important;
+  padding: 18px 20px 18px 52px !important;
   background: transparent !important;
   font-family: var(--vp-font-family-mono);
   font-size: var(--vp-code-font-size, 14px);
@@ -530,66 +637,7 @@ html.dark .typephp-snippet-card {
   min-width: 100%;
 }
 
-/* Mobile: 32px gutter + 16px padding = 48px left offset (Matching custom.css) */
-@media (max-width: 639px) {
-  .line-numbers-wrapper {
-    padding: 16px 0 !important;
-  }
-
-  .snippet-pre {
-    padding: 16px 16px 16px 48px !important;
-  }
-}
-
-/* Sleek VS Code-style scrollbar for snippet code and console output */
-.snippet-pre,
-.console-output,
-:deep(div[class*='language-']),
-:deep(div[class*='language-'] pre) {
-  scrollbar-width: thin;
-  scrollbar-color: var(--vp-c-divider) transparent;
-}
-
-.snippet-pre::-webkit-scrollbar,
-.console-output::-webkit-scrollbar,
-:deep(div[class*='language-'])::-webkit-scrollbar,
-:deep(div[class*='language-'] pre)::-webkit-scrollbar {
-  height: 6px;
-  width: 6px;
-}
-
-.snippet-pre::-webkit-scrollbar-button,
-.console-output::-webkit-scrollbar-button,
-:deep(div[class*='language-'])::-webkit-scrollbar-button,
-:deep(div[class*='language-'] pre)::-webkit-scrollbar-button {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-}
-
-.snippet-pre::-webkit-scrollbar-track,
-.console-output::-webkit-scrollbar-track,
-:deep(div[class*='language-'])::-webkit-scrollbar-track,
-:deep(div[class*='language-'] pre)::-webkit-scrollbar-track {
-  background: transparent !important;
-}
-
-.snippet-pre::-webkit-scrollbar-thumb,
-.console-output::-webkit-scrollbar-thumb,
-:deep(div[class*='language-'])::-webkit-scrollbar-thumb,
-:deep(div[class*='language-'] pre)::-webkit-scrollbar-thumb {
-  background: var(--vp-c-divider) !important;
-  border-radius: 4px;
-}
-
-.snippet-pre::-webkit-scrollbar-thumb:hover,
-.console-output::-webkit-scrollbar-thumb:hover,
-:deep(div[class*='language-'])::-webkit-scrollbar-thumb:hover,
-:deep(div[class*='language-'] pre)::-webkit-scrollbar-thumb:hover {
-  background: var(--vp-c-text-3) !important;
-}
-
-/* Syntax Token Colors (Using CSS Variables) */
+/* Syntax Token Colors */
 :deep(.tok-keyword) { color: var(--snip-keyword) !important; font-weight: normal; }
 :deep(.tok-php) { color: var(--snip-keyword) !important; font-weight: normal; }
 :deep(.tok-fn) { color: var(--snip-fn) !important; }
@@ -604,6 +652,9 @@ html.dark .typephp-snippet-card {
 .snippet-console {
   border-top: 1px solid var(--vp-c-divider);
   background: var(--vp-c-bg-alt, rgba(0, 0, 0, 0.15));
+  border-bottom-left-radius: 7px;
+  border-bottom-right-radius: 7px;
+  overflow: hidden;
 }
 
 .console-header {
@@ -698,14 +749,52 @@ html.dark .typephp-snippet-card {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-@media (max-width: 640px) {
+/* Mobile & Tablet Responsiveness (<= 768px) */
+@media (max-width: 768px) {
   .snippet-header {
-    flex-wrap: wrap;
-    padding: 6px 8px;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 8px 10px !important;
+    gap: 8px !important;
+    height: auto !important;
   }
+
   .header-left {
-    width: 100%;
-    margin-bottom: 2px;
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    min-width: 0 !important;
+  }
+
+  .title-cluster {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+  }
+
+  .snippet-title {
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    color: var(--vp-c-text-1) !important;
+  }
+
+  .header-right {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+
+  .actions-cluster {
+    gap: 6px !important;
+  }
+
+  .line-numbers-wrapper {
+    padding: 14px 0 !important;
+  }
+
+  .snippet-pre {
+    padding: 14px 14px 14px 44px !important;
   }
 }
 </style>

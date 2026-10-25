@@ -11,6 +11,7 @@ export interface InlineVarsConfig {
 
 export interface PlaygroundConfig {
   enabled: boolean;
+  eliminateStaticallyProvenChecks: boolean; 
   onViolation: ViolationMode;
   redactValues: boolean;
   ignoreTraceDepth: number;
@@ -65,6 +66,7 @@ export const DEFAULT_INLINE_VARS_CONFIG: InlineVarsConfig = {
 
 export const DEFAULT_PLAYGROUND_CONFIG: PlaygroundConfig = {
   enabled: true,
+  eliminateStaticallyProvenChecks: true, 
   onViolation: 'throw',
   redactValues: false,
   ignoreTraceDepth: 25,

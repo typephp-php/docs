@@ -96,6 +96,7 @@ const hasCustomConfig = computed<boolean>(() => {
 
   return (
     config.value.enabled !== DEFAULT_PLAYGROUND_CONFIG.enabled ||
+    config.value.eliminateStaticallyProvenChecks !== DEFAULT_PLAYGROUND_CONFIG.eliminateStaticallyProvenChecks ||
     config.value.onViolation !== DEFAULT_PLAYGROUND_CONFIG.onViolation ||
     config.value.redactValues !== DEFAULT_PLAYGROUND_CONFIG.redactValues ||
     config.value.ignoreTraceDepth !== DEFAULT_PLAYGROUND_CONFIG.ignoreTraceDepth ||
