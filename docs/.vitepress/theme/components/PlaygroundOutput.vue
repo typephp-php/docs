@@ -1,16 +1,10 @@
 <template>
-  <!-- Floating tab when collapsed in side dock mode -->
-  <button
-    v-if="position === 'side' && isCollapsed"
-    class="floating-edge-tab"
-    title="Click to expand Console"
-    @click="toggleCollapse"
-  >
+  <button v-if="mode === 'drawer' && position === 'side' && isCollapsed" class="floating-edge-tab"
+    title="Click to expand Console" @click="toggleCollapse">
     <span class="tab-icon-wrapper">
       <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
         <path
-          d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zm-2-1h-6v-2h6v2zM7.5 17l-1.4-1.4 3.1-3.1-3.1-3.1L7.5 8l4.5 4.5-4.5 4.5z"
-        />
+          d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zm-2-1h-6v-2h6v2zM7.5 17l-1.4-1.4 3.1-3.1-3.1-3.1L7.5 8l4.5 4.5-4.5 4.5z" />
       </svg>
     </span>
 
@@ -30,38 +24,31 @@
     </span>
   </button>
 
-  <div
-    v-show="!(position === 'side' && isCollapsed)"
-    :class="[
-      'drawer-container',
-      `pos-${position}`,
-      { collapsed: isCollapsed, 'is-maximized': isMaximized, 'is-resizing': isResizing }
-    ]"
-    :style="containerStyle"
-  >
-    <!-- Resizer Handle with Mouse and Touch Support -->
-    <div
-      v-if="!isCollapsed && !isMaximized"
-      class="resize-handle"
-      :title="position === 'bottom' ? 'Drag to resize height' : 'Drag to resize width'"
-      @mousedown="startResize"
-      @touchstart="startTouchResize"
-    >
+  <div v-show="mode === 'embedded' || !(position === 'side' && isCollapsed)" :class="[
+    'drawer-container',
+    `pos-${position}`,
+    {
+      collapsed: mode === 'drawer' && isCollapsed,
+      'is-maximized': mode === 'drawer' && isMaximized,
+      'is-resizing': isResizing,
+      'is-embedded': mode === 'embedded'
+    }
+  ]" :style="containerStyle">
+    <!-- Resizer Handle with Mouse and Touch Support (Drawer only) -->
+    <div v-if="mode === 'drawer' && !isCollapsed && !isMaximized" class="resize-handle"
+      :title="position === 'bottom' ? 'Drag to resize height' : 'Drag to resize width'" @mousedown="startResize"
+      @touchstart="startTouchResize">
       <div class="resize-grip"></div>
     </div>
 
-    <!-- Drawer Header with Multi-Tabs -->
-    <div class="drawer-header" @click="toggleCollapse">
+    <!-- Header with Multi-Tabs -->
+    <div class="drawer-header" @click="mode === 'drawer' ? toggleCollapse() : null">
       <div class="header-left" @click.stop>
         <!-- Tab 1: Terminal Console -->
-        <button
-          :class="['drawer-tab-btn', { active: activeTab === 'console' }]"
-          @click="selectTab('console')"
-        >
+        <button :class="['drawer-tab-btn', { active: activeTab === 'console' }]" @click="selectTab('console')">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
             <path
-              d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zm-2-1h-6v-2h6v2zM7.5 17l-1.4-1.4 3.1-3.1-3.1-3.1L7.5 8l4.5 4.5-4.5 4.5z"
-            />
+              d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zm-2-1h-6v-2h6v2zM7.5 17l-1.4-1.4 3.1-3.1-3.1-3.1L7.5 8l4.5 4.5-4.5 4.5z" />
           </svg>
           <span>Console</span>
           <span v-if="exitCode !== null" :class="['exit-badge', exitCode === 0 ? 'success' : 'error']">
@@ -70,12 +57,10 @@
         </button>
 
         <!-- Tab 2: Audit Report -->
-        <button
-          v-if="report !== null || isReportModeActive"
-          :class="['drawer-tab-btn', { active: activeTab === 'report' }]"
-          @click="selectTab('report')"
-        >
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button v-if="report !== null || isReportModeActive"
+          :class="['drawer-tab-btn', { active: activeTab === 'report' }]" @click="selectTab('report')">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
             <polyline points="14 2 14 8 20 8"></polyline>
             <line x1="16" y1="13" x2="8" y2="13"></line>
@@ -96,21 +81,16 @@
 
       <!-- Header Right Action Tools -->
       <div class="header-right" @click.stop>
-        <!-- Maximize / Restore Toggle Button -->
-        <button
-          v-if="!isCollapsed"
-          class="icon-action-btn maximize-btn"
-          :title="isMaximized ? 'Restore height' : 'Maximize (Full screen)'"
-          @click="toggleMaximize"
-        >
-          <!-- Restore icon (when maximized) -->
-          <svg v-if="isMaximized" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+        <!-- Maximize / Restore Toggle (Drawer only) -->
+        <button v-if="mode === 'drawer' && !isCollapsed" class="icon-action-btn maximize-btn"
+          :title="isMaximized ? 'Restore height' : 'Maximize (Full screen)'" @click="toggleMaximize">
+          <svg v-if="isMaximized" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor"
+            stroke-width="2">
             <polyline points="4 14 10 14 10 20" />
             <polyline points="20 10 14 10 14 4" />
             <line x1="14" y1="10" x2="21" y2="3" />
             <line x1="3" y1="21" x2="10" y2="14" />
           </svg>
-          <!-- Maximize icon (when normal) -->
           <svg v-else viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="15 3 21 3 21 9" />
             <polyline points="9 21 3 21 3 15" />
@@ -119,13 +99,11 @@
           </svg>
         </button>
 
-        <!-- Dock Position Toggle -->
-        <button
-          class="icon-action-btn dock-btn"
-          :title="position === 'bottom' ? 'Dock to right sidebar' : 'Dock to bottom'"
-          @click="$emit('toggle-position')"
-        >
-          <svg v-if="position === 'bottom'" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+        <!-- Dock Position Toggle (Drawer only) -->
+        <button v-if="mode === 'drawer'" class="icon-action-btn dock-btn"
+          :title="position === 'bottom' ? 'Dock to right sidebar' : 'Dock to bottom'" @click="$emit('toggle-position')">
+          <svg v-if="position === 'bottom'" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+            stroke-width="2">
             <rect x="3" y="3" width="18" height="18" rx="2" />
             <line x1="15" y1="3" x2="15" y2="21" />
           </svg>
@@ -136,13 +114,12 @@
         </button>
 
         <!-- Copy Output / Report Action -->
-        <button
-          v-if="(activeTab === 'console' && (stdout || stderr)) || (activeTab === 'report' && report)"
+        <button v-if="(activeTab === 'console' && (stdout || stderr)) || (activeTab === 'report' && report)"
           class="icon-action-btn"
           :title="copied ? 'Copied to clipboard' : (activeTab === 'report' ? 'Copy JSON Report' : 'Copy console output')"
-          @click="copyActiveContent"
-        >
-          <svg v-if="!copied" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+          @click="copyActiveContent">
+          <svg v-if="!copied" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor"
+            stroke-width="2">
             <rect x="9" y="9" width="13" height="13" rx="2" />
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
           </svg>
@@ -152,33 +129,34 @@
         </button>
 
         <!-- Clear Action -->
-        <button
-          v-if="(activeTab === 'console' && (stdout || stderr)) || (activeTab === 'report' && report)"
-          class="icon-action-btn"
-          :title="activeTab === 'report' ? 'Clear & Delete Report' : 'Clear console'"
-          @click="handleClear"
-        >
+        <button v-if="(activeTab === 'console' && (stdout || stderr)) || (activeTab === 'report' && report)"
+          class="icon-action-btn" :title="activeTab === 'report' ? 'Clear & Delete Report' : 'Clear console'"
+          @click="handleClear">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10" />
             <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
           </svg>
         </button>
 
-        <!-- Collapse Toggle -->
-        <button
-          class="icon-action-btn collapse-toggle-btn"
-          :title="isCollapsed ? 'Expand' : 'Collapse'"
-          @click="toggleCollapse"
-        >
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" :class="{ rotated: !isCollapsed }">
+        <!-- Close Action (Embedded snippet mode) -->
+        <button v-if="mode === 'embedded'" class="icon-action-btn close-btn" title="Close Output"
+          @click="$emit('close')">
+          &times;
+        </button>
+
+        <!-- Collapse Toggle (Drawer only) -->
+        <button v-if="mode === 'drawer'" class="icon-action-btn collapse-toggle-btn"
+          :title="isCollapsed ? 'Expand' : 'Collapse'" @click="toggleCollapse">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+            :class="{ rotated: !isCollapsed }">
             <polyline points="18 15 12 9 6 15" />
           </svg>
         </button>
       </div>
     </div>
 
-    <!-- Drawer Body -->
-    <div v-show="!isCollapsed" class="drawer-body">
+    <!-- Body -->
+    <div v-show="mode === 'embedded' || !isCollapsed" class="drawer-body">
       <!-- 1. Console Stream Tab View -->
       <div v-if="activeTab === 'console'" class="console-view">
         <div v-if="isRunning" class="running-indicator">
@@ -189,12 +167,14 @@
 
         <!-- Segmented STDERR Output (Warnings in Amber, Fatal Errors in Red) -->
         <template v-for="(block, idx) in parsedStderrBlocks" :key="idx">
-          <pre :class="['stderr-stream', block.type === 'warning' ? 'is-warning' : 'is-error']">{{ block.content }}</pre>
+          <pre
+            :class="['stderr-stream', block.type === 'warning' ? 'is-warning' : 'is-error']">{{ block.content }}</pre>
         </template>
 
         <div v-if="!stdout && !stderr && !isRunning && exitCode === null" class="empty-state">
           <p class="empty-state-text">
-            Click <strong>Run</strong> <span class="hide-mobile">(or press <kbd>Ctrl</kbd> + <kbd>Enter</kbd>)</span> to execute.
+            Click <strong>Run</strong><span v-if="mode !== 'embedded'" class="hide-mobile"> (or press <kbd>Ctrl</kbd> +
+              <kbd>Enter</kbd>)</span> to execute.
           </p>
         </div>
       </div>
@@ -219,13 +199,17 @@
             <div class="summary-actions">
               <!-- Cards vs JSON Toggle -->
               <div class="report-subview-toggle">
-                <button :class="['subview-btn', { active: reportViewMode === 'cards' }]" @click="$emit('update:reportViewMode', 'cards')">Cards</button>
-                <button :class="['subview-btn', { active: reportViewMode === 'json' }]" @click="$emit('update:reportViewMode', 'json')">JSON</button>
+                <button :class="['subview-btn', { active: reportViewMode === 'cards' }]"
+                  @click="$emit('update:reportViewMode', 'cards')">Cards</button>
+                <button :class="['subview-btn', { active: reportViewMode === 'json' }]"
+                  @click="$emit('update:reportViewMode', 'json')">JSON</button>
               </div>
 
               <!-- Dedicated Copy JSON Button -->
-              <button :class="['report-action-btn', { success: copiedReportJson }]" :title="copiedReportJson ? 'JSON Copied!' : 'Copy raw JSON report'" @click="copyReportJson">
-                <svg v-if="!copiedReportJson" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+              <button :class="['report-action-btn', { success: copiedReportJson }]"
+                :title="copiedReportJson ? 'JSON Copied!' : 'Copy raw JSON report'" @click="copyReportJson">
+                <svg v-if="!copiedReportJson" viewBox="0 0 24 24" width="12" height="12" fill="none"
+                  stroke="currentColor" stroke-width="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" />
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                 </svg>
@@ -237,7 +221,8 @@
 
               <!-- Dedicated Download JSON Button -->
               <button class="report-action-btn" title="Download typephp-report.json file" @click="downloadReportJson">
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                   <polyline points="7 10 12 15 17 10"></polyline>
                   <line x1="12" y1="15" x2="12" y2="3"></line>
@@ -287,7 +272,9 @@
           </div>
           <span class="clean-report-title">No Contract Violations</span>
           <p class="clean-report-desc">
-            All data structures, parameter inputs, and function return boundaries satisfied their type contracts cleanly in audit mode.
+            All data structures, parameter inputs, and function return boundaries satisfied their type contracts cleanly
+            in
+            audit mode.
           </p>
         </div>
       </div>
@@ -310,11 +297,13 @@ const props = withDefaults(defineProps<{
   report?: AuditReportDocument | null;
   isReportModeActive?: boolean;
   reportViewMode?: 'cards' | 'json';
+  mode?: 'drawer' | 'embedded'; // <-- Added mode
 }>(), {
   position: 'bottom',
   report: null,
   isReportModeActive: false,
   reportViewMode: 'cards',
+  mode: 'drawer',
 });
 
 const emit = defineEmits<{
@@ -322,6 +311,7 @@ const emit = defineEmits<{
   (e: 'clear-report'): void;
   (e: 'toggle-position'): void;
   (e: 'update:reportViewMode', mode: 'cards' | 'json'): void;
+  (e: 'close'): void; // <-- Added close emit
 }>();
 
 const activeTab = ref<'console' | 'report'>('console');
@@ -413,6 +403,14 @@ watch(() => props.isRunning, (running) => {
 });
 
 const containerStyle = computed(() => {
+  if (props.mode === 'embedded') {
+    return {
+      height: 'auto',
+      maxHeight: '340px',
+      width: '100%',
+    };
+  }
+
   if (props.position === 'bottom') {
     let targetHeight = `${drawerHeight.value}px`;
     if (isCollapsed.value) {
@@ -443,6 +441,7 @@ const containerStyle = computed(() => {
 });
 
 function toggleCollapse() {
+  if (props.mode === 'embedded') return;
   if (isCollapsed.value) {
     isCollapsed.value = false;
   } else {
@@ -517,6 +516,7 @@ function downloadReportJson() {
 }
 
 function startResize(e: MouseEvent) {
+  if (props.mode === 'embedded') return;
   e.preventDefault();
   if (isCollapsed.value || isMaximized.value) return;
 
@@ -569,6 +569,7 @@ function startResize(e: MouseEvent) {
 }
 
 function startTouchResize(e: TouchEvent) {
+  if (props.mode === 'embedded') return;
   if (e.touches.length !== 1 || isCollapsed.value || isMaximized.value) return;
 
   isResizing.value = true;
@@ -695,11 +696,30 @@ defineExpose({
   transition: height 0.15s ease-out, width 0.15s ease-out;
 }
 
+/* Embedded Snippet Mode */
+.drawer-container.is-embedded {
+  border-top: 1px solid var(--vp-c-divider) !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-bottom: none !important;
+  border-bottom-left-radius: 7px;
+  border-bottom-right-radius: 7px;
+  transition: none !important;
+}
+
+.drawer-container.is-embedded .drawer-header {
+  cursor: default !important;
+}
+
+.drawer-container.is-embedded .drawer-body {
+  max-height: 280px;
+}
+
 .drawer-container.is-resizing {
   transition: none !important;
 }
 
-.drawer-container.pos-bottom {
+.drawer-container.pos-bottom:not(.is-embedded) {
   border-top: 1px solid var(--vp-c-divider);
 }
 
@@ -709,7 +729,6 @@ defineExpose({
   max-height: 38px !important;
 }
 
-/* Maximized mode */
 .drawer-container.pos-bottom.is-maximized {
   position: absolute;
   bottom: 0;
@@ -728,7 +747,6 @@ defineExpose({
   z-index: 35;
 }
 
-/* Bottom Resize Handle: optimized for both mouse and touch */
 .drawer-container.pos-bottom .resize-handle {
   position: absolute;
   top: 0;
@@ -751,8 +769,7 @@ defineExpose({
   transition: background-color 0.15s ease, height 0.15s ease;
 }
 
-/* Side dock rules */
-.drawer-container.pos-side {
+.drawer-container.pos-side:not(.is-embedded) {
   border-left: 1px solid var(--vp-c-divider);
   max-width: 50vw;
   min-width: 280px;
@@ -882,6 +899,11 @@ defineExpose({
   transition: all 0.15s ease;
 }
 
+.icon-action-btn.close-btn {
+  font-size: 15px;
+  line-height: 1;
+}
+
 .icon-action-btn:hover {
   border-color: var(--vp-c-brand-1);
   color: var(--vp-c-brand-1);
@@ -898,8 +920,8 @@ defineExpose({
 .drawer-body {
   flex: 1;
   min-height: 0;
-  overflow-y: auto; 
-  overflow-x: hidden; 
+  overflow-y: auto;
+  overflow-x: hidden;
   font-family: var(--vp-font-family-mono);
   font-size: var(--playground-font-size, 13px);
   line-height: 1.5;
@@ -913,7 +935,7 @@ defineExpose({
 }
 
 .drawer-body::-webkit-scrollbar-track {
-  background: transparent; 
+  background: transparent;
 }
 
 .drawer-body::-webkit-scrollbar-thumb {

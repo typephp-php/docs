@@ -97,23 +97,24 @@
       </div>
     </div>
 
-    <!-- Output Console -->
-    <div v-if="hasRun" class="snippet-console">
-      <div class="console-header">
-        <div class="console-stats">
-          <span :class="['exit-tag', exitCode === 0 ? 'success' : 'error']">
-            Exit {{ exitCode ?? 0 }}
-          </span>
-          <span v-if="duration" class="duration-tag">{{ duration }}ms</span>
-        </div>
-        <button class="close-console-btn" title="Close Output" @click="hasRun = false">&times;</button>
-      </div>
-
-      <div class="console-output">
-        <pre v-if="stdout" class="stdout-stream">{{ stdout }}</pre>
-        <pre v-if="stderr" class="stderr-stream">{{ stderr }}</pre>
-      </div>
-    </div>
+    <!-- Modular Embedded Console Output & Audit Report -->
+    <PlaygroundOutput
+      v-if="hasRun"
+      mode="embedded"
+      :stdout="stdout"
+      :stderr="stderr"
+      :exit-code="exitCode"
+      :duration="duration"
+      :status-message="''"
+      :is-running="isRunning"
+      :report="report"
+      :is-report-mode-active="localConfig.onViolation === 'report'"
+      :report-view-mode="snippetReportViewMode"
+      @clear="clearConsole"
+      @clear-report="report = null"
+      @update:report-view-mode="snippetReportViewMode = $event"
+      @close="hasRun = false"
+    />
   </div>
 </template>
 
@@ -121,8 +122,9 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { useData } from 'vitepress';
 import { getTypePHPEngine, type RunResult } from '../utils/typephp-engine';
-import { DEFAULT_PLAYGROUND_CONFIG, type PlaygroundConfig } from '../presets';
+import { DEFAULT_PLAYGROUND_CONFIG, type PlaygroundConfig, type AuditReportDocument } from '../presets';
 import PlaygroundConfigPopover from './PlaygroundConfigPopover.vue';
+import PlaygroundOutput from './PlaygroundOutput.vue';
 
 const props = withDefaults(defineProps<{
   code?: string;
@@ -152,6 +154,8 @@ const stdout = ref<string>('');
 const stderr = ref<string>('');
 const exitCode = ref<number | null>(null);
 const duration = ref<string>('');
+const report = ref<AuditReportDocument | null>(null);
+const snippetReportViewMode = ref<'cards' | 'json'>('cards');
 
 const localConfig = ref<PlaygroundConfig>({
   ...DEFAULT_PLAYGROUND_CONFIG,
@@ -214,6 +218,13 @@ function resetToSnippetDefaults() {
     ...DEFAULT_PLAYGROUND_CONFIG,
     ...props.config,
   };
+}
+
+function clearConsole() {
+  stdout.value = '';
+  stderr.value = '';
+  exitCode.value = null;
+  duration.value = '';
 }
 
 function escapeHtml(str: string): string {
@@ -314,6 +325,7 @@ async function runSnippet() {
   hasRun.value = true;
   stdout.value = '';
   stderr.value = '';
+  report.value = null;
 
   const engine = getTypePHPEngine(site.value.base || '/docs/');
 
@@ -324,6 +336,7 @@ async function runSnippet() {
     stderr.value = res.stderr;
     exitCode.value = res.exitCode;
     duration.value = res.duration;
+    report.value = res.report || null;
   } catch (err: any) {
     stderr.value = `Execution Error: ${err?.message || err}`;
     exitCode.value = 255;
@@ -555,8 +568,6 @@ html.dark .typephp-snippet-card {
   position: relative;
   background: var(--vp-code-block-bg, var(--vp-c-bg-soft));
   overflow: hidden;
-  border-bottom-left-radius: 7px;
-  border-bottom-right-radius: 7px;
 }
 
 .slot-content :deep(div[class*='language-']),
@@ -647,91 +658,6 @@ html.dark .typephp-snippet-card {
 :deep(.tok-var) { color: var(--snip-var) !important; }
 :deep(.tok-comment) { color: var(--snip-comment) !important; font-style: italic; }
 :deep(.tok-tag) { color: var(--snip-tag) !important; font-weight: 600; }
-
-/* Console Output */
-.snippet-console {
-  border-top: 1px solid var(--vp-c-divider);
-  background: var(--vp-c-bg-alt, rgba(0, 0, 0, 0.15));
-  border-bottom-left-radius: 7px;
-  border-bottom-right-radius: 7px;
-  overflow: hidden;
-}
-
-.console-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 10px;
-  background: var(--vp-c-bg-mute);
-  border-bottom: 1px solid var(--vp-c-divider);
-}
-
-.console-stats {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.exit-tag {
-  font-size: 9.5px;
-  font-weight: 700;
-  padding: 1px 5px;
-  border-radius: 3px;
-  font-family: var(--vp-font-family-mono);
-}
-
-.exit-tag.success {
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
-}
-
-.exit-tag.error {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-}
-
-.duration-tag {
-  font-size: 10px;
-  color: var(--vp-c-text-3);
-  font-family: var(--vp-font-family-mono);
-}
-
-.close-console-btn {
-  background: none;
-  border: none;
-  font-size: 15px;
-  line-height: 1;
-  color: var(--vp-c-text-3);
-  cursor: pointer;
-}
-
-.close-console-btn:hover {
-  color: var(--vp-c-text-1);
-}
-
-.console-output {
-  padding: 8px 12px;
-  max-height: 220px;
-  overflow-y: auto;
-  font-family: var(--vp-font-family-mono);
-  font-size: 11.5px;
-}
-
-.stdout-stream {
-  margin: 0;
-  white-space: pre-wrap;
-  color: var(--vp-c-text-1);
-}
-
-.stderr-stream {
-  margin: 4px 0 0 0;
-  white-space: pre-wrap;
-  color: #f87171;
-  background: rgba(239, 68, 68, 0.08);
-  border-left: 2px solid #ef4444;
-  padding: 6px 8px;
-  border-radius: 3px;
-}
 
 .spinner {
   width: 9px;
