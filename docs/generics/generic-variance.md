@@ -238,8 +238,8 @@ processCovariantConsumer(new Consumer(new Car()));
 
 A fundamental tension exists between how PHP's native type system operates and how static type checkers enforce generic containers.
 
-### Native PHP LSP: All Returns Are Covariant
-Under the Liskov Substitution Principle (LSP), method return types are inherently **covariant**. A subtype method may always return a narrower, more specific type than its parent. This is 100% valid in native PHP 7.4+:
+### Native PHP Return Covariance (LSP)
+Under the **Liskov Substitution Principle (LSP)**, method return types are inherently **covariant**. A subtype method may always return a narrower, more specific type than its parent. This is 100% valid in native PHP 7.4+:
 
 ```php:line-numbers
 class AnimalShelter {
@@ -252,30 +252,109 @@ class DogShelter extends AnimalShelter {
 }
 ```
 
-Because native PHP returns are covariant, framework developers intuitively assume that returning a specialized subtype collection (`Collection<Dog>`) from a method promising `Collection<Animal>` is completely valid.
+Because native PHP returns have worked covariantly for years, framework developers in Laravel, Symfony, and Shopware naturally assume that returning a specialized subtype collection (`Collection<Dog>`) from a method promising `Collection<Animal>` is completely valid.
 
 ### The Static Analyzer Clash
-Static analyzers (PHPStan, Psalm) ban this by default. They treat generic containers as invariant. They demand that you either mark the class as `@template-covariant T` or write `@return Collection<covariant Animal>`. 
+Static analyzers (PHPStan, Psalm) reject this by default. They treat generic containers as strictly invariant on return unless the author marks the class with `@template-covariant T` or annotates the return type with `<covariant Animal>`. 
 
-### The Solution: Pragmatic Return Mode
-TypePHP bridges the gap between pure static theory and the reality of PHP frameworks through a configurable switch in `typephp.php`:
+Because static analyzers are blind at runtime, they fear that a caller receiving `Collection<Animal>` might try to push a `Cat` into it later in the script.
+
+### The Solution: Pragmatic Return Mode (`strict_return_generic_invariance => false`)
+TypePHP bridges the gap between static theory and practical PHP frameworks through a configurable switch in `typephp.php`:
 
 ```php:line-numbers
 // typephp.php
 return [
     /*
     | - true  (Default / Strict): Requires exact invariant match or explicit <covariant T>.
-    | - false (Pragmatic Mode): Aligns with native PHP LSP covariance, allowing 
+    | - false (Pragmatic Mode): Aligns with native PHP return covariance, allowing
     |         subtypes on return types without explicit docblock tags.
     */
     'strict_return_generic_invariance' => false,
 ];
 ```
 
-### Why Pragmatic Mode is 100% Runtime-Safe in TypePHP
-Static analyzers ban covariant returns because they are blind at runtime and fear memory corruption later in the script. **TypePHP eliminates this risk entirely using `\WeakMap`.**
+### Try It Live: Pragmatic Mode vs. Strict Mode
 
-Even if pragmatic mode allows a `Collection<Dog>` to be returned under a `Collection<Animal>` contract, the underlying object never forgets its true type. If a caller later tries to corrupt the collection by adding a `Cat`, TypePHP instantly halts execution.
+The snippet below is initialized in **Pragmatic Mode** (`strictReturnGenericInvariance: false`):
+
+<TypePHPSnippet 
+  title="Return Covariance: Strict vs. Pragmatic Mode" 
+  :config="{ strictReturnGenericInvariance: false }" 
+  default-view="source"
+>
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+class Animal {}
+class Dog extends Animal {}
+class Cat extends Animal {}
+
+/**
+ * @template T
+ */
+class Collection
+{
+    /** @var array<int, T> */
+    public array $items = [];
+
+    /** @param T $item */
+    public function add(mixed $item): void
+    {
+        $this->items[] = $item;
+    }
+}
+
+/**
+ * Promises Collection<Animal>, but returns Collection<Dog>
+ *
+ * @return Collection<Animal>
+ */
+function getAnimals(): Collection
+{
+    /** @var Collection<Dog> $dogs */
+    $dogs = new Collection();
+    $dogs->add(new Dog());
+
+    // In Strict Mode: Rejected!
+    // In Pragmatic Mode: Allowed (matches native PHP return covariance)!
+    return $dogs;
+}
+
+echo "--- 1. Calling getAnimals() ---\n";
+$animals = getAnimals();
+echo "✓ Successfully returned Collection<Dog> under Collection<Animal> contract!\n\n";
+
+echo "--- 2. Downstream Write Protection ---\n";
+echo "Attempting to sneak a Cat into the returned collection...\n";
+// Even in pragmatic mode, WeakMap memory preserves T = Dog on the instance!
+$animals->add(new Cat());
+```
+
+</TypePHPSnippet>
+
+### Try the Interactive Challenge:
+
+1. **Step 1 (Pragmatic Mode)**: Click **Run**.
+   - Notice that `getAnimals()` returns `Collection<Dog>` cleanly without errors.
+   - However, look at Step 2: the moment code tries to sneak a `Cat` into `$animals`, TypePHP **immediately halts execution**:
+     ```text
+     TypeError: Collection::add(): Argument $item (template T = Dog) must be of type Dog, Cat given
+     ```
+   - *Why?* Even though the return boundary allowed the specialized collection to pass, **`\WeakMap` memory never forgot that the instance is locked to `T = Dog`**. Memory corruption is physically impossible.
+
+2. **Step 2 (Switch to Strict Mode)**:
+   - Click the **Configuration (⚙️)** gear button in the snippet header above.
+   - Toggle **Return Invariance** to **ON** (Strict Mode).
+   - Click **Run** again.
+   - Notice the error moves to line 39:
+     ```text
+     TypeError: getAnimals(): Return value expects Collection<invariant Animal>, but Collection<Dog> was returned
+     ```
+   - TypePHP now strictly halts at the return boundary, giving you exact **PHPStan invariance parity**!
 
 ---
 
