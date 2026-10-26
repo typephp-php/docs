@@ -35,7 +35,7 @@ class Collection
     }
 }
 
-/** @var Collection<User> $users */
+/** @var Collection<User> */
 $users = new Collection();
 $users->add(new User());
 
@@ -93,7 +93,7 @@ class AnimalGroup
     public function requireSame(mixed $animal): void {}
 }
 
-/** @var AnimalGroup<Dog> $group1 */
+/** @var AnimalGroup<Dog> */
 $group1 = new AnimalGroup();
 
 // Clone Group 1 into Group 2
@@ -156,7 +156,7 @@ class SmartBox
     }
 }
 
-/** @var SmartBox<Dog> $box */
+/** @var SmartBox<Dog> */
 $box = new SmartBox();
 
 echo "Cloning SmartBox...\n";
@@ -199,7 +199,7 @@ class GenericRecord
 }
 
 // Instantiate and bind T = string
-/** @var GenericRecord<string> $record */
+/** @var GenericRecord<string> */
 $record = new GenericRecord(10, 'Initial Payload');
 
 // 1. Valid property replacement: Overriding payload with another string
@@ -249,7 +249,7 @@ echo "Cloning and assigning to GenericBox<Cat>...\n";
 
 // The clone is a GenericBox<Dog>. 
 // Assigning it to a variable expecting GenericBox<Cat> violates invariance!
-/** @var GenericBox<Cat> $box2 */
+/** @var GenericBox<Cat> */
 $box2 = clone $box1;
 ```
 </TypePHPSnippet>

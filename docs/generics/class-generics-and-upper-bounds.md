@@ -6,7 +6,7 @@ Class generics parameterize classes and interfaces, transforming standard PHP cl
 
 ## What Are Reified Generics vs. Erased Generics?
 
-To understand why TypePHP is different from other languages, it helps to understand **Type Erasure**:
+To understand why TypePHP is fundamentally different from static analysis tools and compiled languages, it helps to understand **Type Erasure**:
 
 - **Type Erasure (Java, TypeScript, Python, Static Analyzers):** Generic type parameters like `<User>` are erased during compilation. At runtime, the container becomes an untyped `Object` or raw array. The running program has zero memory of what types the container was created to hold.
 - **Reified Generics (C#, TypePHP):** Generic type parameters are preserved in live memory. The object instance itself knows its bound type (`T = User`), enabling active runtime boundary enforcement and live runtime introspection.
@@ -24,7 +24,7 @@ function processCollection(Collection $collection): void
 }
 ```
 
-**TypePHP eliminates this blind spot completely.** Because generic bindings are attached to the object instance in `\WeakMap` memory, the object **never forgets its type**, even when passing through untyped boundaries:
+**TypePHP eliminates this blind spot completely.** Because generic bindings are attached to the object instance in `\WeakMap` memory, the object **never forgets its generic type**, even when passing through untyped functions:
 
 <TypePHPSnippet title="Reified Generics Across Untyped Boundaries" default-view="source">
 
@@ -54,7 +54,7 @@ class Collection
 }
 
 /**
- * An untyped helper function (simulating a framework pipeline or middleware)
+ * An untyped helper function (simulating a framework pipeline or middleware).
  * Notice: No generic DocBlock here! Native PHP only sees "Collection $c".
  */
 function untypedFrameworkPipeline(Collection $c): void
@@ -68,7 +68,8 @@ function untypedFrameworkPipeline(Collection $c): void
     $c->add(new Product('SKU-100'));
 }
 
-/** @var Collection<User> $users */
+// Notice: Using clean, unnamed @var syntax!
+/** @var Collection<User> */
 $users = new Collection();
 $users->add(new User('Alice'));
 
@@ -76,6 +77,28 @@ untypedFrameworkPipeline($users);
 ```
 
 </TypePHPSnippet>
+
+---
+
+## Prebinding Generic Instances (`/** @var Type */`)
+
+To parameterize a generic class upon instantiation, place an inline `@var` annotation above the assignment statement.
+
+### Clean, DRY Syntax (Unnamed `@var`)
+
+TypePHP does not require you to repeat the variable name in the DocBlock. TypePHP's AST parser automatically infers the target variable name from the assignment statement directly beneath it:
+
+```php:line-numbers
+// Recommended: Clean, Modern & DRY
+/** @var Collection<User> */
+$users = new Collection();
+
+// Also Supported: Explicit Variable Name
+/** @var Collection<User> $users */
+$users = new Collection();
+```
+
+Both forms behave identically at runtime. Omitting the variable name keeps your code clean and ensures your DocBlocks never get out of sync when renaming variables during refactoring.
 
 ---
 
@@ -140,19 +163,35 @@ class SingleBag
 }
 
 /**
- * @template-covariant K of array-key
+ * @template-covariant T
+ */
+class Producer
+{
+    /** @param T $item */
+    public function __construct(public mixed $item) {}
+}
+
+/**
+ * @template K of array-key
  * @template V
  */
 class KeyValueCatalog
 {
-    public function __construct(public mixed $k, public mixed $v) {}
+    /**
+     * @param K $k
+     * @param V $v
+     */
+    public function __construct(public string|int $k, public mixed $v) {}
 }
 
-/** @var SingleBag<User> $bag */
+/** @var SingleBag<User> */
 $bag = new SingleBag(new User());
 
-/** @var KeyValueCatalog<string, Product> $catalog */
+/** @var KeyValueCatalog<string, Product> */
 $catalog = new KeyValueCatalog('prod_01', new Product());
+
+/** @var Producer<User> */
+$producer = new Producer(new User());
 
 // 1. Single-Template Smart Fallback (No template name required!)
 echo "Single Bag Type: " . TypePHP::getGenericType($bag) . "\n\n";
@@ -166,15 +205,14 @@ echo "Catalog Full Bindings:\n";
 print_r(TypePHP::getGenericTypes($catalog));
 
 // 4. Inspect Declared Variance
-echo "Catalog K Variance: " . TypePHP::getGenericVariance($catalog, 'K') . "\n";
-echo "Catalog V Variance: " . TypePHP::getGenericVariance($catalog, 'V') . "\n";
+echo "\nProducer T Variance: " . TypePHP::getGenericVariance($producer, 'T') . "\n";
 ```
 
 </TypePHPSnippet>
 
 ---
 
-## How TypePHP Manages Memory via `\WeakMap`
+## Memory Management via `\WeakMap`
 
 TypePHP manages generic state using PHP's native `\WeakMap`:
 
@@ -198,7 +236,7 @@ When a class is included, TypePHP weaves guard rails directly into its internal 
 // In typephp.php:
 // 'include' => ['app/Collections/MyCollection.php']
 
-/** @var MyCollection<User> $users */
+/** @var MyCollection<User> */
 $users = new MyCollection();
 
 // Throws TypeError IMMEDIATELY inside MyCollection::add():
@@ -217,7 +255,7 @@ When a generic class is excluded, TypePHP **does not intercept its internal meth
 // 'exclude' => ['vendor/**']
 
 // 2. Label the collection in your application code:
-/** @var Illuminate\Support\Collection<string> $strings */
+/** @var Illuminate\Support\Collection<string> */
 $strings = new Collection(['valid_string', 12345]); // No error thrown yet!
 
 // 3. Application service acts as a strict boundary gatekeeper:
@@ -282,18 +320,18 @@ class Shelter
 }
 
 // 1. Valid: Dog satisfies upper bound Animal
-/** @var Shelter<Dog> $dogShelter */
+/** @var Shelter<Dog> */
 $dogShelter = new Shelter();
 $dogShelter->admit(new Dog('Buddy'));
 
 // 2. Valid: Cat satisfies upper bound Animal
-/** @var Shelter<Cat> $catShelter */
+/** @var Shelter<Cat> */
 $catShelter = new Shelter();
 $catShelter->admit(new Cat('Luna'));
 
 // 3. Invalid: Car violates upper bound Animal at assignment!
 echo "\nAttempting to instantiate Shelter<Car>...\n";
-/** @var Shelter<Car> $carShelter */
+/** @var Shelter<Car> */
 $carShelter = new Shelter();
 ```
 
@@ -329,13 +367,13 @@ class ScoreTracker
 }
 
 // 1. Valid instantiation
-/** @var ScoreTracker<positive-int> $tracker */
+/** @var ScoreTracker<positive-int> */
 $tracker = new ScoreTracker();
 $tracker->record(100);
 
 // 2. Invalid assignment: string violates upper bound positive-int!
 echo "\nAttempting to instantiate ScoreTracker<string>...\n";
-/** @var ScoreTracker<string> $badTracker */
+/** @var ScoreTracker<string> */
 $badTracker = new ScoreTracker();
 ```
 

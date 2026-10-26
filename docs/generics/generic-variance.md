@@ -161,6 +161,132 @@ processDogConsumer(new Consumer($puppyHandler));
 ```
 
 </TypePHPSnippet>
+---
+
+## Variance on Variable Assignments
+
+Generic variance is not limited to function parameters and return types. In TypePHP, **variable reassignments with inline `@var` annotations enforce variance rules directly at the assignment statement**:
+
+- **Invariant Containers (Default):** A variable typed as `Collection<Animal>` strictly rejects being assigned a `Collection<Dog>`.
+- **Covariant Producers (`@template-covariant`):** A variable typed as `Producer<Animal>` happily accepts a `Producer<Dog>`.
+- **Contravariant Consumers (`@template-contravariant`):** A variable typed as `Consumer<Dog>` happily accepts a `Consumer<Animal>`.
+
+### Interactive Demo: Variance Rules on Assignments
+
+The interactive snippet below demonstrates how invariant, covariant, and contravariant classes behave when reassigned between variables:
+
+<TypePHPSnippet title="Variance Enforcement on Variable Assignments" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+abstract class Animal {}
+class Dog extends Animal {}
+class Cat extends Animal {}
+
+/**
+ * 1. INVARIANT (Default)
+ * @template T
+ */
+class Collection
+{
+    /** @param T $item */
+    public function __construct(public mixed $item) {}
+}
+
+/**
+ * 2. COVARIANT (Producer)
+ * @template-covariant T
+ */
+class Producer
+{
+    /** @param T $item */
+    public function __construct(public mixed $item) {}
+}
+
+/**
+ * 3. CONTRAVARIANT (Consumer)
+ * @template-contravariant T
+ */
+class Consumer
+{
+    /** @param callable(T): void $handler */
+    public function __construct(public mixed $handler) {}
+}
+
+// -----------------------------------------------------------------------------
+// Demonstration 1: Covariant Assignment (Subtypes Permitted)
+// -----------------------------------------------------------------------------
+/** @var Producer<Animal> */
+$animalProducer = new Producer(new Dog());
+
+/** @var Producer<Dog> */
+$dogProducer = new Producer(new Dog());
+
+// Permitted: Producer is covariant, so Producer<Dog> can be assigned to Producer<Animal>!
+$animalProducer = $dogProducer;
+echo "✓ Covariant assignment succeeded\n";
+
+// -----------------------------------------------------------------------------
+// Demonstration 2: Contravariant Assignment (Supertypes Permitted)
+// -----------------------------------------------------------------------------
+/** @var Consumer<Dog> */
+$dogConsumer = new Consumer(fn (Dog $d) => null);
+
+/** @var Consumer<Animal> */
+$animalConsumer = new Consumer(fn (Animal $a) => null);
+
+// Permitted: Consumer is contravariant, so Consumer<Animal> can be assigned to Consumer<Dog>!
+$dogConsumer = $animalConsumer;
+echo "✓ Contravariant assignment succeeded\n\n";
+
+// -----------------------------------------------------------------------------
+// Demonstration 3: Invariant Assignment (Strict Match Required)
+// -----------------------------------------------------------------------------
+/** @var Collection<Animal> */
+$animalCollection = new Collection(new Dog());
+
+/** @var Collection<Dog> */
+$dogCollection = new Collection(new Dog());
+
+echo "Attempting to assign Collection<Dog> to variable expecting Collection<Animal>...\n";
+
+// FAILS! Collection is invariant by default.
+// Assigning a Collection<Dog> into a Collection<Animal> variable is strictly forbidden!
+$animalCollection = $dogCollection;
+```
+
+</TypePHPSnippet>
+
+### Diagnostic Output on Invariant Reassignment Failure
+
+When line 76 runs, TypePHP intercepts the assignment and immediately halts execution:
+
+```text
+✓ Covariant assignment succeeded
+✓ Contravariant assignment succeeded
+
+Attempting to assign Collection<Dog> to variable expecting Collection<Animal>...
+Fatal error: Uncaught TypePHP\Exception\TypeError: Variable $animalCollection expects Collection<invariant Animal>, but Collection<Dog> was given in playground.php on line 76
+Stack trace:
+#0 playground.php(76): TypePHP\Internal\RuntimeTypeChecker::checkVariable(Collection, 'Collection<Anim...', 'animalCollectio...', 'playground.php', NULL, NULL)
+#1 {main}
+  thrown in playground.php on line 76
+```
+
+### Why TypePHP Guards Invariant Assignments
+
+If TypePHP allowed `$animalCollection = $dogCollection;`, subsequent code could execute:
+
+```php:line-numbers
+$animalCollection->item = new Cat();
+```
+
+Because `$animalCollection` points to the exact same instance in memory as `$dogCollection`, that statement would sneak a `Cat` into what the rest of your application assumes is a `Collection<Dog>`.
+
+By validating variance directly on variable assignments, TypePHP ensures that **memory corruption is stopped at the exact line where the incompatible reference is assigned**.
 
 ---
 
@@ -430,7 +556,7 @@ function sneakCatIntoAnimalContainer(CovariantContainer $container): void
     $container->addItem(new Cat());
 }
 
-/** @var CovariantContainer<Dog> $dogContainer */
+/** @var CovariantContainer<Dog> */
 $dogContainer = new CovariantContainer();
 
 // TypePHP's WeakMap keeps $dogContainer pinned strictly to T = Dog!

@@ -1,16 +1,16 @@
 # Function Contracts
 
-Functions and methods form the public boundaries of your software modules. TypePHP enforces `@param`, `@param-out`, and `@return` annotations directly at function entry and exit points.
+Functions and methods form the public boundaries of your software modules. TypePHP enforces `@param` and `@return` annotations directly at function entry and exit points.
 
 ---
 
 ## Parameter Contracts (`@param`)
 
-When you declare `@param` annotations on a function or class method, TypePHP validates all incoming arguments before entering the function body:
+When you declare `@param` annotations on a function or class method, TypePHP validates all incoming arguments before entering the function body.
 
-> **Suppressing Function Contracts:** Need to skip type-checking on a legacy function or method? Add `@typephp-ignore` to its docblock. See [Ignore Annotations](/advanced/ignore-annotations) for full details.
+<TypePHPSnippet title="Parameter Contracts (@param)" default-view="source">
 
-```php
+```php:line-numbers
 <?php
 
 declare(strict_types=1);
@@ -22,33 +22,74 @@ declare(strict_types=1);
  */
 function registerUser(int $id, string $username, string $role): void
 {
-    // Executed only if all arguments pass validation
+    echo "✓ Registered {$role}: {$username} (#{$id})\n";
 }
 
-// Valid Call
+// 1. Valid Call
 registerUser(100, 'Alice', 'admin');
 
-// Invalid Call (Passing negative integer)
-registerUser(-5, 'Alice', 'admin');
-// Throws: TypeError: registerUser(): Argument $id must be of type positive-int, negative int (-5) given
+// 2. Invalid Call: Passing a negative integer!
+echo "\nAttempting to register user with negative ID...\n";
+registerUser(-5, 'Bob', 'viewer');
+
+echo "This line will never be reached!\n";
 ```
 
-> **Execution Order Note:** Native PHP type hints (e.g., `int $id`, `string $username`) are evaluated by PHP's C-engine *before* function execution begins. TypePHP's extended PHPDoc contracts (e.g., `positive-int`, `non-empty-string`) execute at the very start of the function/method body. If a native type hint fails, PHP throws its native `TypeError` before TypePHP's guard rails run.
+</TypePHPSnippet>
+
+> **Execution Order Note:** Native PHP type hints (e.g., `int $id`) are evaluated by PHP's C-engine *before* function execution begins. TypePHP's extended PHPDoc contracts (e.g., `positive-int`) execute at the very start of the function/method body. If a native type hint fails, PHP throws its native `TypeError` before TypePHP's guard rails run.
 
 ---
 
-## Sensitive Parameter Value Masking (PHP 8.2+ `#[SensitiveParameter]`)
+## Return Contracts (`@return`)
 
-PHP 8.2 introduced the native `#[SensitiveParameter]` attribute to protect sensitive values (such as passwords, API keys, secret PINs, and bearer tokens) from leaking into stack traces and error monitoring logs (e.g. Sentry, Datadog, Bugsnag, CloudWatch).
+TypePHP validates `return` statements before values are returned to the caller:
 
-TypePHP natively detects `#[SensitiveParameter]` on functions, class methods, constructors, promoted properties, and inherited interface contracts.
+<TypePHPSnippet title="Return Contracts (@return)" default-view="source">
 
-### Why Value Masking Matters
+```php:line-numbers
+<?php
 
-For standard parameters, TypePHP provides rich, descriptive error messages to make debugging effortless (such as `negative int (-5) given` or `empty string ('') given`). However, for sensitive parameters, printing the raw value risks exposing confidential credentials in exception messages and log files:
+declare(strict_types=1);
 
-```php
-use SensitiveParameter;
+/**
+ * @return array{id: positive-int, status: 'active'|'pending'}
+ */
+function getUserStatus(int $id): array
+{
+    if ($id <= 0) {
+        // Bug! Returning a negative integer violates the array shape contract!
+        return ['id' => $id, 'status' => 'active'];
+    }
+
+    return ['id' => $id, 'status' => 'active'];
+}
+
+echo "Calling getUserStatus(100)...\n";
+print_r(getUserStatus(100));
+
+echo "\nCalling getUserStatus(-10)...\n";
+getUserStatus(-10);
+```
+
+</TypePHPSnippet>
+
+---
+
+## Sensitive Parameter Value Masking (`#[SensitiveParameter]`)
+
+PHP 8.2 introduced the native `#[SensitiveParameter]` attribute to protect sensitive values (such as passwords, API keys, and tokens) from leaking into stack traces.
+
+TypePHP natively detects `#[SensitiveParameter]` on functions, class methods, constructors, promoted properties, and inherited interface contracts. 
+
+For standard parameters, TypePHP prints the exact invalid value (e.g. `negative int (-5) given`) to make debugging effortless. For sensitive parameters, **TypePHP masks the raw value to its native type** to prevent credentials from leaking into log files:
+
+<TypePHPSnippet title="Sensitive Parameter Value Masking" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
 
 /**
  * @param non-empty-string $username
@@ -56,214 +97,172 @@ use SensitiveParameter;
  */
 function login(
     string $username,
-    #[SensitiveParameter]
+    #[\SensitiveParameter]
     string $password
-): bool {
-    return true;
+): void {
+    echo "✓ Login successful!\n";
 }
 
-// 1. Normal parameter fails -> Full diagnostic visibility
-login('', 'correct_secret');
-// Throws: TypeError: login(): Argument $username must be of type non-empty-string, empty string ('') given
+// 1. Normal parameter fails -> Full diagnostic visibility!
+try {
+    login('', 'correct_secret');
+} catch (\TypeError $e) {
+    echo "Standard Error: " . $e->getMessage() . "\n\n";
+}
 
-// 2. Sensitive parameter fails -> Value is safely masked to native type!
-login('admin', 'my_super_secret_password_123');
-// Throws: TypeError: login(): Argument $password must be literal 'correct_secret', string given
-```
-
-### Native PHP Parity (No Information Disclosure)
-
-Rather than injecting explicit redaction markers like `[redacted]` (which can broadcast to attackers or log scrapers that a specific parameter is a secret), TypePHP achieves **100% exact parity with native PHP's `TypeError` behavior**:
-* **`string` parameter:** Formatted as `string given` (raw string value is never printed).
-* **`int` parameter:** Formatted as `int given` (raw number or sign is never printed).
-* **`array` shape parameter:** Formatted as `string given` / `array given` without dumping sensitive payload keys or structure.
-
-### Supported Sensitive Parameter Scopes
-
-TypePHP enforces sensitive value masking across all declaration styles:
-
-| Declaration Scope | Example | Behavior |
-| :--- | :--- | :--- |
-| **Standalone Functions** | `function login(#[SensitiveParameter] string $key)` | Value masked on failure |
-| **Class Methods** | `public function auth(#[SensitiveParameter] string $token)` | Value masked on failure |
-| **Promoted Properties** | `public function __construct(#[SensitiveParameter] public string $secret)` | Value masked on instantiation |
-| **Inherited Interfaces** | `interface Auth { public function verify(#[SensitiveParameter] string $pin); }` | Inherited by implementing classes |
-
----
-
-## Global Value Redaction (`redact_values => true`)
-
-While `#[SensitiveParameter]` is ideal for targeted parameters, relying **solely** on attributes has three major limitations in enterprise and production codebases:
-
-1. **Human Error & Coverage Gaps:** Developers often forget to annotate every sensitive parameter across hundreds of controllers, commands, and DTOs.
-2. **Unsupported Targets:** `#[SensitiveParameter]` only applies to method/function parameters. It **cannot** protect return values (`@return`), class property assignments (`$model->apiKey = ...`), or local inline variables (`/** @var ... */ $token = ...`).
-3. **PHP Version Restrictions:** `#[SensitiveParameter]` is only available on PHP 8.2+. Applications running on PHP 8.1 cannot use it.
-
-To solve this, TypePHP provides the **Global Value Redaction** toggle (`'redact_values' => true`).
-
-### Why Global Redaction is Useful
-
-When enabled, TypePHP treats **every single parameter, return value, class property, and local variable** across your entire application as sensitive:
-
-```
-# Without Redaction (Development Mode)
-TypeError: OrderService::checkout(): Argument $creditCard must be 'valid', string '4111-2222-3333-4444' given
-TypeError: Property User::$secretToken must be positive-int, negative int (-42) given
-TypeError: Return value must be of type positive-int, int (-999) returned
-
-# With Global Redaction (Production / Staging / Audit Mode)
-TypeError: OrderService::checkout(): Argument $creditCard must be 'valid', string given
-TypeError: Property User::$secretToken must be positive-int, int given
-TypeError: Return value must be of type positive-int, int returned
-```
-
-#### Key Benefits:
-* **Zero Code Modifications:** Protects legacy codebases, monolithic apps, and thousands of existing classes without requiring you to manually touch a single file or add attributes.
-* **PHP 8.1+ Compatibility:** Provides enterprise-grade credential masking even if your project has not upgraded to PHP 8.2 yet.
-* **Full-Spectrum Protection:** Redacts values across **all four** boundaries:
-  - Function & method arguments (`@param`).
-  - Function & method returns (`@return`).
-  - Class property assignments (both instance and static `$this->prop` / `self::$prop`).
-  - Inline `@var` variable reassignments and destructuring (`$var = ...`).
-* **Compliance Ready:** Essential for meeting strict data privacy standards (**HIPAA, GDPR, PCI-DSS, SOC 2**) by ensuring raw PII, payment details, or credentials are never written to error log aggregators (Sentry, Datadog) or TypePHP JSON audit reports.
-
-### How to Enable Global Redaction
-
-You can activate global redaction via configuration file, `composer.json`, or environment variable:
-
-#### 1. In `typephp.php`:
-```php
-return [
-    'redact_values' => true,
-];
-```
-
-#### 2. In `composer.json`:
-```json
-{
-  "extra": {
-    "typephp": {
-      "redact-values": true
-    }
-  }
+// 2. Sensitive parameter fails -> Value is safely masked!
+try {
+    login('admin', 'my_super_secret_password_123');
+} catch (\TypeError $e) {
+    echo "Sensitive Error: " . $e->getMessage() . "\n";
 }
 ```
 
-#### 3. Via Environment Variable (Recommended for Production & CI):
-```bash
-export TYPEPHP_REDACT_VALUES=true
-```
+</TypePHPSnippet>
 
 ---
 
-## Comparison: `#[SensitiveParameter]` vs. `'redact_values'`
+## Global Value Redaction (`redact_values`)
 
-| Feature | `#[SensitiveParameter]` (Attribute) | `'redact_values' => true` (Global Toggle) |
-| :--- | :--- | :--- |
-| **Scope** | Granular (per-parameter opt-in) | Universal (project-wide) |
-| **Protected Targets** | Function/method parameters only | Parameters, returns, properties, local variables, reports |
-| **PHP Version** | PHP 8.2+ only | PHP 8.1, 8.2, 8.3, 8.4, 8.5+ |
-| **Code Changes Required** | Yes (manual attribute placement) | None (zero configuration overhead) |
-| **Ideal Environment** | Local development (detailed errors elsewhere, masked on secrets) | Staging, production, CI/CD audit runs, compliance-restricted systems |
+While `#[SensitiveParameter]` is ideal for targeted parameters, it only works on PHP 8.2+ and cannot protect class properties, return values, or local variables.
 
-> **Best Practice:** Use `#[SensitiveParameter]` in your source code for explicit self-documentation. In your **production** and **staging** environments, set `TYPEPHP_REDACT_VALUES=true` as a fail-safe catch-all to guarantee that no secret or PII ever leaks into your centralized logs.
+To protect massive enterprise applications and ensure GDPR/HIPAA compliance across all error logs and JSON audit reports, TypePHP provides **Global Value Redaction**.
 
----
+When enabled, TypePHP treats **every single parameter, return value, class property, and local variable** across your entire application as sensitive.
 
-## Native Parameter Nullability & DocBlock Refinement (`?Type` and `Type|null`)
+<TypePHPSnippet 
+  title="Global Value Redaction" 
+  :config="{ redactValues: true }" 
+  default-view="source"
+>
 
-In modern PHP, parameters frequently declare native nullable typehints:
-* **PHP 7.1+ nullable shorthand:** `?array $tags = null`
-* **PHP 8.0+ native union syntax:** `int|null $id = null` or `array|null $options = null`
+```php:line-numbers
+<?php
 
-### The Inherent Syntax Limitation in Native PHP
+declare(strict_types=1);
 
-PHP's native type system cannot express inner collection or refinement types in method signatures. You cannot natively write `?string[] $tags = null` or `?positive-int $id = null` in PHP.
-
-Because of this language limitation, developers in major enterprise libraries (including **Symfony**, **Laravel**, and **Doctrine**) universally follow this convention:
-1. They declare the **outer nullability** natively in PHP: `?array $groups = null`
-2. They use the **DocBlock strictly to describe the inner elements**: `/** @param string[] $groups */`
-
-```php
-// Common pattern in Symfony and Laravel:
 /**
- * @param string[] $groups // DocBlock omits |null because native PHP already allows null!
+ * @param positive-int $secretPin
+ * @return 'success'|'failure'
  */
-public function configure(?array $groups = null): void
+function processPayment(int $secretPin): string
 {
-    // ...
+    return 'pending'; // Bug! Returns invalid literal.
+}
+
+// 1. Parameter Failure (Pin value -42 is masked!)
+try {
+    processPayment(-42);
+} catch (\TypeError $e) {
+    echo "Parameter Error: " . $e->getMessage() . "\n\n";
+}
+
+// 2. Return Failure (Returned literal 'pending' is masked!)
+try {
+    processPayment(1234);
+} catch (\TypeError $e) {
+    echo "Return Error: " . $e->getMessage() . "\n";
 }
 ```
 
-### How TypePHP Resolves Native Nullability (The Pragmatic Merge)
+</TypePHPSnippet>
 
-By default (`'respect_native_nullability' => true`), TypePHP merges native parameter nullability with the DocBlock's inner type:
+### The Diagnostic Difference
+
+| Violation Context | Standard Output (`redact_values => false`) | Redacted Output (`redact_values => true`) |
+|---|---|---|
+| **Empty string** | `...must be non-empty-string, empty string ('') given` | `...must be non-empty-string, string given` |
+| **Literal strings** | `...must be 'admin', string 'secret_pwd' given` | `...must be 'admin', string given` |
+| **Negative numbers** | `...must be positive-int, negative int (-42) given` | `...must be positive-int, int given` |
+
+---
+
+## Native Parameter Nullability (`?Type` and `Type|null`)
+
+In modern PHP, parameters frequently declare native nullable typehints (e.g., `?array $tags = null`). However, PHP's native type system cannot express inner types natively (you cannot write `?string[] $tags = null`).
+
+By default (`'respect_native_nullability' => true`), TypePHP pragmatically merges native parameter nullability with the DocBlock's inner type:
 
 > **Native `?array`** + **DocBlock `string[]`** $\rightarrow$ **Effective Contract: `?string[]` (`string[]|null`)**
 
-This provides complete type safety without breaking real-world code:
-* **Passing `null` (or omitting default argument):** Accepted cleanly.
-* **Passing `['admin', 'editor']`:** Accepted, and every element is verified as a valid string.
-* **Passing `[12345]`:** Rejected with `TypeError: Argument $groups[0] must be of type string, int (12345) given`.
-* **Passing `'not_an_array'`:** Rejected with `TypeError: Argument $groups must be of type array, string given`.
+<TypePHPSnippet title="Native Nullability Merging" default-view="source">
 
-### Supported Native Nullability Syntaxes
+```php:line-numbers
+<?php
 
-TypePHP automatically detects and respects all native PHP nullability declarations:
+declare(strict_types=1);
 
-| Native PHP Signature | DocBlock Annotation | Effective Evaluated Contract |
-| :--- | :--- | :--- |
-| `?array $tags = null` | `@param string[] $tags` | **`?string[]`** |
-| `int\|null $id = null` | `@param positive-int $id` | **`?positive-int`** |
-| `array\|null $opts = null` | `@param array{timeout: int} $opts` | **`array{timeout: int}\|null`** |
-| `?int $score = null` | `@param int<1, 100> $score` | **`int<1, 100>\|null`** |
+/**
+ * Notice: The DocBlock omits "|null", but the native signature allows it!
+ *
+ * @param string[] $groups 
+ */
+function configureGroups(?array $groups = null): void
+{
+    echo "✓ Groups configured\n";
+}
 
-### Strict Pedantic Mode (`'respect_native_nullability' => false`)
+// 1. Passing null is cleanly accepted!
+configureGroups(null);
 
-If your project requires 100% strict DocBlock auditing where DocBlocks are treated as the absolute literal law, set `'respect_native_nullability' => false` in `typephp.php`:
+// 2. Passing valid array of strings is accepted!
+configureGroups(['admin', 'editor']);
 
-```php
-// typephp.php
-return [
-    'respect_native_nullability' => false,
-];
+// 3. Passing an invalid array element still throws!
+echo "\nAttempting to pass array containing integer...\n";
+configureGroups(['admin', 12345]);
 ```
 
-In strict mode, if a native parameter is `?array $tags = null` but the DocBlock says `@param string[] $tags` (omitting `|null`), passing `null` will be strictly rejected with a `TypeError`.
+</TypePHPSnippet>
+
+### Try the Interactive Challenge:
+
+1. Click **Run** on the snippet above. Notice the error output says `int (12345) given`, revealing the exact raw integer in the array.
+2. Click the **Configuration (⚙️)** gear button in the snippet header above.
+3. Toggle **Redact Raw Values** to **ON**.
+4. Click **Run** again!
+5. Notice that the error message dynamically changes to `int given`. The raw integer `12345` has been securely masked by TypePHP's Global Value Redaction!
 
 ---
 
-## Tooling Annotation Priority Hierarchy (`@phpstan-*` > `@psalm-*` > `@*`)
+## Tooling Annotation Priority Hierarchy
 
-Modern PHP packages and frameworks (such as **Doctrine Collections**, **Symfony**, and **Laravel**) frequently declare both broad IDE-fallback annotations and strict static analysis contracts on the exact same method signature:
+Modern PHP packages (like Doctrine Collections and Symfony) frequently declare both broad IDE-fallback annotations and strict static analysis contracts on the exact same method signature.
 
-```php
-/**
- * @param mixed $element            // Broad fallback for standard IDEs
- * @phpstan-param positive-int $element // Refined contract for static analyzers
- *
- * @return mixed
- * @phpstan-return list<positive-int>
- */
-public function add(mixed $element): mixed;
-```
-
-When multiple tool annotations are declared on the same parameter or return value, TypePHP resolves the active contract using a deterministic **3-Tier Priority Hierarchy**:
+TypePHP resolves the active contract using a deterministic **3-Tier Priority Hierarchy**:
 
 $$\text{1. } \mathbf{@phpstan\text{-}*} \quad \longrightarrow \quad \text{2. } \mathbf{@psalm\text{-}*} \quad \longrightarrow \quad \text{3. } \mathbf{@* \text{ (Standard)}}$$
 
-### Why Priority Matters in Real-World Codebases
+TypePHP always enforces the tighter, intended contract automatically:
 
-1. **Refined Contracts Take Precedence:** Tool-specific annotations (`@phpstan-param`, `@phpstan-param-out`, `@psalm-return`) contain specific type constraints (such as generic templates, array shapes, or integer bounds) that standard `@param mixed` omits. TypePHP always enforces the tighter, intended contract.
-2. **Third-Party Framework Compatibility:** Libraries like Doctrine Collections declare `@phpstan-param T $element` on `Collection::add` alongside native `mixed $element`. TypePHP automatically prioritizes `@phpstan-param`, making generic collections enforce types at runtime without manual wrapper code.
+<TypePHPSnippet title="Tooling Annotation Priority" default-view="source">
 
-### Tooling Priority Matrix Across Boundary Contracts
+```php:line-numbers
+<?php
 
-| Boundary Type | Priority 1 (Highest) | Priority 2 | Priority 3 (Fallback) |
-| :--- | :--- | :--- | :--- |
-| **Parameters (Input)** | `@phpstan-param` | `@psalm-param` | `@param` |
-| **Out-Parameters (Exit)** | `@phpstan-param-out` | `@psalm-param-out` | `@param-out` |
-| **Return Values** | `@phpstan-return` | `@psalm-return` | `@return` |
+declare(strict_types=1);
+
+class Collection 
+{
+    /**
+     * @param mixed $element                 // Priority 3: Broad IDE fallback
+     * @phpstan-param positive-int $element  // Priority 1: Strict contract!
+     */
+    public function add(mixed $element): void 
+    {
+        echo "✓ Added element: {$element}\n";
+    }
+}
+
+$col = new Collection();
+$col->add(42); // Valid (positive-int)
+
+// TypePHP strictly ignores @param mixed and enforces @phpstan-param positive-int!
+echo "\nAttempting to add negative integer...\n";
+$col->add(-5);
+```
+
+</TypePHPSnippet>
 
 ---
 
@@ -271,7 +270,9 @@ $$\text{1. } \mathbf{@phpstan\text{-}*} \quad \longrightarrow \quad \text{2. } \
 
 TypePHP natively supports PHP 8.0+ Named Arguments. Because parameter contracts are mapped by parameter name rather than argument position index, you can pass named arguments in any order, and TypePHP will accurately validate each parameter:
 
-```php
+<TypePHPSnippet title="Named Arguments Resolution" default-view="source">
+
+```php:line-numbers
 <?php
 
 declare(strict_types=1);
@@ -281,231 +282,73 @@ declare(strict_types=1);
  * @param non-empty-string $username
  * @param int<1, 100> $age
  */
-function registerUser(int $id, string $username, int $age): void
+function registerUser(int $id, string $username, int $age): void 
 {
-    // ...
+    echo "✓ Registered {$username} (ID: {$id}, Age: {$age})\n";
 }
 
-// Valid Call: Arguments passed in completely reversed/swapped order
+// Valid: Arguments passed in completely swapped order
 registerUser(age: 25, username: 'Alice', id: 42);
 
-// Invalid Call: $id (-5) passed as 3rd named argument
-registerUser(age: 25, username: 'Alice', id: -5);
-// Throws: TypeError: registerUser(): Argument $id must be of type positive-int, negative int (-5) given
+// Invalid: $id (-5) passed as 3rd named argument triggers TypeError accurately on $id
+echo "\nPassing negative ID as 3rd named argument...\n";
+registerUser(age: 25, username: 'Bob', id: -5);
 ```
+
+</TypePHPSnippet>
 
 ---
 
-## Arguments Passed By-Reference (`&$param`)
+## Variadic Parameters (`...$items`)
 
-TypePHP natively supports PHP's by-reference parameter semantics (`function update(int &$value)`).
+When a function or method accepts variadic arguments (`...$items`), TypePHP validates every element passed in the variadic argument list:
 
-### How By-Reference Input Validation Works (`@param`)
+<TypePHPSnippet title="Variadic Parameter Validation" default-view="source">
 
-1. **Entry Guard Rails:** TypePHP inspects and validates the variable's value *on function entry* before the function body executes.
-2. **In-Place Caller Scope Mutation:** If the argument passes validation, the function body executes normally, and any modifications to the variable mutate the caller's variable in the caller's scope.
-3. **Safety Guarantee on Failure:** If an invalid value is passed into a by-reference parameter on entry, a `TypeError` is thrown *before* any code in the function body runs, ensuring the caller's variable remains **100% un-mutated and un-corrupted**.
-
-```php
+```php:line-numbers
 <?php
 
 declare(strict_types=1);
 
 /**
- * @param positive-int &$score
- * @param non-empty-string &$username
+ * @param positive-int ...$ids
  */
-function applyBonus(int &$score, string &$username): void
+function deleteUsers(int ...$ids): void 
 {
-    $score += 50;
-    $username = strtoupper($username);
+    echo "✓ Deleted " . count($ids) . " users\n";
 }
 
-// 1. Valid Call: Value is validated on entry and mutated in caller scope
-$userScore = 100;
-$userName = 'alice';
+// 1. Valid Call
+deleteUsers(10, 20, 30);
 
-applyBonus($userScore, $userName);
-
-echo $userScore; // Output: 150
-echo $userName;  // Output: 'ALICE'
-
-// 2. Invalid Call: Throws TypeError on entry, leaving caller variable untouched!
-$invalidScore = -10;
-$userTag = 'alice';
-
-try {
-    applyBonus($invalidScore, $userTag);
-} catch (\TypeError $e) {
-    echo $invalidScore; // Still -10 (Caller variable was never corrupted!)
-}
+// 2. Invalid Call (3rd variadic item violates positive-int)
+echo "\nAttempting to delete with a negative ID...\n";
+deleteUsers(10, 20, -5);
 ```
 
-### DocBlock Syntax Flexibility (`&$param` vs. `$param`)
-
-You can write your DocBlock annotations with or without the leading ampersand (`&`). Both are recognized identically by TypePHP's parser:
-
-```php
-// Option A: Explicit ampersand in DocBlock (Recommended)
-/**
- * @param positive-int &$count
- */
-function incrementCount(int &$count): void { $count++; }
-
-// Option B: Ampersand in native PHP signature only (Fully supported)
-/**
- * @param positive-int $count
- */
-function incrementCount(int &$count): void { $count++; }
-```
+</TypePHPSnippet>
 
 ---
 
-## By-Reference Out-Parameter Contracts (`@param-out`)
+## Class Constructors & Property Promotion
 
-While `@param` enforces pre-conditions on function entry, **`@param-out`** (and `@phpstan-param-out` / `@psalm-param-out`) enforces **post-conditions on function exit**.
-
-When a function mutates a by-reference variable, TypePHP validates the variable's value right before the function returns or exits.
-
-```php
-/**
- * On entry: $value can be anything (mixed)
- * On exit:  $value is guaranteed to be a positive integer
- *
- * @param mixed &$value
- * @param-out positive-int $value
- */
-function initializeIdentifier(mixed &$value): void
-{
-    $value = 42; // Valid mutation
-}
-
-$id = null;
-initializeIdentifier($id);
-echo $id; // Output: 42
-
-/**
- * Failing Out-Parameter Example
- *
- * @param mixed &$value
- * @param-out positive-int $value
- */
-function badInitialize(mixed &$value): void
-{
-    $value = -50; // Invalid: Violates positive-int!
-}
-
-$code = 'init';
-badInitialize($code);
-// Throws: TypeError: badInitialize(): Argument &$value (param-out) must be of type positive-int, negative int (-50) given
-```
-
-### Full Type Algebra Support in `@param-out`
-
-`@param-out` supports all advanced types available in TypePHP:
-* **Refinements:** `@param-out non-empty-string $token`
-* **Array Shapes:** `@param-out array{id: positive-int, token: non-empty-string} $payload`
-* **Unions & Intersections:** `@param-out ('active'|'pending') $status`, `@param-out (Countable&ArrayAccess) $collection`
-* **Generic Templates:** `@param-out T $output`
-
-### Disabling Out-Parameter Checks Independently
-
-You can independently enable or disable `@param-out` enforcement using the `'params_out'` configuration key in `typephp.php`:
-
-```php
-// typephp.php
-return [
-    'params'     => true, // Enforces @param on entry
-    'returns'    => true, // Enforces @return
-    'params_out' => true, // Set to false to disable @param-out exit validation
-];
-```
-
----
-
-## Class Methods (Instance & Static)
-
-All parameter, return, and out-parameter contract rules apply identically to **instance methods** (`public`, `protected`, `private`) and **static methods**:
-
-```php
-class UserService
-{
-    /**
-     * Instance Method Contract
-     *
-     * @param positive-int $id
-     * @return array{id: positive-int, name: non-empty-string}
-     */
-    public function findUser(int $id): array
-    {
-        return ['id' => $id, 'name' => 'Alice'];
-    }
-
-    /**
-     * Static Method Contract
-     *
-     * @param non-empty-string $role
-     * @return list<positive-int>
-     */
-    public static function getRoleIds(string $role): array
-    {
-        return [10, 20, 30];
-    }
-}
-
-$service = new UserService();
-
-// Invalid Instance Method Call ($id is negative)
-$service->findUser(-10);
-// Throws: TypeError: UserService::findUser(): Argument $id must be of type positive-int
-
-// Invalid Static Method Call ($role is empty string)
-UserService::getRoleIds('');
-// Throws: TypeError: UserService::getRoleIds(): Argument $role must be of type non-empty-string
-```
-
----
-
-## Class Constructors (`__construct`)
-
-TypePHP fully validates class constructor arguments, supporting both standard constructors and **Constructor Property Promotion** (PHP 8.0+).
-
-### Promoted Properties (PHP 8.0+)
-
-Annotate promoted properties in the constructor's docblock using standard `@param` or `@phpstan-param` tags:
-
-```php
-class Order
-{
-    /**
-     * @param positive-int $id
-     * @param non-empty-string $sku
-     * @param int<1, 100> $quantity
-     */
-    public function __construct(
-        public int $id,
-        public string $sku,
-        public int $quantity
-    ) {}
-}
-
-// Valid Instance
-new Order(1, 'SKU-99', 5);
-
-// Invalid Instance ($id is negative)
-new Order(-1, 'SKU-99', 5);
-// Throws: TypeError: Order::__construct(): Argument $id must be of type positive-int
-```
+TypePHP fully validates class constructor arguments, supporting both standard constructors and **Constructor Property Promotion**.
 
 ### Property `@var` Fallback for Un-Annotated Constructors
 
-If a constructor parameter is un-annotated (or lacks a `@param` tag), TypePHP automatically inspects the corresponding class property's `@var` / `@phpstan-var` docblock to infer the parameter contract:
+If a constructor parameter is un-annotated (or lacks a `@param` tag), TypePHP automatically inspects the corresponding class property's `@var` docblock to infer the parameter contract:
 
-```php
+<TypePHPSnippet title="Constructor Property Promotion Fallback" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 class User
 {
     /**
-     * @var string[]
+     * @var non-empty-string[]
      */
     public array $roles;
 
@@ -516,33 +359,14 @@ class User
     }
 }
 
-// Invalid Instance (element 1 is an integer)
-new User(['admin', 12345]);
-// Throws: TypeError: User::__construct(): Argument $roles[1] must be of type string, int (12345) given
+$user = new User(['admin', 'editor']);
+echo "✓ Instantiated user successfully\n\n";
+
+echo "Attempting to instantiate with empty string role...\n";
+new User(['admin', '']);
 ```
 
----
-
-## Return Contracts (`@return`)
-
-TypePHP validates `return` statements before values are returned to the caller:
-
-```php
-/**
- * @return array{id: positive-int, status: 'active'|'pending'}
- */
-function getUserStatus(int $id): array
-{
-    if ($id <= 0) {
-        return ['id' => $id, 'status' => 'active']; // Invalid: $id is negative
-    }
-
-    return ['id' => $id, 'status' => 'active'];
-}
-
-getUserStatus(-10);
-// Throws: TypeError: getUserStatus(): Return value['id'] must be of type positive-int
-```
+</TypePHPSnippet>
 
 ---
 
@@ -550,57 +374,60 @@ getUserStatus(-10);
 
 For fluent builder or service classes annotated with `@return $this`, TypePHP verifies strict object identity (`$result === $this`), preventing accidental instantiation of new instances:
 
-```php
+<TypePHPSnippet title="Fluent $this Identity Returns" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 class UserBuilder
 {
-    private string $name = '';
-
-    /**
-     * @return $this
-     */
+    /** @return $this */
     public function setName(string $name): self
     {
-        $this->name = $name;
-
+        echo "✓ Name set to {$name}\n";
         return $this; // Valid: Strict $this identity
     }
 
-    /**
-     * @return $this
-     */
+    /** @return $this */
     public function cloneSelf(): self
     {
-        return new self(); // Invalid: New instance returned instead of $this
+        return new self(); // Invalid: New instance returned instead of $this!
     }
 }
 
 $builder = new UserBuilder();
+$builder->setName('Alice');
+
+echo "\nAttempting to return a new instance instead of \$this...\n";
 $builder->cloneSelf();
-// Throws: TypeError: UserBuilder::cloneSelf(): Return value must be $this instance
 ```
+
+</TypePHPSnippet>
 
 ---
 
-## Late Static Binding Return Contracts (`@return static`)
+## Late Static Binding Returns (`@return static`)
 
-When a parent class method (static factory method or fluent instance method) is annotated with `@return static`, TypePHP enforces **Late Static Binding** at runtime. 
+When a parent class method is annotated with `@return static`, TypePHP enforces **Late Static Binding** at runtime. It dynamically verifies that the returned object is an instance of the **actual calling class**:
 
-It dynamically verifies that the returned object is an instance of the **actual calling class** (`UserEntityFactory`), strictly rejecting parent instances (`BaseEntityFactory`), sibling instances (`AdminEntityFactory`), or generic objects (`stdClass`):
+<TypePHPSnippet title="Late Static Binding Returns" default-view="source">
 
-```php
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 abstract class BaseEntityFactory
 {
-    /**
-     * @return static
-     */
-    public static function create(): static
+    /** @return static */
+    public static function create(): object
     {
         return new static();
     }
-
-    /**
-     * @return static
-     */
+    
+    /** @return static */
     public static function createSibling(): object
     {
         return new AdminEntityFactory(); // Invalid: Returns sibling instead of calling class!
@@ -610,119 +437,23 @@ abstract class BaseEntityFactory
 class UserEntityFactory extends BaseEntityFactory {}
 class AdminEntityFactory extends BaseEntityFactory {}
 
-// Valid: Returns UserEntityFactory instance matching the late-static calling class
+echo "Creating valid UserEntityFactory instance...\n";
 $user = UserEntityFactory::create();
+echo "✓ Created: " . get_class($user) . "\n\n";
 
 // Invalid: UserEntityFactory called, but AdminEntityFactory was returned!
+echo "Calling createSibling()...\n";
 UserEntityFactory::createSibling();
-// Throws: TypeError: UserEntityFactory::createSibling(): Return value must be of type App\UserEntityFactory, App\AdminEntityFactory returned
 ```
 
-### Late Static Binding with Generics (`static<T>`)
-
-Late static binding seamlessly integrates with TypePHP's Reified Generics engine. A static factory can return a specialized generic instance of the late-static-bound calling class:
-
-```php
-/**
- * @template T
- */
-abstract class BaseGenericFactory
-{
-    /**
-     * @template TValue
-     * @param TValue $value
-     * @return static<TValue>
-     */
-    public static function of(mixed $value): static
-    {
-        return new static($value);
-    }
-}
-
-class UserGenericFactory extends BaseGenericFactory {}
-
-// 1. Returns UserGenericFactory instance
-// 2. Binds generic template T = Dog in WeakMap memory!
-$factory = UserGenericFactory::of(new Dog());
-```
+</TypePHPSnippet>
 
 ---
 
-## Variadic Parameter Contracts
+## By-Reference Contracts & Mutations
 
-When a function or method accepts variadic arguments (`...$items`), TypePHP validates every element passed in the variadic argument list:
+Because by-reference variables (`&$param`), out-parameters (`@param-out`), and in-place mutations (e.g. inside `foreach` loops or `array_walk`) constitute a massive subset of runtime behavior, TypePHP features an entire subsystem dedicated to reference safety.
 
-```php
-/**
- * @param positive-int ...$ids
- */
-function deleteUsers(int ...$ids): void
-{
-    // ...
-}
-
-// Valid Call
-deleteUsers(10, 20, 30);
-
-// Invalid Call (3rd variadic item violates positive-int)
-deleteUsers(10, 20, -5);
-// Throws: TypeError: deleteUsers(): Argument $ids[2] must be of type positive-int
-```
-
----
-
-## Conditional Return Types
-
-TypePHP supports parameter-based conditional return types (`@return ($param is true ? TypeA : TypeB)`):
-
-```php
-/**
- * @param bool $asInt
- * @param mixed $value
- * @return ($asInt is true ? positive-int : non-empty-string)
- */
-function formatValue(bool $asInt, mixed $value): mixed
-{
-    return $value;
-}
-
-// Valid Calls
-formatValue(true, 42);       // Evaluates return type as positive-int
-formatValue(false, 'hello'); // Evaluates return type as non-empty-string
-
-// Invalid Call
-formatValue(true, 'not_an_int');
-// Throws: TypeError: formatValue(): Return value must be of type positive-int
-```
-
----
-
-## PHP 8.0+ Attributes Coexistence
-
-TypePHP seamlessly coexists with native PHP 8.0+ Attributes (`#[Route]`, `#[Inject]`, `#[Validate]`, `#[SensitiveParameter]`). 
-
-You can place your PHPDoc annotations **either above or below** native PHP attributes on properties, methods, or functions. TypePHP's AST engine and PHP's Reflection API process both metadata channels independently without any syntax conflicts:
-
-```php
-// Option A: DocBlock ABOVE Attribute (Supported)
-/**
- * @param positive-int $id
- * @return array{id: positive-int, username: non-empty-string}
- */
-#[Route('/user/{id}', method: 'GET')]
-public function showUser(int $id): array
-{
-    return ['id' => $id, 'username' => 'Alice'];
-}
-
-// Option B: DocBlock BELOW Attribute (Supported)
-#[Route('/user/{id}', method: 'GET')]
-/**
- * @param positive-int $id
- * @return array{id: positive-int, username: non-empty-string}
- */
-public function showUser(int $id): array
-{
-    return ['id' => $id, 'username' => 'Alice'];
-}
-```
+::: tip Continue Reading
+Learn how TypePHP actively guards variables against memory corruption via aliases in the [By-Reference Contracts & Mutations](/core-concepts/by-reference-contracts) guide.
+:::

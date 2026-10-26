@@ -179,7 +179,15 @@ declare(strict_types=1);
 class Dictionary
 {
     public array $items = [];
-    public function put(mixed $key, mixed $val): void { $this->items[$key] = $val; }
+
+    /**
+     * @param K $key
+     * @param V $val
+     */
+    public function put(mixed $key, mixed $val): void 
+    { 
+        $this->items[$key] = $val; 
+    }
 }
 
 class User {}
@@ -196,20 +204,20 @@ function processStringDictionary(Dictionary $dict): void
 }
 
 // 1. Valid: String keys with User values
-/** @var Dictionary<string, User> $userDict */
+/** @var Dictionary<string, User> */
 $userDict = new Dictionary();
 $userDict->put('user_1', new User());
 processStringDictionary($userDict);
 
 // 2. Valid: String keys with Product values
-/** @var Dictionary<string, Product> $prodDict */
+/** @var Dictionary<string, Product> */
 $prodDict = new Dictionary();
 $prodDict->put('prod_1', new Product());
 processStringDictionary($prodDict);
 
 // 3. Invalid: Integer keys violate Dictionary<string, *>!
 echo "\nPassing integer-keyed dictionary into string-keyed wildcard expectation...\n";
-/** @var Dictionary<int, User> $intDict */
+/** @var Dictionary<int, User> */
 $intDict = new Dictionary();
 $intDict->put(1, new User());
 processStringDictionary($intDict);
@@ -268,7 +276,7 @@ function viewSecretDashboard(Session $session): void
     echo "✓ Access GRANTED to secret dashboard!\n";
 }
 
-/** @var Session<'unauthenticated'> $session */
+/** @var Session<'unauthenticated'> */
 $session = new Session();
 echo "Initial State: " . TypePHP::getGenericType($session) . "\n";
 
@@ -327,7 +335,7 @@ class MutableCollection
     }
 }
 
-/** @var MutableCollection<Dog> $col */
+/** @var MutableCollection<Dog> */
 $col = new MutableCollection();
 echo "Initial Type: " . TypePHP::getGenericType($col) . "\n";
 
@@ -508,7 +516,9 @@ groomPet(new Car()); // Throws TypeError: Car does not satisfy upper bound (Dog 
 Enforce that generic items inside a container must implement multiple interfaces:
 
 ```php:line-numbers
-/** @var Collection<Countable & ArrayAccess> $collections */
+/**
+ *  @var Collection<Countable & ArrayAccess> 
+ */
 $collections = new Collection();
 
 $collections->add(new ArrayObject([1, 2])); // Valid (Implements both)
