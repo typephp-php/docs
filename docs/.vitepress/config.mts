@@ -78,9 +78,9 @@ export default defineConfig({
         text: 'Enforcement Boundaries',
         items: [
           { text: 'Function & Method Contracts', link: '/core-concepts/function-contracts' },
-          { text: 'By-Reference Contracts & Mutations', link: '/core-concepts/by-reference-contracts' },
-          { text: 'Class Property Validation & Hooks', link: '/core-concepts/property-validation' },
           { text: 'Inline Variables & Destructuring', link: '/core-concepts/inline-variables' },
+          { text: 'Class Property Validation & Hooks', link: '/core-concepts/property-validation' },
+          { text: 'By-Reference Contracts & Mutations', link: '/core-concepts/by-reference-contracts' },
           { text: 'Magic Annotations (@property & @method)', link: '/core-concepts/magic-annotations' },
         ]
       },

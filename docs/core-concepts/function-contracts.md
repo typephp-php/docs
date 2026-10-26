@@ -332,13 +332,60 @@ deleteUsers(10, 20, -5);
 
 ## Class Constructors & Property Promotion
 
-TypePHP fully validates class constructor arguments, supporting both standard constructors and **Constructor Property Promotion**.
+TypePHP fully validates class constructor arguments, natively supporting PHP 8.0+ **Constructor Property Promotion**. 
 
-### Property `@var` Fallback for Un-Annotated Constructors
+You can define the contract for a promoted property in two ways:
+1. Using a standard `@param` tag in the constructor's main DocBlock.
+2. Using an inline `/** @var Type */` tag placed **directly above the promoted property argument**. TypePHP intelligently reads the property-level `@var` tag and applies it as a fallback contract for the incoming constructor parameter!
 
-If a constructor parameter is un-annotated (or lacks a `@param` tag), TypePHP automatically inspects the corresponding class property's `@var` docblock to infer the parameter contract:
+<TypePHPSnippet title="Constructor Property Promotion & @var Fallback" default-view="source">
 
-<TypePHPSnippet title="Constructor Property Promotion Fallback" default-view="source">
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+class Account
+{
+    /**
+     * 1. You can use standard @param tags in the method docblock...
+     *
+     * @param positive-int $accountId
+     */
+    public function __construct(
+        public int $accountId,
+
+        /** 2. Or place @var directly above the promoted property argument! */
+        /** @var non-empty-string */
+        public string $username
+    ) {
+        echo "✓ Account created: {$this->username} (#{$this->accountId})\n";
+    }
+}
+
+// 1. Valid Instance
+$account = new Account(42, 'Alice');
+
+// 2. Invalid Instance (Violates @param positive-int)
+try {
+    echo "\nPassing negative ID...\n";
+    new Account(-5, 'Alice');
+} catch (\TypeError $e) {
+    echo "Caught: " . $e->getMessage() . "\n";
+}
+
+// 3. Invalid Instance (Violates inline @var non-empty-string fallback!)
+echo "\nPassing empty string username...\n";
+new Account(42, '');
+```
+
+</TypePHPSnippet>
+
+### Property `@var` Fallback for Standard Constructors
+
+This automatic fallback behavior is not limited to promoted properties. If a standard (non-promoted) constructor parameter lacks a `@param` tag, TypePHP searches the class for a declared property with a matching name and inherits its `@var` contract:
+
+<TypePHPSnippet title="Standard Property @var Fallback" default-view="source">
 
 ```php:line-numbers
 <?php
@@ -356,13 +403,13 @@ class User
     public function __construct(array $roles)
     {
         $this->roles = $roles;
+        echo "✓ User roles assigned\n";
     }
 }
 
 $user = new User(['admin', 'editor']);
-echo "✓ Instantiated user successfully\n\n";
 
-echo "Attempting to instantiate with empty string role...\n";
+echo "\nAttempting to instantiate with empty string role...\n";
 new User(['admin', '']);
 ```
 
