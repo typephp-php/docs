@@ -43,7 +43,7 @@ export default defineConfig({
       { text: 'Home', link: '/' },
       { text: 'Documentation', link: '/getting-started/installation' },
       { text: 'Playground', link: '/playground' },
-      { text: 'Generics', link: '/generics/basics-and-bounds' },
+      { text: 'Generics', link: '/generics/class-generics-and-upper-bounds' },
       { text: 'Blog', link: '/blog/' },
     ],
     sidebar: [
@@ -57,27 +57,11 @@ export default defineConfig({
         ]
       },
       {
-        text: 'Testing & Codebase Auditing',
-        items: [
-          { text: 'Pest & PHPUnit Integration', link: '/testing/pest-and-phpunit' },
-          { text: 'Violation Reporting & Auditing', link: '/core-concepts/violation-reporting' },
-        ]
-      },
-      {
-        text: 'Runtime Generics (Flagship)',
-        items: [
-          { text: 'Class Generics & Upper Bounds', link: '/generics/class-generics-and-upper-bounds' },
-          { text: 'Function & Static Method Generics', link: '/generics/function-and-static-method-generics' },
-          { text: 'Generic Variance', link: '/generics/generic-variance' },
-          { text: 'Inheritance, Interfaces & Traits', link: '/generics/inheritance-interfaces-and-traits' },
-          { text: 'Advanced Generic Patterns', link: '/generics/advanced-generic-patterns' },
-          { text: 'Cloning Generic Objects', link: '/generics/cloning-generic-objects' },
-        ]
-      },
-      {
         text: 'Enforcement Boundaries',
+        collapsed: false,
         items: [
           { text: 'Function & Method Contracts', link: '/core-concepts/function-contracts' },
+          { text: 'Liskov & DocBlock Inheritance', link: '/core-concepts/liskov-and-inheritance' },
           { text: 'Inline Variables & Destructuring', link: '/core-concepts/inline-variables' },
           { text: 'Class Property Validation & Hooks', link: '/core-concepts/property-validation' },
           { text: 'By-Reference Contracts & Mutations', link: '/core-concepts/by-reference-contracts' },
@@ -86,6 +70,7 @@ export default defineConfig({
       },
       {
         text: 'Type Reference & Algebra',
+        collapsed: false,
         items: [
           { text: 'Primitives, Ranges & Refinements', link: '/supported-types/primitives-and-scalars' },
           { text: 'Arrays, Lists & Shape Composition', link: '/supported-types/arrays-and-shapes' },
@@ -96,11 +81,31 @@ export default defineConfig({
         ]
       },
       {
+        text: 'Runtime Generics (Flagship)',
+        collapsed: false,
+        items: [
+          { text: 'Class Generics & Upper Bounds', link: '/generics/class-generics-and-upper-bounds' },
+          { text: 'Function & Static Method Generics', link: '/generics/function-and-static-method-generics' },
+          { text: 'Generic Variance', link: '/generics/generic-variance' },
+          { text: 'Inheritance, Interfaces & Traits', link: '/generics/inheritance-interfaces-and-traits' },
+          { text: 'Advanced Generic Patterns', link: '/generics/advanced-generic-patterns' },
+          { text: 'Cloning Generic Objects', link: '/generics/cloning-generic-objects' },
+        ]
+      },
+      {
+        text: 'Testing & Codebase Auditing',
+        collapsed: false,
+        items: [
+          { text: 'Pest & PHPUnit Integration', link: '/testing/pest-and-phpunit' },
+          { text: 'Violation Reporting & Auditing', link: '/testing/violation-reporting' },
+        ]
+      },
+      {
         text: 'Architecture & Optimization',
+        collapsed: true,
         items: [
           { text: 'How It Works (StreamWrapper & LTW)', link: '/advanced/how-it-works' },
           { text: 'Compile-Time Check Elimination', link: '/advanced/compile-time-elimination' },
-          { text: 'Liskov Substitution & Inheritance', link: '/advanced/liskov-and-inheritance' },
           { text: 'Stub Files (Third-Party Overrides)', link: '/advanced/stubs' },
           { text: 'Vendor Isolation & Path Filtering', link: '/advanced/vendor-and-path-filtering' },
           { text: 'Ignore Annotations (@typephp-ignore)', link: '/advanced/ignore-annotations' },
@@ -110,6 +115,7 @@ export default defineConfig({
       },
       {
         text: 'Production & Performance',
+        collapsed: true,
         items: [
           { text: 'Production Readiness & Strategy', link: '/production/production-readiness' },
           { text: 'Performance & JIT Benchmarks', link: '/production/performance-considerations' },

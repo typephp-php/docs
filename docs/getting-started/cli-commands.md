@@ -64,7 +64,7 @@ vendor/bin/typephp report
 This status code behavior allows `vendor/bin/typephp report` to function as a standalone non-blocking audit step in CI/CD build pipelines.
 
 ::: tip Full Audit & Sharding Guide
-To learn more about configuring audit mode (`'on_violation' => 'report'`), parallel test worker sharding (Pest Parallel / ParaTest), and CI gatekeeping (`fail_on_report`), see the dedicated [Violation Reporting & Auditing](/core-concepts/violation-reporting) guide.
+To learn more about configuring audit mode (`'on_violation' => 'report'`), parallel test worker sharding (Pest Parallel / ParaTest), and CI gatekeeping (`fail_on_report`), see the dedicated [Violation Reporting & Auditing](/testing/violation-reporting) guide.
 :::
 
 ---

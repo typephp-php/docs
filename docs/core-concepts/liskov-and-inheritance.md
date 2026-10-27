@@ -6,9 +6,11 @@ TypePHP respects the Liskov Substitution Principle (LSP). Child classes, impleme
 
 ## Abstract Method & Interface Contract Inheritance
 
-When a child class implements an interface or extends an abstract parent class, it inherits all `@param` and `@return` contracts declared on the parent methods:
+When a child class implements an interface or extends an abstract parent class, it automatically inherits all `@param`, `@return`, and `@param-out` contracts declared on the ancestor methods:
 
-```php
+<TypePHPSnippet title="Interface & Abstract Method Contract Inheritance" default-view="source">
+
+```php:line-numbers
 <?php
 
 declare(strict_types=1);
@@ -37,26 +39,40 @@ class UserRepository implements UserRepositoryInterface
 
 $repo = new UserRepository();
 
-// Valid Call
-$repo->findUser(42);
+// 1. Happy Path: Valid parameter and return shape
+$user = $repo->findUser(42);
+echo "✓ Found user #{$user['id']}: {$user['username']}\n\n";
 
-// Invalid Call ($id is negative)
-$repo->findUser(-5);
-// Throws: TypeError: UserRepository::findUser(): Argument $id must be of type positive-int
+// 2. Failure: Parameter $id = -5 violates inherited positive-int contract
+try {
+    $repo->findUser(-5);
+} catch (\TypeError $e) {
+    echo "✗ Inherited parameter contract violation:\n   " . $e->getMessage() . "\n";
+}
 ```
+
+</TypePHPSnippet>
 
 ---
 
 ## Deep Multi-Level Inheritance Chains
 
-TypePHP recursively traverses inheritance trees down to any depth across classes, interfaces, and traits:
+TypePHP recursively traverses inheritance trees down to any depth across classes, interfaces, and traits.
 
-### 4-Level Class Inheritance (`Level 1` $\rightarrow$ `Level 2` $\rightarrow$ `Level 3` $\rightarrow$ `Level 4`)
+### 4-Level Class Inheritance (`Level 1` $\to$ `Level 2` $\to$ `Level 3` $\to$ `Level 4`)
 
-```php
+<TypePHPSnippet title="Deep Multi-Level Class Inheritance" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 abstract class DeepLevel1
 {
     /**
+     * Contract declared on root ancestor
+     *
      * @param positive-int $id
      * @return non-empty-string
      */
@@ -68,7 +84,7 @@ abstract class DeepLevel3 extends DeepLevel2 {}
 
 class DeepLevel4Executor extends DeepLevel3
 {
-    // Level 4 concrete class with NO docblock! Inherits from Level 1 root.
+    // Concrete implementation with NO docblock! Inherits from Level 1 root.
     public function process(int $id): string
     {
         return "item_{$id}";
@@ -77,14 +93,30 @@ class DeepLevel4Executor extends DeepLevel3
 
 $executor = new DeepLevel4Executor();
 
-// $id = -50 violates Level 1 abstract parent's @param positive-int
-$executor->process(-50);
-// Throws: TypeError: DeepLevel4Executor::process(): Argument $id must be of type positive-int
+// 1. Happy Path
+echo "✓ Processed: " . $executor->process(42) . "\n\n";
+
+// 2. Failure: $id = -50 violates Level 1 root abstract @param positive-int
+try {
+    $executor->process(-50);
+} catch (\TypeError $e) {
+    echo "✗ 4-level deep inheritance check failure:\n   " . $e->getMessage() . "\n";
+}
 ```
+
+</TypePHPSnippet>
+
+---
 
 ### Deep Interface Chains (`RootInterface` $\leftarrow$ `MidInterface` $\leftarrow$ `ChildInterface`)
 
-```php
+<TypePHPSnippet title="Deep Interface Inheritance Chains" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 interface RootInterface
 {
     /**
@@ -107,10 +139,19 @@ class InterfaceExecutor implements ChildInterface
 
 $executor = new InterfaceExecutor();
 
-// $code = -10 violates RootInterface's @param positive-int
-$executor->execute(-10);
-// Throws: TypeError: InterfaceExecutor::execute(): Argument $code must be of type positive-int
+// 1. Happy Path
+$executor->execute(10);
+echo "✓ Executed root interface contract cleanly\n\n";
+
+// 2. Failure: $code = -10 violates RootInterface's @param positive-int
+try {
+    $executor->execute(-10);
+} catch (\TypeError $e) {
+    echo "✗ Deep interface inheritance failure:\n   " . $e->getMessage() . "\n";
+}
 ```
+
+</TypePHPSnippet>
 
 ---
 
@@ -118,7 +159,13 @@ $executor->execute(-10);
 
 In PHP 8.4, interfaces can declare property hooks (`{ get; set; }`). Implementing classes inherit property `@var` contracts directly from the interface:
 
-```php
+<TypePHPSnippet title="PHP 8.4 Interface Property Hook Inheritance" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 interface UserInterface
 {
     /**
@@ -150,15 +197,26 @@ class User implements UserInterface
 
 $user = new User();
 
-// Invalid Read ($user->_id = -5 violates interface's inherited @var positive-int)
-$user->_id = -5;
-$value = $user->id;
-// Throws: TypeError: Property User::$id must be of type positive-int
+// 1. Valid Access
+echo "✓ Profile initialized: User={$user->username}, ID={$user->id}\n\n";
 
-// Invalid Write ($username = '' violates interface's inherited @var non-empty-string)
-$user->username = '';
-// Throws: TypeError: Property User::$username must be of type non-empty-string
+// 2. Invalid Read: $user->_id = -5 violates interface's inherited @var positive-int
+try {
+    $user->_id = -5;
+    $val = $user->id;
+} catch (\TypeError $e) {
+    echo "✗ Interface hooked property read check:\n   " . $e->getMessage() . "\n\n";
+}
+
+// 3. Invalid Write: Empty string violates interface's inherited @var non-empty-string
+try {
+    $user->username = '   ';
+} catch (\TypeError $e) {
+    echo "✗ Interface hooked property write check:\n   " . $e->getMessage() . "\n";
+}
 ```
+
+</TypePHPSnippet>
 
 ---
 
@@ -166,7 +224,13 @@ $user->username = '';
 
 Instance and static properties declared in Traits inherit their `@var` docblock contracts when used by a class:
 
-```php
+<TypePHPSnippet title="Trait Instance & Static Property Inheritance" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 trait IdentifiableTrait
 {
     /**
@@ -197,53 +261,27 @@ class AppModel
 
 $model = new AppModel();
 
-// $val = -50 violates Trait's @var positive-int
-$model->setTraitId(-50);
-// Throws: TypeError: Property AppModel::$traitId must be of type positive-int
+// 1. Valid Updates
+$model->setTraitId(100);
+AppModel::setTraitVersion('2.0');
+echo "✓ Trait properties updated: ID={$model->traitId}, Version=" . AppModel::$traitVersion . "\n\n";
 
-// $val = '' violates Trait's @var non-empty-string
-AppModel::setTraitVersion('');
-// Throws: TypeError: Property AppModel::$traitVersion must be of type non-empty-string
+// 2. Invalid Instance Property: $val = -50 violates Trait's @var positive-int
+try {
+    $model->setTraitId(-50);
+} catch (\TypeError $e) {
+    echo "✗ Trait instance property check:\n   " . $e->getMessage() . "\n\n";
+}
+
+// 3. Invalid Static Property: Empty string violates Trait's @var non-empty-string
+try {
+    AppModel::setTraitVersion('');
+} catch (\TypeError $e) {
+    echo "✗ Trait static property check:\n   " . $e->getMessage() . "\n";
+}
 ```
 
----
-
-## Trait Inheritance Across Parent-Child Classes
-
-When a parent class uses a Trait (`ParentClass` uses `LoggerTrait`), any child class extending the parent (`ChildClass extends ParentClass`) automatically inherits all `@param`, `@return`, and `@var` contracts declared on the parent's Trait:
-
-```php
-trait LoggerTrait
-{
-    /**
-     * @param positive-int $level
-     * @return non-empty-string
-     */
-    public function logMessage(int $level, string $msg): string
-    {
-        return "log_{$level}_{$msg}";
-    }
-}
-
-class ParentService
-{
-    use LoggerTrait; // Parent class uses trait
-}
-
-class ChildService extends ParentService
-{
-    // Child class inherits logMessage() without declaring a docblock
-}
-
-$child = new ChildService();
-
-// Valid Call
-$child->logMessage(10, 'boot');
-
-// Invalid Call ($level = -50 violates inherited Trait's @param positive-int)
-$child->logMessage(-50, 'boot');
-// Throws: TypeError: ChildService::logMessage(): Argument $level must be of type positive-int
-```
+</TypePHPSnippet>
 
 ---
 
@@ -251,7 +289,13 @@ $child->logMessage(-50, 'boot');
 
 When a class uses a Trait and renames a method using PHP's trait `as` alias syntax, TypePHP inspects trait alias mappings and automatically inherits the original Trait method's DocBlock contracts onto the aliased method:
 
-```php
+<TypePHPSnippet title="Trait Method Aliasing (as)" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 trait LoggerTrait
 {
     /**
@@ -273,13 +317,19 @@ class AuditService
 
 $service = new AuditService();
 
-// Valid Call
+// 1. Happy Path: Call aliased method
 $service->recordAuditLog(1, 'audit_ok');
+echo "✓ Successfully executed aliased trait method\n\n";
 
-// Invalid Call ($level = -1 violates inherited Trait's @param positive-int)
-$service->recordAuditLog(-1, 'audit_ok');
-// Throws: TypeError: Argument $level must be of type positive-int
+// 2. Failure: $level = -1 violates inherited Trait's @param positive-int
+try {
+    $service->recordAuditLog(-1, 'audit_ok');
+} catch (\TypeError $e) {
+    echo "✗ Aliased trait method violation:\n   " . $e->getMessage() . "\n";
+}
 ```
+
+</TypePHPSnippet>
 
 ---
 
@@ -287,7 +337,13 @@ $service->recordAuditLog(-1, 'audit_ok');
 
 When a class uses multiple traits with identical method names, PHP requires resolving the collision with `insteadof`. TypePHP respects `insteadof` precedence, enforcing contracts strictly from the selected trait:
 
-```php
+<TypePHPSnippet title="Trait Conflict Resolution (insteadof)" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 trait PrimaryLogger
 {
     /**
@@ -324,13 +380,27 @@ class LoggingService
 $service = new LoggingService();
 
 // 1. Primary log() enforces positive-int and non-empty-string from PrimaryLogger
-$service->log(10, 'server_boot'); // Valid
-// $service->log(-5, 'server_boot'); // Throws: TypeError: Argument $level must be of type positive-int
+echo "✓ " . $service->log(10, 'server_boot') . "\n";
 
 // 2. Aliased secondaryLog() enforces negative-int from SecondaryLogger
-$service->secondaryLog(-20, 'server_shutdown'); // Valid
-// $service->secondaryLog(20, 'server_shutdown'); // Throws: TypeError: Argument $level must be of type negative-int
+echo "✓ " . $service->secondaryLog(-20, 'server_shutdown') . "\n\n";
+
+// 3. Passing negative integer to primary log() triggers TypeError
+try {
+    $service->log(-5, 'server_boot');
+} catch (\TypeError $e) {
+    echo "✗ Primary trait conflict check:\n   " . $e->getMessage() . "\n\n";
+}
+
+// 4. Passing positive integer to secondaryLog() triggers TypeError
+try {
+    $service->secondaryLog(20, 'server_shutdown');
+} catch (\TypeError $e) {
+    echo "✗ Secondary trait conflict check:\n   " . $e->getMessage() . "\n";
+}
 ```
+
+</TypePHPSnippet>
 
 ---
 
@@ -338,11 +408,17 @@ $service->secondaryLog(-20, 'server_shutdown'); // Valid
 
 If a child class overrides a method and provides a docblock for **only some** parameters, TypePHP fills in the missing parameter contracts from the parent class or interface:
 
-```php
+<TypePHPSnippet title="Partial Parameter Overriding (Gap-Filling)" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 class BaseService
 {
     /**
-     * Parent defines contracts for $id and $name
+     * Parent defines contracts for both $id and $name
      *
      * @param positive-int $id
      * @param non-empty-string $name
@@ -357,6 +433,7 @@ class ChildService extends BaseService
 {
     /**
      * Child overrides ONLY $name to restrict allowed string literals!
+     * Contract for $id is inherited automatically from parent BaseService.
      *
      * @param 'Alice'|'Bob' $name
      */
@@ -368,31 +445,49 @@ class ChildService extends BaseService
 
 $service = new ChildService();
 
-// Valid Call
+// 1. Happy Path: Valid $id and valid restricted $name
 $service->update(10, 'Alice');
+echo "✓ Updated user with valid ID and name\n\n";
 
-// Invalid $id (-5 violates parent's inherited @param positive-int)
-$service->update(-5, 'Alice');
-// Throws: TypeError: ChildService::update(): Argument $id must be of type positive-int
+// 2. Failure: Invalid $id (-5 violates parent's inherited @param positive-int)
+try {
+    $service->update(-5, 'Alice');
+} catch (\TypeError $e) {
+    echo "✗ Inherited parent gap check ($id):\n   " . $e->getMessage() . "\n\n";
+}
 
-// Invalid $name ('Charlie' violates child's local @param 'Alice'|'Bob')
-$service->update(10, 'Charlie');
-// Throws: TypeError: ChildService::update(): Argument $name must be of type ('Alice' | 'Bob')
+// 3. Failure: Invalid $name ('Charlie' violates child's local @param 'Alice'|'Bob')
+try {
+    $service->update(10, 'Charlie');
+} catch (\TypeError $e) {
+    echo "✗ Local refined parameter check ($name):\n   " . $e->getMessage() . "\n";
+}
 ```
+
+</TypePHPSnippet>
 
 ---
 
-## Parameter Renaming ($id → $userId) & Position Shift Disambiguation
+## Parameter Renaming & Position Shift Disambiguation
 
 When a child class, constructor, or trait implementation overrides an ancestor method, parameter positions may shift when new parameters are inserted, or parameter names may be renamed.
 
 TypePHP resolves parameter contract inheritance using **3-Tier Name & Position Disambiguation**:
 
 1. **Name-First Matching:** If a parameter name in the child method matches a parameter name in the parent class (e.g. `$container`), the parent's contract is mapped to that parameter regardless of its position index in the child.
-2. **Position Fallback on Renamed Parameters:** If a parameter is renamed in the child class (e.g. `$id` $\rightarrow$ `$userId`), TypePHP maps the contract using its position index.
-3. **Candidate Disambiguation (Shift Protection):** If a child class inserts a new parameter at index 0 (shifting all subsequent parameters down), TypePHP **verifies that the candidate child parameter does not already exist in the parent under its own name**. This prevents parent parameter contracts from accidentally mis-mapping onto shifted child parameters!
+2. **Position Fallback on Renamed Parameters:** If a parameter is renamed in the child class (e.g. `$id` $\to$ `$userId`), TypePHP maps the contract using its position index.
+3. **Candidate Disambiguation (Shift Protection):** If a child class inserts a new parameter at index 0 (shifting all subsequent parameters down), TypePHP **verifies that the candidate child parameter does not already exist in the parent under its own name**. This prevents parent parameter contracts from accidentally mis-mapping onto shifted child parameters.
 
-```php
+<TypePHPSnippet title="Parameter Position Shift & Renaming Disambiguation" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+interface ContainerInterface {}
+class Container implements ContainerInterface {}
+
 class BaseRegistry
 {
     /**
@@ -430,10 +525,31 @@ class SalesChannelRegistry extends BaseRegistry
     }
 }
 
-// TypePHP correctly keeps $container (Index 1 in child) untouched,
-// rather than mis-mapping parent's @param array $definitions (Index 1 in parent) onto it!
-new SalesChannelRegistry('sales_channel.', new Container(), ['prod' => 'ProductDef'], ['prod' => 'ProductRepo']);
+// 1. Happy Path:
+// TypePHP keeps $container (Index 1 in child) untouched rather than mis-mapping
+// parent's @param array $definitions (Index 1 in parent) onto it!
+new SalesChannelRegistry(
+    'sales_channel.',
+    new Container(),
+    ['prod' => 'ProductDef'],
+    ['prod' => 'ProductRepo']
+);
+echo "✓ Position shift disambiguation succeeded with no false-positive mis-mapping!\n\n";
+
+// 2. Failure: Passing invalid non-string value in $definitionMap
+try {
+    new SalesChannelRegistry(
+        'sales_channel.',
+        new Container(),
+        ['prod' => 12345], // Invalid: value must be string
+        ['prod' => 'ProductRepo']
+    );
+} catch (\TypeError $e) {
+    echo "✗ Target parameter validation check:\n   " . $e->getMessage() . "\n";
+}
 ```
+
+</TypePHPSnippet>
 
 ---
 
@@ -441,7 +557,13 @@ new SalesChannelRegistry('sales_channel.', new Container(), ['prod' => 'ProductD
 
 When a class implements an Interface and fulfills its methods by using a Trait:
 
-```php
+<TypePHPSnippet title="Trait & Interface Contract Fusion" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 interface ExecutorInterface
 {
     /**
@@ -467,10 +589,18 @@ class AppExecutor implements ExecutorInterface
 
 $app = new AppExecutor();
 
-// $code = -5 violates ExecutorInterface's @param positive-int
-$app->execute(-5);
-// Throws: TypeError: AppExecutor::execute(): Argument $code must be of type positive-int
+// 1. Happy Path
+echo "✓ Executed: " . $app->execute(42) . "\n\n";
+
+// 2. Failure: $code = -5 violates ExecutorInterface's @param positive-int
+try {
+    $app->execute(-5);
+} catch (\TypeError $e) {
+    echo "✗ Interface contract fusion failure:\n   " . $e->getMessage() . "\n";
+}
 ```
+
+</TypePHPSnippet>
 
 ---
 
@@ -496,4 +626,3 @@ TypePHP protects your application from third-party vendor docblock bugs using **
 
 * If a parent class or interface is located inside an excluded folder (such as `/vendor/`), TypePHP **ignores its inherited docblocks**.
 * This prevents third-party package docblock errors or outdated annotations from causing unexpected `TypeError` exceptions in your application code.
-```

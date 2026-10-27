@@ -1,213 +1,305 @@
 # Primitives & Scalars
 
-TypePHP provides runtime enforcement for all native PHP primitives, literal scalar values, extended integer ranges, string refinements, class-string subtypes, float constraints, resources, and special return control types.
+TypePHP provides runtime enforcement for all native PHP primitives, literal scalar values, integer refinements, string refinements, class-string subtypes, float constraints, resources, and special return control types.
 
 ---
 
-## Native PHP Primitives
+## Strict Non-Coercion Policy (Zero Type Juggling)
 
-TypePHP validates standard PHP primitive types in function parameters, return values, properties, and `@var` local assignments:
+In standard PHP execution without `declare(strict_types=1);`, the Zend Engine aggressively juggles scalar types (converting numeric strings like `'42'` to `int`, or truthy integers like `1` to `bool`).
 
-| Primitive Keyword | Validated PHP Types | Example Values |
-| :--- | :--- | :--- |
-| **`int`**, **`integer`** | Native integers | `10`, `-5`, `0` |
-| **`string`** | Native string scalars | `'hello'`, `''`, `'123'` |
-| **`float`**, **`double`** | Floating-point numbers & integers | `12.34`, `0.0`, `-5.5`, `10` |
-| **`bool`**, **`boolean`** | Native booleans | `true`, `false` |
-| **`null`** | Null value | `null` |
-| **`mixed`** | Any value | Always valid (Zero overhead) |
-| **`scalar`** | Any PHP scalar (`int`, `string`, `float`, `bool`) | `10`, `'hello'`, `true` |
+**TypePHP enforces a strict Zero-Coercion Policy at runtime:**
 
-```php
+* **Strings are NEVER coerced to numbers:** Passing `'42'` into `int` or `positive-int` triggers an immediate `TypeError`.
+* **Numbers are NEVER coerced to booleans:** Passing `1` or `0` into `bool`, `true`, or `false` triggers an immediate `TypeError`.
+* **Booleans are NEVER coerced to strings:** Passing `true` into `string` or `non-empty-string` triggers an immediate `TypeError`.
+
+### The Single Standard Exception: Whole Integer to Float Widening
+
+To remain 100% faithful to the native PHP language specification, TypePHP allows **whole integers to satisfy `float` contracts**.
+
+Even under native PHP's strictest mode (`declare(strict_types=1);`), the Zend Engine allows passing an `int` into a parameter expecting `float` (e.g. passing `10` into `float $rate` widens losslessly to `10.0` in C memory) [1]. TypePHP adopts this exact widening behavior while strictly rejecting reverse coercion (`float` into `int` is always rejected).
+
+Because TypePHP's exceptions extend PHP's native `\TypeError` [1], you can catch all contract failures using standard native PHP error handling without importing any custom classes:
+
+<TypePHPSnippet title="Strict Non-Coercion & Int-to-Float Widening" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
  * @param int $id
- * @param string $name
+ * @param float $rate
  * @param bool $active
  */
-function processPrimitive(int $id, string $name, bool $active): void
+function configureMetric($id, $rate, $active): void
 {
-    // ...
+    echo "✓ Success: ID={$id}, Rate={$rate}, Active=" . ($active ? 'true' : 'false') . "\n";
+}
+
+// 1. Valid Call: Whole int 10 is allowed for float (PHP standard widening)
+configureMetric(101, 10, true);
+
+// 2. Coercion Attempt: Passing numeric string '101' into int
+try {
+    configureMetric('101', 10.5, true);
+} catch (\TypeError $e) {
+    echo "✗ Rejected string -> int coercion:\n   " . $e->getMessage() . "\n";
+}
+
+// 3. Coercion Attempt: Passing integer 1 into bool
+try {
+    configureMetric(101, 10.5, 1);
+} catch (\TypeError $e) {
+    echo "✗ Rejected int -> bool coercion:\n   " . $e->getMessage() . "\n";
+}
+
+// 4. Coercion Attempt: Passing float 10.5 into int (no lossy truncation)
+try {
+    configureMetric(10.5, 10.5, true);
+} catch (\TypeError $e) {
+    echo "✗ Rejected float -> int coercion:\n   " . $e->getMessage() . "\n";
 }
 ```
 
+</TypePHPSnippet>
+
 ---
 
-## Literal Scalar Values
+## Exact Scalar Literals & Float Epsilon Tolerance
 
-TypePHP supports enforcing exact literal scalar values in DocBlock types. The incoming value must strictly match the declared literal:
+TypePHP supports enforcing exact literal scalar values in DocBlock types (`'active'`, `42`, `3.14`, `true`, `false`).
 
-| Literal Category | Example Syntax | Valid Value | Invalid Example |
-| :--- | :--- | :--- | :--- |
-| **String Literals** | `'active'`, `'admin'` | `'active'` | `'inactive'`, `'user'` |
-| **Integer Literals** | `42`, `200` | `42` | `43`, `'42'` |
-| **Float Literals** | `3.14`, `0.01` | `3.14`, `3` | `3.15`, `'3.14'` |
-| **Boolean Literals** | `true`, `false` | `true` | `false`, `1` |
+Furthermore, because floating-point calculations like `0.1 + 0.2` compute to `0.30000000000000004` under IEEE 754 representation, TypePHP compares float literals using an **Epsilon Tolerance (`1e-9`)** to prevent false-positive crashes on microscopic rounding errors:
 
-```php
+<TypePHPSnippet title="Exact Literals & Float Epsilon Tolerance" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
- * @param 'active' $status      // Requires exact string 'active'
- * @param 200 $code             // Requires exact integer 200
- * @param true $debug           // Requires exact boolean true
- * @param 0.3 $threshold        // Requires float literal 0.3
+ * @param 'active'|'pending' $status
+ * @param 200|201 $statusCode
+ * @param true $requireTls
+ * @param 0.3 $threshold
  */
-function setEnvironment(string $status, int $code, bool $debug, float $threshold): void
+function establishConnection(string $status, int $statusCode, bool $requireTls, float $threshold): void
 {
-    // ...
+    echo "✓ Connected: Status='{$status}', Code={$statusCode}, Threshold={$threshold}\n";
 }
 
-// Valid Call
-setEnvironment('active', 200, true, 0.3);
+// 1. Valid Call (0.1 + 0.2 satisfies 0.3 via 1e-9 epsilon tolerance)
+establishConnection('active', 200, true, 0.1 + 0.2);
 
-// Invalid Call ('inactive' is not literal 'active')
-setEnvironment('inactive', 200, true, 0.3);
-// Throws: TypeError: setEnvironment(): Argument $status must be literal 'active', string 'inactive' given
+// 2. Invalid String Literal
+try {
+    establishConnection('archived', 200, true, 0.3);
+} catch (\TypeError $e) {
+    echo "✗ Caught invalid string literal:\n   " . $e->getMessage() . "\n";
+}
+
+// 3. Invalid Integer Literal
+try {
+    establishConnection('active', 500, true, 0.3);
+} catch (\TypeError $e) {
+    echo "✗ Caught invalid integer literal:\n   " . $e->getMessage() . "\n";
+}
+
+// 4. Invalid Boolean Literal (false passed where true is required)
+try {
+    establishConnection('active', 200, false, 0.3);
+} catch (\TypeError $e) {
+    echo "✗ Caught invalid boolean literal:\n   " . $e->getMessage() . "\n";
+}
+
+// 5. Invalid Float Literal (Genuine deviation beyond epsilon)
+try {
+    establishConnection('active', 200, true, 0.35);
+} catch (\TypeError $e) {
+    echo "✗ Caught deviating float literal:\n   " . $e->getMessage() . "\n";
+}
 ```
 
-### Floating-Point Precision & Epsilon Comparison
-
-Floating-point arithmetic in computers uses IEEE 754 representation, where mathematical operations like `0.1 + 0.2` evaluate to `0.30000000000000004`.
-
-To prevent rounding artifacts from causing unexpected type failures, TypePHP evaluates float literals using **Epsilon Tolerance (`1e-9`)**:
-
-1. **IEEE 754 Arithmetic Handling:** Floating-point calculations evaluating to `0.30000000000000004` safely satisfy `@param 0.3`.
-2. **Integer Coercion Support:** Integer values like `10` safely satisfy float literal types like `@param 10.0` in accordance with PHP scalar coercion rules.
+</TypePHPSnippet>
 
 ---
 
-## Wildcard Constant Patterns (`Class::PREFIX_*` & `StatusEnum::*`)
+## Integer Refinements & Bounded Ranges
 
-TypePHP supports validating parameters, return types, properties, and `@var` local assignments against wildcard constant patterns (`Class::PREFIX_*` or `StatusEnum::*`). 
+TypePHP provides strict enforcement for all integer refinement subtypes and range expressions:
 
-* **Class Constants (`Class::PREFIX_*`):** TypePHP uses Reflection to safely inspect all matching constants—including `public`, `protected`, and `private` class constants—and validates that the incoming value matches one of the declared constant scalar values.
-* **Enums (`StatusEnum::*` or `StatusEnum::ACT*`):** Matches incoming **Enum case objects** against the wildcard case pattern.
+| Keyword / Syntax | Mathematical Rule | Valid Examples | Invalid Examples |
+| :--- | :--- | :--- | :--- |
+| **`positive-int`** | $n > 0$ | `1`, `42`, `100` | `0`, `-5` |
+| **`negative-int`** | $n < 0$ | `-1`, `-42` | `0`, `5` |
+| **`non-positive-int`** | $n \le 0$ | `0`, `-1`, `-10` | `1`, `5` |
+| **`non-negative-int`** | $n \ge 0$ | `0`, `1`, `100` | `-1`, `-5` |
+| **`non-zero-int`** | $n \ne 0$ | `1`, `-1`, `100` | `0` |
+| **`unsigned-int`** | $n \ge 0$ | `0`, `10`, `50` | `-10` |
+| **`int<min, max>`** | $\text{min} \le n \le \text{max}$ | `int<1, 100>` (e.g. `50`) | `0`, `101` |
+| **`int<0, max>`** | $n \ge 0$ | `0`, `500` | `-1` |
 
-```php
-class MigrationCollectionLoader
+<TypePHPSnippet title="Integer Refinements & Bounded Ranges" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+class IntegerChecker
 {
-    public const VERSION_SELECTION_ALL = 'all';
-    public const VERSION_SELECTION_BLUE_GREEN = 'blue-green';
-    private const VERSION_SELECTION_INTERNAL = 'internal-mode';
-
     /**
-     * @param self::VERSION_SELECTION_* $mode
+     * @param positive-int $pos
+     * @param negative-int $neg
+     * @param non-positive-int $nonPos
+     * @param non-negative-int $nonNeg
+     * @param non-zero-int $nonZero
+     * @param unsigned-int $unsigned
+     * @param int<1, 100> $range
      */
-    public function collectAllForVersion(string $mode): string
-    {
-        return $mode;
+    public function verifyAll(
+        int $pos,
+        int $neg,
+        int $nonPos,
+        int $nonNeg,
+        int $nonZero,
+        int $unsigned,
+        int $range
+    ): void {
+        echo "✓ All 7 integer refinements satisfied!\n";
     }
 }
 
-enum StatusEnum: string
-{
-    case Active = 'active';
-    case Inactive = 'inactive';
-    case Pending = 'pending';
+$checker = new IntegerChecker();
+
+// 1. Happy Path: All integer bounds satisfied
+$checker->verifyAll(
+    pos: 42,
+    neg: -10,
+    nonPos: 0,
+    nonNeg: 0,
+    nonZero: 5,
+    unsigned: 100,
+    range: 50
+);
+
+// 2. Test positive-int boundary (0 is not positive)
+try {
+    $checker->verifyAll(0, -10, 0, 0, 5, 100, 50);
+} catch (\TypeError $e) {
+    echo "✗ positive-int check:\n   " . $e->getMessage() . "\n";
 }
 
-class EnumProcessor
-{
-    /**
-     * @param StatusEnum::ACT* $status
-     */
-    public static function processActive(StatusEnum $status): StatusEnum
-    {
-        return $status;
-    }
+// 3. Test negative-int boundary (0 is not negative)
+try {
+    $checker->verifyAll(42, 0, 0, 0, 5, 100, 50);
+} catch (\TypeError $e) {
+    echo "✗ negative-int check:\n   " . $e->getMessage() . "\n";
 }
 
-$loader = new MigrationCollectionLoader();
+// 4. Test non-positive-int boundary (5 is positive)
+try {
+    $checker->verifyAll(42, -10, 5, 0, 5, 100, 50);
+} catch (\TypeError $e) {
+    echo "✗ non-positive-int check:\n   " . $e->getMessage() . "\n";
+}
 
-// Valid Class Constant Calls (Matches public and private VERSION_SELECTION_* constant values)
-$loader->collectAllForVersion('all');
-$loader->collectAllForVersion('internal-mode');
+// 5. Test non-negative-int boundary (-1 is negative)
+try {
+    $checker->verifyAll(42, -10, 0, -1, 5, 100, 50);
+} catch (\TypeError $e) {
+    echo "✗ non-negative-int check:\n   " . $e->getMessage() . "\n";
+}
 
-// Valid Enum Wildcard Call (Matches StatusEnum::ACT* -> StatusEnum::Active)
-EnumProcessor::processActive(StatusEnum::Active);
+// 6. Test non-zero-int boundary (0 given)
+try {
+    $checker->verifyAll(42, -10, 0, 0, 0, 100, 50);
+} catch (\TypeError $e) {
+    echo "✗ non-zero-int check:\n   " . $e->getMessage() . "\n";
+}
 
-// Invalid Enum Wildcard Call (StatusEnum::Pending does not match StatusEnum::ACT*)
-EnumProcessor::processActive(StatusEnum::Pending);
-// Throws: TypeError: Argument $status must be a valid constant matching StatusEnum::ACT*
+// 7. Test unsigned-int boundary (-50 is signed negative)
+try {
+    $checker->verifyAll(42, -10, 0, 0, 5, -50, 50);
+} catch (\TypeError $e) {
+    echo "✗ unsigned-int check:\n   " . $e->getMessage() . "\n";
+}
+
+// 8. Test int<1, 100> range boundaries (150 > 100)
+try {
+    $checker->verifyAll(42, -10, 0, 0, 5, 100, 150);
+} catch (\TypeError $e) {
+    echo "✗ int<1, 100> range check:\n   " . $e->getMessage() . "\n";
+}
 ```
 
----
-
-## Integer Refinements and Ranges
-
-TypePHP enforces exact value constraints and bounds on integer parameters:
-
-| Refinement Keyword | Constraint Rule | Valid Examples | Invalid Examples |
-| :--- | :--- | :--- | :--- |
-| **`positive-int`** | Integer > 0 | `1`, `42`, `100` | `0`, `-5` |
-| **`negative-int`** | Integer < 0 | `-1`, `-42` | `0`, `5` |
-| **`non-positive-int`** | Integer <= 0 | `0`, `-1`, `-10` | `1`, `5` |
-| **`non-negative-int`** | Integer >= 0 | `0`, `1`, `100` | `-1`, `-5` |
-| **`non-zero-int`** | Integer != 0 | `1`, `-1`, `100` | `0` |
-| **`unsigned-int`** | Integer >= 0 | `0`, `10`, `50` | `-10` |
-
-### Integer Bounds (`int<min, max>`)
-
-Define explicit minimum and maximum bounds for integers using range syntax:
-
-```php
-/**
- * @param int<1, 100> $percentage  // Range: 1 to 100 inclusive
- * @param int<0, max> $offset      // Range: 0 to infinity (non-negative)
- * @param int<min, 10> $maxLimit   // Range: negative infinity to 10
- */
-function setRange(int $percentage, int $offset, int $maxLimit): void
-{
-    // ...
-}
-
-// Valid Call
-setRange(50, 0, 5);
-
-// Invalid Call ($percentage = 150 exceeds max bound 100)
-setRange(150, 0, 5);
-// Throws: TypeError: setRange(): Argument $percentage must be <= 100, 150 given
-```
+</TypePHPSnippet>
 
 ---
 
 ## Integer Bitmasks (`int-mask<...>` & `int-mask-of<...>`)
 
-TypePHP enforces bitwise flag combinations created by bitwise `OR` (`|`) operations on integers using `int-mask` and `int-mask-of`:
+TypePHP validates bitwise flag combinations created by bitwise `OR` (`|`) operations on integers:
 
-| Refinement Keyword | Constraint Rule | Valid Examples | Invalid Examples |
-| :--- | :--- | :--- | :--- |
-| **`int-mask<1, 2, 4>`** | Value must be a valid bitwise combination of the allowed integer flags (or `0`). | `0`, `1`, `3` (`1\|2`), `7` (`1\|2\|4`) | `8`, `10`, `-1` |
-| **`int-mask-of<self::FLAG_*>`** | Value must be a valid bitwise combination of class constants matching the wildcard pattern. | `1`, `3`, `7` | `16` |
+* **`int-mask<1, 2, 4>`:** Value must be a valid bitwise combination of the explicitly specified integers (or `0`).
+* **`int-mask-of<self::FLAG_*>`:** Value must be a valid bitwise combination of class constants or enum cases matching the wildcard prefix.
 
-```php
-class BitmaskFlags
+<TypePHPSnippet title="Integer Bitmasks (int-mask & int-mask-of)" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+class FilePermission
 {
-    public const FLAG_READ = 1;    // 0001
-    public const FLAG_WRITE = 2;   // 0010
-    public const FLAG_EXECUTE = 4; // 0100
+    public const PERM_READ = 1;    // 0001
+    public const PERM_WRITE = 2;   // 0010
+    public const PERM_EXEC = 4;    // 0100
 
     /**
-     * @param int-mask<1, 2, 4> $mask
-     * @param int-mask-of<self::FLAG_*> $wildcardMask
+     * @param int-mask<1, 2, 4> $numericMask
+     * @param int-mask-of<self::PERM_*> $constantMask
      */
-    public static function setPermissions(int $mask, int $wildcardMask): void
+    public static function apply(int $numericMask, int $constantMask): void
     {
-        // ...
+        echo "✓ Permissions Applied: Numeric={$numericMask}, Constant={$constantMask}\n";
     }
 }
 
-// Valid Call
-BitmaskFlags::setPermissions(3, 7); // 3 = READ | WRITE, 7 = READ | WRITE | EXECUTE
+// 1. Valid Combinations:
+// 3 = READ | WRITE (1 | 2)
+// 7 = READ | WRITE | EXEC (1 | 2 | 4)
+// 0 is always allowed as an empty mask
+FilePermission::apply(3, FilePermission::PERM_READ | FilePermission::PERM_EXEC);
+FilePermission::apply(0, 0);
 
-// Invalid (8 contains bits outside allowed mask 1|2|4 = 7)
-BitmaskFlags::setPermissions(8, 7);
-// Throws: TypeError: Argument $mask must be a valid bitmask combination of the allowed flags
+// 2. Invalid numeric bitmask: 8 (01000) is outside allowed flags (1 | 2 | 4 = 7)
+try {
+    FilePermission::apply(8, 3);
+} catch (\TypeError $e) {
+    echo "✗ Invalid numeric bitmask check:\n   " . $e->getMessage() . "\n";
+}
+
+// 3. Invalid constant bitmask: 16 is outside self::PERM_* combinations
+try {
+    FilePermission::apply(3, 16);
+} catch (\TypeError $e) {
+    echo "✗ Invalid constant bitmask check:\n   " . $e->getMessage() . "\n";
+}
 ```
+
+</TypePHPSnippet>
 
 ---
 
 ## String Refinements
 
-Validate string lengths, formatting, character casing, and truthiness at runtime:
+Validate string lengths, casing, formatting, and boolean truthiness:
 
 | Refinement Keyword | Constraint Rule | Valid Examples | Invalid Examples |
 | :--- | :--- | :--- | :--- |
@@ -218,201 +310,382 @@ Validate string lengths, formatting, character casing, and truthiness at runtime
 | **`uppercase-string`** | `strtoupper($val) === $val` | `'USD'`, `'HELLO_100'` | `'Hello'`, `'admin'` |
 | **`non-empty-uppercase-string`** | Non-empty & uppercase | `'EUR'`, `'ABC'` | `''`, `'Eur'` |
 | **`array-key`** | `is_int($val) \|\| is_string($val)` | `100`, `'user_100'` | `true`, `[]`, `null` |
-| **`literal-string`** | String scalar | `'active'`, `'user'` | Non-strings |
-| **`truthy-string`**, **`non-falsy-string`** | Evaluates to `true` in boolean context | `'hello'`, `'1'` | `''`, `'0'` |
+| **`literal-string`** | Native string scalar | `'active'`, `'user'` | Numbers, Objects |
+| **`truthy-string`** | String evaluates to `true` | `'hello'`, `'1'` | `''`, `'0'` |
 
-```php
-/**
- * @param non-empty-string $title
- * @param numeric-string $amount
- * @param lowercase-string $slug
- */
-function createPost(string $title, string $amount, string $slug): void
+<TypePHPSnippet title="String Refinements Validation" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+class StringValidator
 {
-    // ...
+    /**
+     * @param non-empty-string $nonEmpty
+     * @param numeric-string $numeric
+     * @param lowercase-string $lower
+     * @param non-empty-lowercase-string $nonEmptyLower
+     * @param uppercase-string $upper
+     * @param non-empty-uppercase-string $nonEmptyUpper
+     * @param array-key $key
+     * @param truthy-string $truthy
+     */
+    public function verifyStrings(
+        string $nonEmpty,
+        string $numeric,
+        string $lower,
+        string $nonEmptyLower,
+        string $upper,
+        string $nonEmptyUpper,
+        int|string $key,
+        string $truthy
+    ): void {
+        echo "✓ All string refinements satisfied!\n";
+    }
 }
 
-// Valid Call
-createPost('Welcome', '99.99', 'welcome-post');
+$validator = new StringValidator();
 
-// Invalid Call ($title is empty string)
-createPost('', '99.99', 'welcome-post');
-// Throws: TypeError: createPost(): Argument $title must be of type non-empty-string
+// 1. Happy Path: All string contracts satisfied
+$validator->verifyStrings(
+    nonEmpty: 'Title',
+    numeric: '149.99',
+    lower: 'slug_title',
+    nonEmptyLower: 'active',
+    upper: 'USD',
+    nonEmptyUpper: 'EUR',
+    key: 'user_101',
+    truthy: 'yes'
+);
+
+// 2. Test non-empty-string (empty string given)
+try {
+    $validator->verifyStrings('', '100', 'a', 'a', 'A', 'A', 'k', '1');
+} catch (\TypeError $e) {
+    echo "✗ non-empty-string check:\n   " . $e->getMessage() . "\n";
+}
+
+// 3. Test numeric-string ('abc' is non-numeric)
+try {
+    $validator->verifyStrings('Title', 'abc', 'a', 'a', 'A', 'A', 'k', '1');
+} catch (\TypeError $e) {
+    echo "✗ numeric-string check:\n   " . $e->getMessage() . "\n";
+}
+
+// 4. Test non-empty-lowercase-string ('User' has uppercase)
+try {
+    $validator->verifyStrings('Title', '100', 'a', 'User', 'A', 'A', 'k', '1');
+} catch (\TypeError $e) {
+    echo "✗ non-empty-lowercase-string check:\n   " . $e->getMessage() . "\n";
+}
+
+// 5. Test non-empty-uppercase-string ('usd' has lowercase)
+try {
+    $validator->verifyStrings('Title', '100', 'a', 'a', 'A', 'usd', 'k', '1');
+} catch (\TypeError $e) {
+    echo "✗ non-empty-uppercase-string check:\n   " . $e->getMessage() . "\n";
+}
+
+// 6. Test truthy-string ('0' evaluates to false in PHP boolean context)
+try {
+    $validator->verifyStrings('Title', '100', 'a', 'a', 'A', 'A', 'k', '0');
+} catch (\TypeError $e) {
+    echo "✗ truthy-string check:\n   " . $e->getMessage() . "\n";
+}
 ```
+
+</TypePHPSnippet>
 
 ---
 
-## Class-String Subtypes and Generics (`class-string<T>`)
+## Class-String Subtypes & Generics (`class-string<T>`)
 
-Enforce that string parameters contain valid class, interface, trait, or enum references, with optional generic bounds (`class-string<T>`):
+Enforce that string parameters contain valid class, interface, trait, or enum references, with optional upper bounds (`class-string<T>`):
 
 | Keyword | Validation Rule | Valid Examples | Invalid Examples |
 | :--- | :--- | :--- | :--- |
-| **`class-string`** | Valid class, interface, trait, or enum | `User::class`, `stdClass::class` | `'NonExistentClass'` |
-| **`class-string<T>`** | Valid class-string that extends or matches `T` | `Dog::class` for `class-string<Animal>` | `Car::class` for `class-string<Animal>` |
+| **`class-string`** | Syntactically valid class that exists in runtime | `User::class`, `stdClass::class` | `'NonExistentClass'` |
+| **`class-string<T>`** | Valid class-string that extends or implements `T` | `Dog::class` for `class-string<Animal>` | `Car::class` for `class-string<Animal>` |
 | **`interface-string`** | `interface_exists($val) === true` | `DateTimeInterface::class` | `stdClass::class` |
 | **`trait-string`** | `trait_exists($val) === true` | `LoggerTrait::class` | `stdClass::class` |
 | **`enum-string`** | `enum_exists($val) === true` | `StatusEnum::class` | `stdClass::class` |
 
-### Generic `class-string<T>` Factories
+<TypePHPSnippet title="Class-String Subtypes & Generics" default-view="source">
 
-When combined with `@template T`, `class-string<T>` binds the template parameter from the class name string and enforces a matching return type:
+```php:line-numbers
+<?php
 
-```php
-abstract class Animal {}
-class Dog extends Animal {}
-class Car {} // Not an Animal!
+declare(strict_types=1);
 
-/**
- * Generic Factory Function
- *
- * @template T of Animal
- *
- * @param class-string<T> $class
- * @return T
- */
-function makeAnimal(string $class): Animal
+interface RepositoryInterface {}
+class UserRepository implements RepositoryInterface {}
+class OrderRepository implements RepositoryInterface {}
+class UnrelatedHelper {}
+
+trait IdentifiableTrait {}
+enum UserRole { case ADMIN; }
+
+class ClassStringTester
 {
-    return new $class();
+    /**
+     * @param class-string $anyClass
+     * @param interface-string $iface
+     * @param trait-string $trait
+     * @param enum-string $enum
+     * @param class-string<RepositoryInterface> $repo
+     */
+    public function verifyClassStrings(
+        string $anyClass,
+        string $iface,
+        string $trait,
+        string $enum,
+        string $repo
+    ): void {
+        echo "✓ All class-string specifications verified!\n";
+    }
 }
 
-// Valid Call (Dog extends Animal, binds T = Dog)
-$dog = makeAnimal(Dog::class);
+$tester = new ClassStringTester();
 
-// Invalid Call (Car does not extend Animal)
-makeAnimal(Car::class);
-// Throws: TypeError: makeAnimal(): Argument $class (class-string<T>) must be a class-string of Animal, 'Car' given
+// 1. Happy Path: All class-string types satisfied
+$tester->verifyClassStrings(
+    anyClass: stdClass::class,
+    iface: RepositoryInterface::class,
+    trait: IdentifiableTrait::class,
+    enum: UserRole::class,
+    repo: UserRepository::class
+);
+
+// 2. Test class-string with non-existent class
+try {
+    $tester->verifyClassStrings('App\\NonExistentClass', RepositoryInterface::class, IdentifiableTrait::class, UserRole::class, UserRepository::class);
+} catch (\TypeError $e) {
+    echo "✗ class-string existence check:\n   " . $e->getMessage() . "\n";
+}
+
+// 3. Test interface-string with class name
+try {
+    $tester->verifyClassStrings(stdClass::class, stdClass::class, IdentifiableTrait::class, UserRole::class, UserRepository::class);
+} catch (\TypeError $e) {
+    echo "✗ interface-string check:\n   " . $e->getMessage() . "\n";
+}
+
+// 4. Test trait-string with interface name
+try {
+    $tester->verifyClassStrings(stdClass::class, RepositoryInterface::class, RepositoryInterface::class, UserRole::class, UserRepository::class);
+} catch (\TypeError $e) {
+    echo "✗ trait-string check:\n   " . $e->getMessage() . "\n";
+}
+
+// 5. Test enum-string with class name
+try {
+    $tester->verifyClassStrings(stdClass::class, RepositoryInterface::class, IdentifiableTrait::class, stdClass::class, UserRepository::class);
+} catch (\TypeError $e) {
+    echo "✗ enum-string check:\n   " . $e->getMessage() . "\n";
+}
+
+// 6. Test class-string<T> bound (UnrelatedHelper does not implement RepositoryInterface)
+try {
+    $tester->verifyClassStrings(stdClass::class, RepositoryInterface::class, IdentifiableTrait::class, UserRole::class, UnrelatedHelper::class);
+} catch (\TypeError $e) {
+    echo "✗ class-string<T> upper bound check:\n   " . $e->getMessage() . "\n";
+}
 ```
+
+</TypePHPSnippet>
 
 ---
 
 ## Float Refinements
 
-TypePHP enforces signs and bounds on floating-point parameters:
+TypePHP enforces signs and bounds on floating-point parameters (and note that whole integers widen losslessly to float):
 
 | Refinement Keyword | Constraint Rule | Valid Examples | Invalid Examples |
 | :--- | :--- | :--- | :--- |
-| **`positive-float`** | Float > 0.0 | `12.34`, `0.01` | `0.0`, `-5.5` |
-| **`negative-float`** | Float < 0.0 | `-12.34`, `-0.01` | `0.0`, `5.5` |
-| **`non-positive-float`** | Float <= 0.0 | `0.0`, `-1.5` | `1.5` |
-| **`non-negative-float`** | Float >= 0.0 | `0.0`, `1.5` | `-1.5` |
-| **`non-zero-float`** | Float != 0.0 | `1.5`, `-1.5` | `0.0` |
+| **`positive-float`** | Float > 0.0 | `12.34`, `0.01`, `5` | `0.0`, `-5.5` |
+| **`negative-float`** | Float < 0.0 | `-12.34`, `-0.01`, `-5` | `0.0`, `5.5` |
+| **`non-positive-float`** | Float <= 0.0 | `0.0`, `-1.5` | `1.5`, `10` |
+| **`non-negative-float`** | Float >= 0.0 | `0.0`, `1.5`, `10` | `-1.5`, `-5` |
+| **`non-zero-float`** | Float != 0.0 | `1.5`, `-1.5`, `5` | `0.0`, `0` |
 
-```php
-/**
- * @param positive-float $rate
- * @param non-zero-float $delta
- */
-function applyRate(float $rate, float $delta): void
+<TypePHPSnippet title="Float Refinements & Boundaries" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+class FloatChecker
 {
-    // ...
+    /**
+     * @param positive-float $pos
+     * @param negative-float $neg
+     * @param non-positive-float $nonPos
+     * @param non-negative-float $nonNeg
+     * @param non-zero-float $nonZero
+     */
+    public function verifyFloats(
+        float $pos,
+        float $neg,
+        float $nonPos,
+        float $nonNeg,
+        float $nonZero
+    ): void {
+        echo "✓ All 5 float refinements satisfied!\n";
+    }
 }
 
-// Valid Call
-applyRate(0.05, -1.2);
+$checker = new FloatChecker();
 
-// Invalid Call ($rate = 0.0 is not positive-float)
-applyRate(0.0, -1.2);
-// Throws: TypeError: applyRate(): Argument $rate must be of type positive-float
+// 1. Happy Path: All float refinements satisfied (including whole int widening)
+$checker->verifyFloats(
+    pos: 0.0825,
+    neg: -15.50,
+    nonPos: 0.0,
+    nonNeg: 10, // whole integer widens cleanly
+    nonZero: -1.2
+);
+
+// 2. Test positive-float (0.0 is not strictly positive)
+try {
+    $checker->verifyFloats(0.0, -15.5, 0.0, 1.0, 1.0);
+} catch (\TypeError $e) {
+    echo "✗ positive-float check:\n   " . $e->getMessage() . "\n";
+}
+
+// 3. Test negative-float (0.0 is not strictly negative)
+try {
+    $checker->verifyFloats(1.0, 0.0, 0.0, 1.0, 1.0);
+} catch (\TypeError $e) {
+    echo "✗ negative-float check:\n   " . $e->getMessage() . "\n";
+}
+
+// 4. Test non-positive-float (1.5 is positive)
+try {
+    $checker->verifyFloats(1.0, -1.0, 1.5, 1.0, 1.0);
+} catch (\TypeError $e) {
+    echo "✗ non-positive-float check:\n   " . $e->getMessage() . "\n";
+}
+
+// 5. Test non-negative-float (-1.5 is negative)
+try {
+    $checker->verifyFloats(1.0, -1.0, 0.0, -1.5, 1.0);
+} catch (\TypeError $e) {
+    echo "✗ non-negative-float check:\n   " . $e->getMessage() . "\n";
+}
+
+// 6. Test non-zero-float (0.0 is zero)
+try {
+    $checker->verifyFloats(1.0, -1.0, 0.0, 1.0, 0.0);
+} catch (\TypeError $e) {
+    echo "✗ non-zero-float check:\n   " . $e->getMessage() . "\n";
+}
 ```
+
+</TypePHPSnippet>
 
 ---
 
-## Truthiness and Numeric Types
+## Truthiness, Numeric Types, Resources & Control Returns
 
-Validate boolean truthiness or generic numeric inputs:
+Validate boolean truthiness, generic numeric types, open/closed stream resources, and exit control types (`void` and `never`):
 
 | Keyword | Validation Rule | Valid Examples | Invalid Examples |
 | :--- | :--- | :--- | :--- |
 | **`truthy`** | Evaluates to `true` in boolean context | `'hello'`, `1`, `[1]`, `true` | `0`, `''`, `null`, `false` |
 | **`falsy`**, **`falsey`** | Evaluates to `false` in boolean context | `0`, `''`, `null`, `false`, `[]` | `'hello'`, `1`, `true` |
 | **`numeric`**, **`number`** | Integer, Float, or Numeric String | `10`, `12.34`, `'99.9'` | `'abc'`, `null` |
+| **`open-resource`**, **`resource`** | `is_resource($val) === true` | `fopen('php://memory', 'r')` | Closed stream, String |
+| **`closed-resource`** | Handle closed via `fclose($fp)` | Closed stream handle | Open stream, String |
+| **`never`** | Function never returns normally | Throws exception or `exit()` | Returns any value |
 
-```php
-/**
- * @param truthy $flag
- * @param numeric $amount
- */
-function processFlag(mixed $flag, mixed $amount): void
+<TypePHPSnippet title="Truthiness, Numeric, Resources & never" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+class SpecialTypeTester
 {
-    // ...
+    /**
+     * @param truthy $truthy
+     * @param falsy $falsy
+     * @param numeric $num
+     * @param open-resource $openRes
+     * @param closed-resource $closedRes
+     */
+    public function verifySpecials(mixed $truthy, mixed $falsy, mixed $num, $openRes, $closedRes): void
+    {
+        echo "✓ Special types verified!\n";
+    }
+
+    /**
+     * @return never
+     */
+    public function haltService(): string
+    {
+        return 'unexpected_return'; // Violates never!
+    }
 }
 
-// Valid Call
-processFlag('valid', '99.9');
+$tester = new SpecialTypeTester();
 
-// Invalid Call ($flag = 0 is falsy)
-processFlag(0, '99.9');
-// Throws: TypeError: processFlag(): Argument $flag must be of type truthy
+$openFp = fopen('php://memory', 'r+');
+$closedFp = fopen('php://memory', 'r+');
+fclose($closedFp);
+
+// 1. Happy Path: All special types satisfied
+$tester->verifySpecials(
+    truthy: 'enabled',
+    falsy: '',
+    num: '199.95',
+    openRes: $openFp,
+    closedRes: $closedFp
+);
+fclose($openFp);
+
+// 2. Test truthy (empty string is falsy)
+try {
+    $dummy = fopen('php://memory', 'r+');
+    $closed = fopen('php://memory', 'r+');
+    fclose($closed);
+    $tester->verifySpecials('', '', '10', $dummy, $closed);
+} catch (\TypeError $e) {
+    echo "✗ truthy check:\n   " . $e->getMessage() . "\n";
+} finally {
+    if (isset($dummy) && is_resource($dummy)) fclose($dummy);
+}
+
+// 3. Test numeric ('abc' is not numeric)
+try {
+    $dummy = fopen('php://memory', 'r+');
+    $closed = fopen('php://memory', 'r+');
+    fclose($closed);
+    $tester->verifySpecials('ok', '', 'abc', $dummy, $closed);
+} catch (\TypeError $e) {
+    echo "✗ numeric check:\n   " . $e->getMessage() . "\n";
+} finally {
+    if (isset($dummy) && is_resource($dummy)) fclose($dummy);
+}
+
+// 4. Test open-resource (passing closed handle)
+try {
+    $closed = fopen('php://memory', 'r+');
+    fclose($closed);
+    $tester->verifySpecials('ok', '', '10', $closed, $closed);
+} catch (\TypeError $e) {
+    echo "✗ open-resource check:\n   " . $e->getMessage() . "\n";
+}
+
+// 5. Test @return never contract failure (method returned instead of throwing)
+try {
+    $tester->haltService();
+} catch (\TypeError $e) {
+    echo "✗ never return contract check:\n   " . $e->getMessage() . "\n";
+}
 ```
 
----
-
-## Resources
-
-Validate active open or closed PHP resource handles:
-
-| Keyword | Validation Rule | Valid Examples | Invalid Examples |
-| :--- | :--- | :--- | :--- |
-| **`resource`**, **`open-resource`** | `is_resource($val) === true` | `fopen('file.txt', 'r')` | Closed stream, String |
-| **`closed-resource`** | Stream handle that was closed | Closed stream handle (`fclose($fp)`) | Open stream, String |
-
-```php
-/**
- * @param open-resource $stream
- */
-function processStream($stream): void
-{
-    // ...
-}
-
-$fp = fopen('php://memory', 'r');
-processStream($fp); // Valid
-
-fclose($fp);
-processStream($fp); // Invalid: Stream was closed
-// Throws: TypeError: processStream(): Argument $stream must be of type open-resource
-```
-
----
-
-## Special Control Return Types (`void` & `never`)
-
-Enforce function exit behaviors:
-
-### `void`
-Verifies that a function returns `null` or omits a return expression:
-
-```php
-/**
- * @return void
- */
-function processVoid(): void
-{
-    // Valid void function
-}
-```
-
-### `never` (`no-return`, `never-return`, `never-returns`)
-Verifies that a function **never returns normally** (it must either throw an exception or call `exit()`):
-
-```php
-/**
- * @return never
- */
-function haltExecution(): void
-{
-    throw new RuntimeException('Execution stopped'); // Valid: Exits via exception
-}
-
-/**
- * @return never
- */
-function badHaltExecution(): string
-{
-    return 'unexpected_return'; // Invalid: Function returned a value!
-}
-
-badHaltExecution();
-// Throws: TypeError: badHaltExecution(): Return value must be of type never
-```
+</TypePHPSnippet>
