@@ -23,7 +23,7 @@ Today, I am incredibly proud to announce the release of **TypePHP v0.8.0**.
 
 When I started TypePHP, my goal was simple: bring true runtime type safety to modern PHP without forcing developers to abandon their existing PHPDoc annotations, compile C-extensions, or adopt proprietary attributes. I wanted the PHPStan and Psalm contracts you already write to actually mean something when your code runs in production.
 
-I have already been using TypePHP in almost all of my own PHP projects and daily development workflows. It has completely transformed how I write code and making me significantly more productive and giving me absolute confidence through extreme type safety. Finally being able to rely on typed arrays and true reified generics at runtime is an absolute game changer.
+I have already been using TypePHP in almost all of my own PHP projects and daily development workflows. It has completely transformed how I write code, making me significantly more productive and giving me absolute confidence through extreme type safety. Finally being able to rely on typed arrays and true reified generics at runtime is an absolute game changer.
 
 With the release of v0.8.0, the engine has reached a remarkable level of maturity. Over **1,270 tests** and **3,300 assertions** run flawlessly under PHPStan Level MAX strictness. The engine now fluently handles some of the most advanced type algebra in the PHP ecosystem.
 
@@ -37,30 +37,60 @@ In modular architectures, developers frequently compose schemas using intersecti
 
 In v0.8.0, TypePHP introduces **Schema Composition**. When you intersect multiple array shapes or object shapes, TypePHP seamlessly merges them into a unified composite schema at runtime.
 
-```php
+Click **Run** below to test schema composition live:
+
+<TypePHPSnippet title="Array Shape Composition (ShapeA & ShapeB)" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
- * @phpstan-type Identifiable array{id: positive-int}
- * @phpstan-type Taggable     array{tags: list<string>}
+ * @phpstan-type Identifiable array{id: positive-int, created_at: non-empty-string}
+ * @phpstan-type Taggable     array{tags: list<non-empty-string>}
  * @phpstan-type ArticleShape Identifiable & Taggable
  *
  * @param ArticleShape $article
  */
-function publishArticle(array $article): void { ... }
+function publishArticle(array $article): void
+{
+    echo "✓ Published Article #{$article['id']} with " . count($article['tags']) . " tag(s)\n";
+}
 
-// Valid: TypePHP merges the schemas into array{id: positive-int, tags: list<string>}
+// 1. Happy Path: Merges both schemas into a single valid composite shape
 publishArticle([
     'id' => 101,
-    'tags' => ['php', 'release'],
+    'created_at' => '2026-09-15',
+    'tags' => ['php', 'release', 'typephp'],
 ]);
 
-// Invalid: The merged shape is sealed. Unexpected keys are strictly forbidden!
-publishArticle([
-    'id' => 101,
-    'tags' => ['php'],
-    'unregistered_key' => true,
-]);
-// Throws: TypeError: Argument $article contains unsealed unexpected key 'unregistered_key'
+echo "\n";
+
+// 2. Missing Composed Key: Omitting 'tags' from Taggable fails
+try {
+    publishArticle([
+        'id' => 101,
+        'created_at' => '2026-09-15',
+    ]);
+} catch (\TypeError $e) {
+    echo "✗ Missing key from composed schema:\n   " . $e->getMessage() . "\n\n";
+}
+
+// 3. Sealed Safety: Extra unexpected keys not in either schema are strictly rejected!
+try {
+    publishArticle([
+        'id' => 101,
+        'created_at' => '2026-09-15',
+        'tags' => ['release'],
+        'unregistered_key' => true,
+    ]);
+} catch (\TypeError $e) {
+    echo "✗ Sealed composition rejected unsealed key:\n   " . $e->getMessage() . "\n";
+}
 ```
+
+</TypePHPSnippet>
 
 If intersected shapes declare the same key with different constraints (e.g., `score: int` and `score: positive-int`), TypePHP intelligently unifies them into a combined intersection constraint (`score: int & positive-int`).
 
@@ -73,7 +103,8 @@ Discriminated unions (also known as tagged unions) are the industry standard for
 ```php
 /**
  * @param array{type: 'click', x: int, y: int}
- *      | array{type: 'hover', element: non-empty-string} $event
+ *      | array{type: 'hover', element: non-empty-string}
+ *      | array{type: 'scroll', offset: positive-int} $event
  */
 function handleEvent(array $event): void { ... }
 ```
@@ -83,46 +114,128 @@ In previous versions, if you passed a `'hover'` event but accidentally left the 
 In v0.8.0, I completely rewrote the union validation logic with a **Discriminator-Aware Diagnostic Engine**:
 1. TypePHP now scans union branches for literal discriminator fields (like `'type' => 'hover'`).
 2. If your input matches a specific branch's discriminator, TypePHP isolates that branch and diagnoses the **exact failing field** within it.
+3. If an input matches zero discriminators, it falls back to reporting the full union contract.
 
-```php
-handleEvent([
-    'type' => 'hover',
-    'element' => '', // Fails non-empty-string!
-]);
+Test both discriminator branch isolation and full intersection reporting live:
 
-// Beautiful, accurate diagnostics:
-// Throws: TypeError: Argument $event['element'] must be of type non-empty-string, empty string ('') given
+<TypePHPSnippet title="Discriminator-Aware Union & Intersection Diagnostics" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+/**
+ * @param array{type: 'click', x: int, y: int}
+ *      | array{type: 'hover', element: non-empty-string}
+ *      | array{type: 'scroll', offset: positive-int} $event
+ */
+function handleEvent(array $event): void
+{
+    echo "✓ Handled event '{$event['type']}'\n";
+}
+
+/**
+ * @param Countable&ArrayAccess $collection
+ */
+function verifyIntersection(object $collection): void
+{
+    echo "✓ Verified intersection: implements Countable & ArrayAccess\n";
+}
+
+// 1. Happy Path: Valid event payloads
+handleEvent(['type' => 'click', 'x' => 10, 'y' => 20]);
+handleEvent(['type' => 'hover', 'element' => 'btn-submit']);
+
+echo "\n";
+
+// 2. Discriminator-Aware Isolation:
+// Matches 'hover' discriminator, pinpointing empty 'element' rather than blaming 'click'!
+try {
+    handleEvent(['type' => 'hover', 'element' => '']);
+} catch (\TypeError $e) {
+    echo "✗ Targeted discriminator failure:\n   " . $e->getMessage() . "\n\n";
+}
+
+// 3. Unrecognized Discriminator Fallback:
+// 'swipe' matches no valid branch, reporting the complete union contract:
+try {
+    handleEvent(['type' => 'swipe', 'distance' => 50]);
+} catch (\TypeError $e) {
+    echo "✗ Unrecognized discriminator fallback:\n   " . $e->getMessage() . "\n\n";
+}
+
+// 4. Complete Intersection Contract Reporting:
+// Matches PHP 8.1+ native behavior by reporting the full intersection contract!
+class CountableOnly implements Countable { public function count(): int { return 0; } }
+try {
+    verifyIntersection(new CountableOnly());
+} catch (\TypeError $e) {
+    echo "✗ Intersection error formatting:\n   " . $e->getMessage() . "\n";
+}
 ```
 
-And if you pass an entirely unrecognized discriminator (e.g., `'type' => 'unknown'`), TypePHP gracefully falls back to reporting the full union contract, clearly communicating that the payload matched zero valid branches.
-
-**Intersection Error Formatting**  
-Beyond unions, I've also drastically improved error message formatting for intersection types. Instead of leaking a single failing interface on shallow type mismatches, TypePHP now reports the complete intersection contract (e.g., `must be of type (Countable & Iterator)`), perfectly matching PHP 8.1+ native behavior while preserving deep property errors for intersected shapes.
+</TypePHPSnippet>
 
 ---
 
 ## 3. Conditional Parameters (`$mode is 'json' ? array : string`)
 
-TypePHP already supported conditional return types. In v0.8.0, I am bringing that same dynamic evaluation engine to **function and method parameters**.
+TypePHP already supported conditional return types. In v0.8.0, I brought that same dynamic evaluation engine to **function and method parameters**.
 
-You can now enforce that a parameter's expected type strictly depends on the runtime value of an earlier parameter, or on an inferred generic template `T`:
+You can now enforce that a parameter's expected type strictly depends on the runtime value of an earlier parameter, or on an inferred generic template `T`.
 
-```php
+This feature fully supports nested multi-branch conditionals, negated conditions (`is not`), boolean flags, and PHP 8.0+ named arguments passed in swapped order:
+
+<TypePHPSnippet title="Conditional Parameters ($format is 'json' ? A : B)" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
+ * Expected type of $payload strictly depends on $format:
+ *
  * @param 'json'|'xml' $format
- * @param ($format is 'json' ? array<string, mixed> : string) $payload
+ * @param ($format is 'json' ? array<string, mixed> : non-empty-string) $payload
  */
-function sendPayload(string $format, mixed $payload): void { ... }
+function sendPayload(string $format, mixed $payload): void
+{
+    if (is_array($payload)) {
+        echo "✓ Dispatched JSON payload with " . count($payload) . " field(s)\n";
+    } else {
+        echo "✓ Dispatched XML string: {$payload}\n";
+    }
+}
 
-// Evaluates $payload contract as array<string, mixed>
-sendPayload('json', ['status' => 'ok']); 
+// 1. Format 'json' -> requires array
+sendPayload('json', ['status' => 'ok', 'code' => 200]);
 
-// Invalid: The format is 'json', so payload MUST be an array!
-sendPayload('json', '<xml></xml>');
-// Throws: TypeError: sendPayload(): Argument $payload must be of type array, string '<xml></xml>' given
+// 2. Format 'xml' -> requires non-empty-string
+sendPayload('xml', '<response><status>ok</status></response>');
+
+// 3. Named arguments passed in swapped order are fully resolved!
+sendPayload(payload: ['status' => 'swapped'], format: 'json');
+
+echo "\n";
+
+// 4. Failure: Passing string when format is 'json'
+try {
+    sendPayload('json', '{"status":"ok"}');
+} catch (\TypeError $e) {
+    echo "✗ JSON branch violation:\n   " . $e->getMessage() . "\n\n";
+}
+
+// 5. Failure: Passing empty string when format is 'xml'
+try {
+    sendPayload('xml', '');
+} catch (\TypeError $e) {
+    echo "✗ XML branch violation:\n   " . $e->getMessage() . "\n";
+}
 ```
 
-This feature fully supports nested multi-branch conditionals, negated conditions (`is not`), boolean flags, and PHP 8.0+ named arguments passed in swapped order.
+</TypePHPSnippet>
 
 ---
 
@@ -130,20 +243,71 @@ This feature fully supports nested multi-branch conditionals, negated conditions
 
 As developers build increasingly complex DTOs and deeply nested JSON structures, error diagnostics must remain pristine. I audited and fortified the diagnostic engine to ensure that deep property breadcrumbs remain 100% accurate, no matter how deep the chain goes.
 
-```php
+Whether the failure is a type mismatch, a deep missing property, or an uninitialized PHP 8.1+ readonly property, TypePHP pinpoints the exact object and field responsible for the crash:
+
+<TypePHPSnippet title="Deep Property Chain Breadcrumbs (4 Levels Deep)" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
+ * 4-level deep nested object shape contract:
+ *
  * @param object{company: object{department: object{lead: object{name: non-empty-string}}}} $user
  */
-function assignLead(object $user): void { ... }
+function assignLead(object $user): void
+{
+    echo "✓ Assigned lead: {$user->company->department->lead->name}\n";
+}
 
-// Invalid: Fails non-empty-string on the 4th level down
-$user->company->department->lead->name = '';
+// 1. Happy Path: All 4 levels are valid
+$validUser = (object) [
+    'company' => (object) [
+        'department' => (object) [
+            'lead' => (object) [
+                'name' => 'Alice Johnson',
+            ],
+        ],
+    ],
+];
+assignLead($validUser);
 
-assignLead($user);
-// Throws: TypeError: assignLead(): Argument $user->company->department->lead->name must be of type non-empty-string
+echo "\n";
+
+// 2. Deep Field Type Failure (Empty string 4 levels down):
+try {
+    $badNameUser = (object) [
+        'company' => (object) [
+            'department' => (object) [
+                'lead' => (object) [
+                    'name' => '', // Fails non-empty-string!
+                ],
+            ],
+        ],
+    ];
+    assignLead($badNameUser);
+} catch (\TypeError $e) {
+    echo "✗ Deep field error diagnostic:\n   " . $e->getMessage() . "\n\n";
+}
+
+// 3. Deep Missing Property ('lead' is omitted 3 levels down):
+try {
+    $missingPropUser = (object) [
+        'company' => (object) [
+            'department' => (object) [
+                // 'lead' is missing!
+            ],
+        ],
+    ];
+    assignLead($missingPropUser);
+} catch (\TypeError $e) {
+    echo "✗ Deep missing property diagnostic:\n   " . $e->getMessage() . "\n";
+}
 ```
 
-Whether the failure is a type mismatch, a deep missing property (`...->lead is missing required property 'name'`), or a deep uninitialized PHP 8.1+ readonly property, TypePHP pinpoints the exact object and field responsible for the crash.
+</TypePHPSnippet>
 
 ---
 
@@ -151,7 +315,7 @@ Whether the failure is a type mismatch, a deep missing property (`...->lead is m
 
 TypePHP operates flawlessly in CI/CD and local development, but in high-throughput production environments (like Laravel Octane or FrankenPHP), checking `@filemtime` on 1,000+ files per request to detect AST cache invalidation adds unnecessary disk I/O latency.
 
-In v0.8.0, I introduced a dedicated **Production Zero-I/O Flag**.
+In v0.8.0, I introduced a dedicated **Production Zero-I/O Flag**:
 
 ```php
 // typephp.php

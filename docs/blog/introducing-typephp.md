@@ -19,7 +19,7 @@ next: false
   <span>3 min read</span>
 </div>
 
-For the past several years, the PHP ecosystem has undergone a massive renaissance. With tools like **PHPStan**, **Psalm**, and **Pest**, PHP developers now write some of the most strictly-typed, expresive codebases in the world.
+For the past several years, the PHP ecosystem has undergone a massive renaissance. With tools like **PHPStan**, **Psalm**, and **Pest**, PHP developers now write some of the most strictly-typed, expressive codebases in the world.
 
 We routinely write rich, descriptive DocBlocks:
 
@@ -42,7 +42,7 @@ function registerUser(int $id, string $email, Collection $team, array $options):
 Because PHP's C-engine (the Zend Engine) ignores DocBlocks at runtime, those rich types are **passive comments**:
 
 * An incoming HTTP JSON payload or database row can pass `$id = -50` or `$email = ''`.
-* A third-party webhook can inject an unexpectted key into what you assumed was a sealed array shape.
+* A third-party webhook can inject an unexpected key into what you assumed was a sealed array shape.
 * A caller can pass `$team->add(new Product())` and pollute what was supposed to be a `Collection<User>`.
 
 Native PHP type hints allow all of this through without a single warning. To defend against this, developers were historically forced to **litter their clean domain logic with repetitive assertion boilerplate**:
@@ -66,12 +66,12 @@ We asked ourselves: **Why should we write our types twice? What if our existing 
 
 ## Enter TypePHP
 
-**[TypePHP](https://github.com/typephp-php/docs)** is a transparent, pure-PHP runtime type checker that turns your existing DocBlocks (`@param`, `@return`, `@var`, `@template`, `@property`, `@method`, array shapes, integer ranges, and scalar refinements) into **active runtime guard rails** during execution.
+**[TypePHP](https://github.com/typephp-php/typephp)** is a transparent, pure-PHP runtime type checker that turns your existing DocBlocks (`@param`, `@return`, `@var`, `@template`, `@property`, `@method`, array shapes, integer ranges, and scalar refinements) into **active runtime guard rails** during execution.
 
 * **Zero New Syntax:** Write standard, clean PHP and standard PHPDocs.
 * **Zero Build Steps & Zero Node.js:** No Babel, Webpack, or transpilation toolchains.
 * **Zero C-Extensions:** Runs in 100% pure PHP userland across **PHP 8.1, 8.2, 8.3, 8.4, and 8.5** on Linux, macOS, and Windows.
-* **Zero Line-Drift:** Injected guard rails are squashed onto opening braces so that eror stack traces and Xdebug breakpoints match your source files **100% accurately**.
+* **Zero Line-Drift:** Injected guard rails are squashed onto opening braces so that error stack traces and Xdebug breakpoints match your source files **100% accurately**.
 
 ---
 
@@ -95,30 +95,69 @@ TypePHP utilizes a technique known in Aspect-Oriented Programming (AOP) as **Loa
 
 ---
 
-## True Riefied Generics in Pure PHP (`\WeakMap`)
+## True Reified Generics in Pure PHP (`\WeakMap`)
 
-Unlike languages that erase generic types at compile time (like Java or TypeScript), TypePHP delivers **Reified Generics** in memory using PHP's native `\WeakMap`:
+Unlike languages that erase generic types at compile time (like Java or TypeScript), TypePHP delivers **Reified Generics** in memory using PHP's native `\WeakMap`.
 
-```php
-use App\Collections\Collection;
-use App\Models\User;
-use App\Models\Product;
+Click **Run** below to watch this in action. The valid `User` is accepted, the bound generic type is inspected live from RAM, and the invalid `Product` is halted with an uncaught `TypeError` displaying the exact call-site stack trace:
+
+<TypePHPSnippet title="Runtime Reified Generics in Pure PHP" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 use TypePHP\TypePHP;
 
-/** @var Collection<User> $users */
+class User
+{
+    public function __construct(public string $name) {}
+}
+
+class Product
+{
+    public function __construct(public string $sku) {}
+}
+
+/**
+ * @template T
+ */
+class Collection
+{
+    /** @var array<int, T> */
+    public array $items = [];
+
+    /**
+     * @param T $item
+     */
+    public function add(mixed $item): void
+    {
+        $this->items[] = $item;
+    }
+}
+
+/** @var Collection<User> */
 $users = new Collection();
 
-$users->add(new User('Alice')); // Valid
+// 1. Valid addition
+$users->add(new User('Alice'));
+echo "✓ Added User: {$users->items[0]->name}\n";
+echo "✓ Reified Memory Type: " . TypePHP::getGenericType($users) . "\n\n";
 
-$users->add(new Product('SKU-100')); 
-// Throws: TypeError: Collection::add(): Argument $item (template T = User) must be of type User, Product given
+// 2. Runtime violation: Product violates Collection<User>
+// Executed directly without try-catch to display the exact call-site stack trace!
+echo "Attempting to add Product into Collection<User>...\n";
+$users->add(new Product('SKU-100'));
 ```
+
+</TypePHPSnippet>
 
 Because `\WeakMap` uses weak references, the exact microsecond `$users` is unset or goes out of scope, its generic bindings are **automatically deleted from RAM with zero memory leaks**.
 
-You can even inspect generic parameters at runtime via the library's reified generics api:
+You can even inspect generic parameters at runtime via the library's reified generics API:
 ```php
-TypePHP::getGenericType($users); // Returns 'App\Models\User'
+TypePHP::getGenericType($users); // Returns 'User'
 ```
 
 ---
@@ -174,7 +213,7 @@ Generate your default configuration:
 vendor/bin/typephp config:init
 ```
 
-Now, run your exiting test suite or application:
+Now, run your existing test suite or application:
 
 ```bash
 php artisan serve
@@ -200,5 +239,5 @@ Every function contract, array shape, integer range, and generic container in yo
 
 * **[Documentation Website »](/getting-started/installation)**
 * **[Quick Start Guide »](/getting-started/quick-start)**
-* **[Generics Deep Dive »](/generics/basics-and-bounds)**
-* **[GitHub Repository »](https://github.com/typephp-php/docs)**
+* **[Generics Deep Dive »](/generics/class-generics-and-upper-bounds)**
+* **[GitHub Repository »](https://github.com/typephp-php/typephp)**
