@@ -15,26 +15,28 @@ TypePHP coordinates two industry-standard parsing libraries:
 
 ## The 6-Step Execution Lifecycle
 
-```
-[include / require "file.php"] 
-               │
-               ▼
- 1. Stream Interception (StreamWrapper on 'file://')
-               │
-               ▼
- 2. Path & Specificity Filtering (PathMatcher & FileFilter)
-               │
-               ▼
- 3. Compile-Time AST Check Elimination (StaticTypeEvaluator)
-               │ (Evaluates @return, @var, & property defaults for scalars, arrays, non-generic objects)
-               ▼
- 4. Selective Guard Rail Injection (ContractVisitor & FunctionContractInjector)
-               │ (Injects callee-side parameter boundaries, dynamic returns, and generic state)
-               ▼
- 5. Zero Line-Drift Formatting & Disk Caching (TypePHPPrinter & CacheManager)
-               │ (Preserves exact source file lines in stack traces)
-               ▼
- 6. Runtime Enforcement & State Tracking (RuntimeTypeChecker & TemplateManager)
+```mermaid
+flowchart TD
+    A["`**include** / **require** 'file.php'`"] --> B["`**1. Stream Interception**
+    *(StreamWrapper on 'file://')*`"]
+    B --> C["`**2. Path & Specificity Filtering**
+    *(PathMatcher & FileFilter)*`"]
+    C --> D["`**3. Compile-Time AST Elimination**
+    *(StaticTypeEvaluator)*`"]
+    D --> E["`**4. Selective Guard Rail Injection**
+    *(ContractVisitor & FunctionContractInjector)*`"]
+    E --> F["`**5. Zero Line-Drift Formatting & Disk Cache**
+    *(TypePHPPrinter & CacheManager)*`"]
+    F --> G["`**6. Runtime Enforcement & State Tracking**
+    *(RuntimeTypeChecker & TemplateManager)*`"]
+
+    style A fill:#3b82f6,color:#fff,stroke-width:0px
+    style B fill:#1e293b,color:#e2e8f0,stroke:#3b82f6
+    style C fill:#1e293b,color:#e2e8f0,stroke:#3b82f6
+    style D fill:#1e293b,color:#e2e8f0,stroke:#3b82f6
+    style E fill:#1e293b,color:#e2e8f0,stroke:#3b82f6
+    style F fill:#1e293b,color:#e2e8f0,stroke:#3b82f6
+    style G fill:#10b981,color:#fff,stroke-width:0px
 ```
 
 ---
@@ -86,20 +88,23 @@ Compile-time check elimination applies **strictly to `@return` statements, local
 
 Function parameters (`@param`) are **deliberately excluded** from caller-side compile-time elimination and are enforced at the callee boundary (see Section 4).
 
-```
-                  AST Expression + DocBlock TypeNode
-                  (@return, @var, or property default)
-                                  │
-                                  ▼
-                       [ StaticTypeEvaluator ]
-                                  │
-         ┌────────────────────────┴────────────────────────┐
-         │                                                 │
-  [PROVEN_VALID]                                   [UNKNOWN / DYNAMIC]
-         │                                                 │
-         ▼                                                 ▼
-  ELIMINATE CHECK                                   DEFER TO RUNTIME
- (Emit clean node)                               (Inject TypePHP check)
+```mermaid
+flowchart TD
+    A["`**AST Expression + DocBlock TypeNode**
+    *(@return, @var, or property default)*`"] --> B["StaticTypeEvaluator"]
+    B -->|Verified| C["PROVEN VALID"]
+    B -->|Unverifiable| D["UNKNOWN / DYNAMIC"]
+    
+    C --> E["`**ELIMINATE CHECK**
+    *(Emit clean node)*`"]
+    D --> F["`**DEFER TO RUNTIME**
+    *(Inject TypePHP check)*`"]
+
+    style A fill:#3b82f6,color:#fff,stroke-width:0px
+    style C fill:#10b981,color:#fff,stroke-width:0px
+    style E fill:#10b981,color:#fff,stroke-width:0px
+    style D fill:#f59e0b,color:#fff,stroke-width:0px
+    style F fill:#ef4444,color:#fff,stroke-width:0px
 ```
 
 ### What Gets Eliminated?
@@ -136,11 +141,21 @@ Rather than injecting checks at every call site, TypePHP injects parameter check
 
 1. **The Inversion-of-Control / Testing Boundary:**
    In web frameworks and test runners (Laravel, Symfony, Pest, PHPUnit), application code is routinely invoked by **untransformed, blacklisted vendor code**:
+
+   ```mermaid
+   flowchart LR
+       A["`**Untransformed Caller**
+       *vendor/pestphp/pest/src/...*`"] -->|invokes| B["`**Transformed Target**
+       *tests/Feature/OrderTest.php*`"]
+       B -->|invokes| C["`**Transformed Target**
+       *app/Services/PaymentService.php*
+       **(Callee-Side Fortress)**`"]
+
+       style A fill:#64748b,color:#fff,stroke-width:0px
+       style B fill:#3b82f6,color:#fff,stroke-width:0px
+       style C fill:#10b981,color:#fff,stroke-width:0px
    ```
-   vendor/pestphp/pest/src/... (Untransformed Caller)
-       └── invokes ──> tests/Feature/OrderTest.php (Transformed Target)
-                           └── invokes ──> app/Services/PaymentService.php (Transformed Target)
-   ```
+
    If checks were placed on the caller, calls originating from test runners, framework routers, and middleware pipelines would have **no validation code injected**. By enforcing checks at the callee, **whitelisted application files defend their own boundaries regardless of who calls them.**
 
 2. **First-Class Callables (`$service->method(...)`):**

@@ -1,3 +1,4 @@
+
 # Performance Considerations
 
 TypePHP is engineered for sub-second CLI test execution, zero memory leaks, and high-throughput production workloads. This document details the internal performance architecture, compile-time AST check elimination, collection validation strategies, JIT compiler optimizations, and benchmarking guidelines.
@@ -8,22 +9,45 @@ TypePHP is engineered for sub-second CLI test execution, zero memory leaks, and 
 
 TypePHP minimizes execution overhead through 7 core architectural optimizations:
 
-```
-[Source Code / Included File]
-         │
-         ├── 1. Compile-Time AST Check Elimination ──► 0 opcodes for proven literals, $this, & defaults
-         │
-         ├── 2. Direct Opcode Parameter Arrays ──► ['id' => $id] (Zero symbol table scans)
-         │
-         ├── 3. O(1) Contract Short-Circuiting ──► Instant 1-op exit if method has no contracts
-         │
-         ├── 4. Selective Proxy Injection ──► Zero wrapper overhead for non-callable types
-         │
-         ├── 5. Vendor Boundary Short-Circuiting ──► Bypasses vendor-internal calls
-         │
-         ├── 6. Zero-Allocation Lazy Context ──► Strings constructed only on validation failure
-         │
-         └── 7. WeakMap Object Memoization ──► O(1) cached check on repeated object instances
+```mermaid
+flowchart TD
+    A["`**Source Code / Included File**`"]
+
+    subgraph Phase1["Compile-Time Optimizations"]
+        B["`**1. Compile-Time AST Elimination**
+        *0 opcodes for proven literals, $this, & defaults*`"]
+        C["`**2. Direct Opcode Parameter Arrays**
+        *['id' => $id] (Zero symbol table scans)*`"]
+    end
+
+    subgraph Phase2["Call-Boundary Optimizations"]
+        D["`**3. O(1) Contract Short-Circuiting**
+        *Instant 1-op exit if method has no contracts*`"]
+        E["`**4. Selective Proxy Injection**
+        *Zero wrapper overhead for non-callable types*`"]
+        F["`**5. Vendor Boundary Short-Circuiting**
+        *Bypasses vendor-internal calls*`"]
+    end
+
+    subgraph Phase3["Runtime Memory Optimizations"]
+        G["`**6. Zero-Allocation Lazy Context**
+        *Strings constructed only on validation failure*`"]
+        H["`**7. WeakMap Object Memoization**
+        *O(1) cached check on repeated object instances*`"]
+    end
+
+    A --> Phase1
+    Phase1 --> Phase2
+    Phase2 --> Phase3
+
+    style A fill:#3b82f6,color:#fff,stroke-width:0px
+    style B fill:#10b981,color:#fff,stroke-width:0px
+    style C fill:#10b981,color:#fff,stroke-width:0px
+    style D fill:#10b981,color:#fff,stroke-width:0px
+    style E fill:#10b981,color:#fff,stroke-width:0px
+    style F fill:#10b981,color:#fff,stroke-width:0px
+    style G fill:#10b981,color:#fff,stroke-width:0px
+    style H fill:#10b981,color:#fff,stroke-width:0px
 ```
 
 ---
@@ -66,7 +90,7 @@ return '1.0.0';
 * **Literal Returns:** `return 42;` vs `@return positive-int`, `return 'active';` vs `'active'|'pending'`.
 * **Fluent Method Chaining:** `return $this;` against `@return $this` / `@return self` (identity truth $\to$ zero checks, allowing fluent builders to run at 100% native speed).
 * **Late Static Binding:** `return new static();` against `@return static`.
-* **Exact Object Instantiations:** `return new User('Alice');` against `@return User` (FQCN matches without reflection).
+* **Exact Object Instantiations:** `return new User('Alice');` vs `@return User` (exact FQCN string match, zero reflection, zero autoloading).
 * **Empty Arrays:** `return [];` against `list<T>`, `array<K, V>`, `iterable`.
 * **Sequential Lists:** `return [1, 2, 3];` against `list<positive-int>` (bypasses loop entirely).
 * **Property Defaults:** `public int $retries = 3;` vs `@var positive-int` (bypasses constructor synthesis).
@@ -132,11 +156,22 @@ In production containers (Docker, Kubernetes, AWS Lambda), application source fi
 
 Validating collection structures (`list<T>`, `array<K, V>`, `Type[]`) can be configured in `typephp.php` via `'array_validation'`:
 
-```php
-// typephp.php
-return [
-    'array_validation' => 'full', // 'full' or 'hybrid'
-];
+```mermaid
+flowchart TD
+    A["`**Array Validation Request**`"] --> B{"`**Array Size**`"}
+    
+    B -->|"N ≤ 128 items"| C["`**Full Exhaustive Scan**
+    *Validates 100% of items O(n)*`"]
+    
+    B -->|"N > 128 items (Hybrid Mode)"| D["`**O(1) Constant Sampling**
+    • Native C-level array_is_list()
+    • First & last boundary items
+    • 3 random internal samples`"]
+
+    style A fill:#3b82f6,color:#fff,stroke-width:0px
+    style B fill:#1e293b,color:#e2e8f0,stroke:#3b82f6
+    style C fill:#10b981,color:#fff,stroke-width:0px
+    style D fill:#f59e0b,color:#fff,stroke-width:0px
 ```
 
 ### 1. Strict Full Mode (`'array_validation' => 'full'`, Default)

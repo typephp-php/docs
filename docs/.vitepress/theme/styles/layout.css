@@ -91,3 +91,19 @@ body {
         width: 270px !important;
     }
 }
+
+.mermaid .node foreignObject {
+  overflow: visible !important;
+}
+
+.mermaid .node foreignObject div {
+  line-height: 1.35 !important;
+  font-size: 13px !important;
+  font-family: var(--vp-font-family-base) !important;
+}
+
+.mermaid .node rect,
+.mermaid .node polygon {
+  rx: 6px !important;
+  ry: 6px !important;
+}

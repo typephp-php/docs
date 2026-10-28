@@ -12,7 +12,7 @@ You can configure the active handling strategy via `'on_violation'` in `typephp.
 
 | Strategy | Behavior | Best Used For |
 | :--- | :--- | :--- |
-| **`'throw'`** *(Default)* | Throws `TypePHP\Exception\TypeError` on the first violation. Telemetry tracking is disabled for **0 memory overhead**. | Production gatekeeping, local feature development, and strict test suites. |
+| **`'throw'`** *(Default)* | Throws `TypeError` on the first violation. Telemetry tracking is disabled for **0 memory overhead**. | Production gatekeeping, local feature development, and strict test suites. |
 | **`'warn'`** | Suppresses exceptions; emits a native PHP `E_USER_WARNING` with exact caller locations once per unique violation and continues execution normally. Telemetry tracking is disabled for **0 memory overhead**. | Live staging logs, local dev server logs, and APM monitoring (Sentry / Datadog / Bugsnag). |
 | **`'report'`** | Suppresses exceptions; activates telemetry to track instrumented files, records all unique violations into memory, tracks occurrence frequencies, and exports a structured JSON report to `report_file` at shutdown. | 1-pass codebase audits, legacy migration, multi-module test runs, and non-blocking CI build gates. |
 
@@ -20,7 +20,7 @@ You can configure the active handling strategy via `'on_violation'` in `typephp.
 
 ## Strict Fail-Fast Mode (Default)
 
-By default (`'on_violation' => 'throw'`), TypePHP operates as a strict runtime gatekeeper. The moment an invalid argument, return value, or property assignment occurs, TypePHP halts execution immediately by throwing `TypePHP\Exception\TypeError`:
+By default (`'on_violation' => 'throw'`), TypePHP operates as a strict runtime gatekeeper. The moment an invalid argument, return value, or property assignment occurs, TypePHP halts execution immediately by throwing a standard `TypeError`:
 
 <TypePHPSnippet title="Strict Fail-Fast (throw Mode)" default-view="source">
 
@@ -326,18 +326,20 @@ If a test suite runs but no files match the `include` paths, TypePHP injects a `
 
 To make auditing large codebases fast and actionable, TypePHP tracks three distinct location coordinates for every reported violation:
 
-```text
-┌────────────────────────────────────────────────────────┐
-│ 1. declared_in: src/Contracts/OrderInterface.php:15     │  <-- Where the contract is defined
-└────────────────────────────────────────────────────────┘
-                           │
-┌────────────────────────────────────────────────────────┐
-│ 2. file:line   : src/Services/OrderService.php:42      │  <-- Where the contract was violated
-└────────────────────────────────────────────────────────┘
-                           │
-┌────────────────────────────────────────────────────────┐
-│ 3. caller      : tests/OrderTest.php:100 (testPay())    │  <-- Who triggered the execution
-└────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A["`**1. declared_in**
+    <code>src/Contracts/OrderInterface.php:15</code>
+    *(Where the contract is defined)*`"] --> B["`**2. file:line**
+    <code>src/Services/OrderService.php:42</code>
+    *(Where the contract was violated)*`"]
+    B --> C["`**3. caller**
+    <code>tests/OrderTest.php:100 (testPay())</code>
+    *(Who triggered the execution)*`"]
+
+    style A fill:#3b82f6,color:#fff,stroke-width:0px
+    style B fill:#ef4444,color:#fff,stroke-width:0px
+    style C fill:#f59e0b,color:#fff,stroke-width:0px
 ```
 
 - **Violation Site (`file` & `line`):** Points to the exact line where invalid data was received, returned, or assigned.
@@ -350,24 +352,33 @@ To make auditing large codebases fast and actionable, TypePHP tracks three disti
 
 When executing tests across multiple parallel worker processes (`pest --parallel` or `paratest -p 4`):
 
-```text
-┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
-│ Worker 1 (PID)  │       │ Worker 2 (PID)  │       │ Worker N (PID)  │
-│  In-Memory RAM  │       │  In-Memory RAM  │       │  In-Memory RAM  │
-└────────┬────────┘       └────────┬────────┘       └────────┬────────┘
-         │ (At Shutdown)           │ (At Shutdown)           │ (At Shutdown)
-         ▼                         ▼                         ▼
-┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
-│ shard_w1.json   │       │ shard_w2.json   │       │ shard_wN.json   │
-└────────┬────────┘       └────────┬────────┘       └────────┬────────┘
-         │                         │                         │
-         └────────────────┬────────┴─────────────────────────┘
-                          │ (Lock-Free Auto-Consolidation)
-                          ▼
-            ┌───────────────────────────┐
-            │ var/typephp-report.json   │
-            │  (Consolidated & Deduped) │
-            └───────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Parallel Workers
+        W1["`**Worker 1 (PID)**
+        *In-Memory RAM*`"]
+        W2["`**Worker 2 (PID)**
+        *In-Memory RAM*`"]
+        WN["`**Worker N (PID)**
+        *In-Memory RAM*`"]
+    end
+
+    subgraph Lock-Free Disk Shards
+        S1["`<code>shard_w1.json</code>`"]
+        S2["`<code>shard_w2.json</code>`"]
+        SN["`<code>shard_wN.json</code>`"]
+    end
+
+    W1 -->|At Shutdown| S1
+    W2 -->|At Shutdown| S2
+    WN -->|At Shutdown| SN
+
+    S1 --> M["`**var/typephp-report.json**
+    *(Consolidated & Deduplicated)*`"]
+    S2 --> M
+    SN --> M
+
+    style M fill:#10b981,color:#fff,stroke-width:0px
 ```
 
 - **Lock-Free Worker Writing:** Each worker process detects its worker ID (`TEST_TOKEN` or `PEST_PARALLEL_WORKER_ID`) and writes to an isolated shard file (`var/.typephp-shards/shard_<worker>_<pid>.json`). Workers never acquire file locks (`flock`), ensuring **0ms lock contention**.

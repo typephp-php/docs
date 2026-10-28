@@ -174,6 +174,107 @@ Child classes automatically inherit magic property and method annotations declar
 * **Traits:** A class using a trait inherits all magic annotations declared on the trait.
 * **Overriding:** If a child class redeclares an `@property` or `@method` annotation, the child's annotation takes precedence.
 
+<TypePHPSnippet title="DocBlock Inheritance for Magic Annotations" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+/**
+ * 1. Interface declaring a magic method contract
+ *
+ * @method non-empty-string findByTag(non-empty-string $tag)
+ */
+interface BaseModelInterface {}
+
+/**
+ * 2. Trait declaring a magic property write contract
+ *
+ * @property-write positive-int $auditUserId
+ */
+trait AuditableTrait {}
+
+/**
+ * 3. Parent Class declaring magic property read and general property contracts
+ *
+ * @property-read positive-int $id
+ * @property string $title
+ */
+abstract class AbstractModel
+{
+    protected array $attributes = [];
+
+    public function __get(string $name): mixed
+    {
+        return $this->attributes[$name] ?? null;
+    }
+
+    public function __set(string $name, mixed $value): void
+    {
+        $this->attributes[$name] = $value;
+    }
+
+    public function __call(string $name, array $arguments): mixed
+    {
+        if ($name === 'findByTag') {
+            return "found_" . $arguments[0];
+        }
+        throw new \BadMethodCallException("Method {$name} not found");
+    }
+}
+
+/**
+ * 4. Child Class inheriting from Parent, Interface, and Trait!
+ * Notice: Overrides parent's @property $title to restrict it to 'draft'|'published'!
+ *
+ * @property 'draft'|'published' $title
+ */
+class ArticleModel extends AbstractModel implements BaseModelInterface
+{
+    use AuditableTrait;
+}
+
+$article = new ArticleModel();
+
+// A. Inherited Interface @method findByTag()
+echo "✓ " . $article->findByTag('php') . "\n";
+
+// B. Inherited Trait @property-write $auditUserId
+$article->auditUserId = 100;
+echo "✓ Wrote to inherited trait @property-write \$auditUserId\n";
+
+// C. Child Overridden @property $title
+$article->title = 'published';
+echo "✓ Wrote 'published' to child overridden @property \$title\n\n";
+
+// D. Failure: Overridden @property $title rejects 'archived'
+try {
+    echo "Attempting to assign 'archived' to overridden @property \$title...\n";
+    $article->title = 'archived';
+} catch (\TypeError $e) {
+    echo "✗ Child override check:\n   " . $e->getMessage() . "\n\n";
+}
+
+// E. Failure: Inherited Trait @property-write $auditUserId rejects negative int
+try {
+    echo "Attempting to assign negative ID to inherited trait @property-write...\n";
+    $article->auditUserId = -50;
+} catch (\TypeError $e) {
+    echo "✗ Inherited trait property check:\n   " . $e->getMessage() . "\n\n";
+}
+
+// F. Failure: Inherited Interface @method findByTag() rejects empty string tag
+try {
+    echo "Attempting to pass empty string tag to inherited interface @method...\n";
+    $article->findByTag('');
+} catch (\TypeError $e) {
+    echo "✗ Inherited interface method check:\n   " . $e->getMessage() . "\n";
+}
+```
+
+</TypePHPSnippet>
+
 ---
 
 ## Best Practice: Quoted Literals in `@method` Signatures

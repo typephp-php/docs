@@ -134,21 +134,58 @@
           </svg>
         </button>
 
-        <!-- Share Snippet -->
+      <!-- Share Snippet -->
         <button
-          :class="['icon-action-btn', { success: copiedLink }]"
-          :title="copiedLink ? 'Share Link Copied!' : 'Share Snippet URL'"
+          :class="['icon-action-btn', { success: copiedLink, loading: isSharing }]"
+          :disabled="isSharing"
+          :title="isSharing ? 'Generating short link...' : (copiedLink ? 'Share Link Copied!' : 'Share Snippet URL')"
           aria-label="Share Snippet URL"
           @click="$emit('share')"
         >
-          <svg v-if="!copiedLink" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <!-- 1. Spinner while Supabase is creating the link -->
+          <svg
+            v-if="isSharing"
+            class="animate-spin"
+            viewBox="0 0 24 24"
+            width="14"
+            height="14"
+            fill="none"
+          >
+            <circle cx="12" cy="12" r="9" stroke="var(--vp-c-divider)" stroke-width="2.5" />
+            <path d="M12 3a9 9 0 0 1 9 9" stroke="var(--vp-c-brand-1)" stroke-width="2.5" stroke-linecap="round" />
+          </svg>
+
+          <!-- 2. Green checkmark after successfully copied -->
+          <svg
+            v-else-if="copiedLink"
+            viewBox="0 0 24 24"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="#10b981"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+
+          <!-- 3. Default share icon -->
+          <svg
+            v-else
+            viewBox="0 0 24 24"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <circle cx="18" cy="5" r="3" />
             <circle cx="6" cy="12" r="3" />
             <circle cx="18" cy="19" r="3" />
             <path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98" />
-          </svg>
-          <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M20 6 9 17l-5-5" />
           </svg>
         </button>
       </div>
@@ -181,6 +218,7 @@ defineProps<{
   hasCustomConfig: boolean;
   copiedCode: boolean;
   copiedLink: boolean;
+  isSharing?: boolean; 
 }>();
 
 const emit = defineEmits<{
@@ -209,6 +247,21 @@ function onPresetChange(e: Event) {
 </script>
 
 <style scoped>
+.animate-spin {
+  animation: toolbar-spin 0.8s linear infinite;
+}
+
+@keyframes toolbar-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.icon-action-btn:disabled {
+  opacity: 0.7;
+  cursor: wait !important;
+}
+
 .playground-toolbar {
   position: relative;
   z-index: 10;

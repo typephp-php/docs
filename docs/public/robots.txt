@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://typephp-php.github.io/docs/sitemap.xml
