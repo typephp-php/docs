@@ -1,7 +1,7 @@
 [
   {
     "title": "The 'No More DocBlocks' Illusion: Why Native Generics Would Never Kill the Comment Tax in PHP",
-    "url": "/docs/blog/the-no-more-docblocks-illusion",
+    "url": "/blog/the-no-more-docblocks-illusion",
     "date": "September 26, 2026",
     "readTime": "8 min read",
     "badge": "Deep Dive",
@@ -10,7 +10,7 @@
   },
   {
     "title": "TypePHP v0.8.0: Schema Composition, Conditional Parameters, and Smart Diagnostics",
-    "url": "/docs/blog/celebrating-v0.8.0-schema-composition-and-smart-diagnostics",
+    "url": "/blog/celebrating-v0.8.0-schema-composition-and-smart-diagnostics",
     "date": "September 15, 2026",
     "readTime": "6 min read",
     "badge": "Release",
@@ -19,7 +19,7 @@
   },
   {
     "title": "When Static Analyzers Teach You the Wrong Way: The Dogma of Variance and the Pursuit of Working QA",
-    "url": "/docs/blog/when-static-analyzers-teach-the-wrong-way",
+    "url": "/blog/when-static-analyzers-teach-the-wrong-way",
     "date": "September 9, 2026",
     "readTime": "9 min read",
     "badge": "Deep Dive",
@@ -28,7 +28,7 @@
   },
   {
     "title": "From Sluggish to Blazing Fast: How I Made TypePHP 90x Faster and Uncovered 400+ 'DocBlock Lies' on Shopware 6",
-    "url": "/docs/blog/from-sluggish-to-blazing-fast",
+    "url": "/blog/from-sluggish-to-blazing-fast",
     "date": "August 30, 2026",
     "readTime": "9 min read",
     "badge": "Case Study",
@@ -37,7 +37,7 @@
   },
   {
     "title": "How to Enforce Runtime Generics on Third-Party Collections Libraries (Doctrine, Ramsey, Laravel Collections) with TypePHP",
-    "url": "/docs/blog/reifying-third-party-collections",
+    "url": "/blog/reifying-third-party-collections",
     "date": "August 18, 2026",
     "readTime": "6 min read",
     "badge": "Guide",
@@ -46,7 +46,7 @@
   },
   {
     "title": "The Death of the 'DocBlock Lie': Introducing TypePHP and Runtime Reified Generics in Pure PHP",
-    "url": "/docs/blog/introducing-typephp",
+    "url": "/blog/introducing-typephp",
     "date": "August 18, 2026",
     "readTime": "3 min read",
     "badge": "Announcement",
