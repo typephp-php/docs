@@ -11,7 +11,7 @@ hero:
       link: /playground
     - theme: alt
       text: "Get Started →"
-      link: /getting-started/installation
+      link: /docs/getting-started/installation
     - theme: alt
       text: "View on GitHub"
       link: https://github.com/typephp-php/typephp
@@ -37,38 +37,117 @@ Want to see runtime reified generics and shape validation in action right now? L
 
 TypePHP operates entirely in userland using native stream wrappers and AST transformations. Because it requires no C-extensions or FFI, you can drop it into any PHP 8.1+ project or web framework effortlessly. It reads your existing PHPDoc annotations and enforces them the moment your code runs.
 
-### Real-World Framework Guard Rails (Laravel / Symfony)
-Prevent dynamic data bugs from leaking into database queries or API responses:
+---
 
-```php
-namespace App\Models;
+### 1. True Runtime Generics with Reified Memory State
 
-use App\Enums\Role;
-use Illuminate\Database\Eloquent\Model;
+Define generic templates and TypePHP binds their state per object instance in memory using native `\WeakMap`.
 
-class User extends Model
+Click **Run** below to watch TypePHP enforce generic boundaries live:
+
+<TypePHPSnippet title="Runtime Reified Generics (WeakMap)" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+use TypePHP\TypePHP;
+
+class User { public function __construct(public string $name) {} }
+class Product { public function __construct(public string $sku) {} }
+
+/**
+ * @template T
+ */
+class Collection 
 {
-    /**
-     * @return list<int>
-     */
-    public function assignableRoles(): array
-    {
-        if ($this->isSuperAdmin()) {
-            // Bug! Returns an array of Role Enum instances instead of integers:
-            return Role::cases(); 
-        }
+    /** @var array<int, T> */
+    public array $items = [];
 
-        return [Role::STAFF->value];
+    /** @param T $item */
+    public function add(mixed $item): void 
+    {
+        $this->items[] = $item;
     }
 }
 
-// Executing $user->assignableRoles() throws:
-// TypePHP\Exception\TypeError: User::assignableRoles(): Return value[0] must be of type int, App\Enums\Role returned
+// Prebind T = User to this specific object instance in memory
+/** @var Collection<User> $users */
+$users = new Collection();
+
+// 1. Valid addition
+$users->add(new User('Alice'));
+echo "✓ Added User: {$users->items[0]->name}\n";
+echo "✓ Reified Memory Type: " . TypePHP::getGenericType($users) . "\n\n";
+
+// 2. Uncaught runtime violation: Product violates Collection<User>
+echo "Attempting to add Product into Collection<User>...\n";
+$users->add(new Product('SKU-100'));
 ```
+
+</TypePHPSnippet>
 
 ---
 
-### Non-Fatal Codebase Auditing & JSON Reports
+### 2. Array Shapes & Key/Value Extractions
+
+Enforce strict associative array structures and constant extractions:
+
+<TypePHPSnippet title="Array Shapes & Constant Key Extractions" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+class DatabaseMap
+{
+    public const DRIVERS = [
+        'mysql' => 'PDO\MySQL\Driver',
+        'pgsql' => 'PDO\PgSQL\Driver',
+    ];
+}
+
+/**
+ * @param array{
+ *     driver: key-of<DatabaseMap::DRIVERS>,
+ *     host: non-empty-string,
+ *     port: int<1, 65535>
+ * } $config
+ */
+function connectDatabase(array $config): void
+{
+    echo "✓ Connected via driver '{$config['driver']}' to {$config['host']}:{$config['port']}\n";
+}
+
+// 1. Valid connection payload
+connectDatabase([
+    'driver' => 'mysql',
+    'host' => '127.0.0.1',
+    'port' => 3306,
+]);
+
+echo "\n";
+
+// 2. Invalid Driver: 'sqlite' is not a valid key of DatabaseMap::DRIVERS!
+try {
+    echo "Attempting to connect with unapproved driver 'sqlite'...\n";
+    connectDatabase([
+        'driver' => 'sqlite',
+        'host' => '127.0.0.1',
+        'port' => 3306,
+    ]);
+} catch (\TypeError $e) {
+    echo "✗ Caught invalid driver key:\n   " . $e->getMessage() . "\n";
+}
+```
+
+</TypePHPSnippet>
+
+---
+
+### 3. Non-Fatal Codebase Auditing & JSON Reports
 
 Onboard TypePHP onto legacy codebases without fixing errors one crash at a time. Run your test suite in Audit Mode (`TYPEPHP_ON_VIOLATION=report`) to execute all tests to completion and capture every single type discrepancy across your application into a single structured JSON report:
 
@@ -95,67 +174,7 @@ vendor/bin/typephp report
     Line 88    return      return       expected list<int>, App\Enums\Role returned
 ```
 
-> **Learn More:** Check out the [Violation Reporting & Auditing](/testing/violation-reporting) guide for full details on parallel worker sharding and CI gatekeeping (`fail_on_report`).
-
----
-
-### True Runtime Generics with Reified Memory State
-Define generic templates and TypePHP tracks their state per object instance in memory using native `\WeakMap`:
-
-```php
-/**
- * @template T
- */
-class Collection 
-{
-    /** @param T $item */
-    public function add(mixed $item): void { /* ... */ }
-}
-
-// Prebind T = User to this specific object instance in memory
-/** @var Collection<User> $users */
-$users = new Collection();
-
-$users->add(new User('Alice')); // Valid
-
-$users->add(new Product('SKU-100')); 
-// Throws TypeError: Argument $item (template T = User) must be of type User, Product given
-```
-
----
-
-### Array Shapes & Key/Value Extractions
-Enforce strict associative array structures and constant extractions:
-
-```php
-namespace App\Services;
-
-use App\Database\DriverManager;
-
-/**
- * @phpstan-type ConnectionParams array{
- *     driver: key-of<DriverManager::DRIVER_MAP>,
- *     driverClass?: value-of<DriverManager::DRIVER_MAP>
- * }
- */
-class DatabaseService
-{
-    /**
-     * @param ConnectionParams $params
-     */
-    public function connect(array $params): void
-    {
-        // ...
-    }
-}
-
-$service = new DatabaseService();
-
-$service->connect(['driver' => 'pdo_mysql']); // Valid
-
-$service->connect(['driver' => 'pdo_invalid']);
-// Throws TypeError: Argument $params['driver'] must be a key of DriverManager::DRIVER_MAP
-```
+> **Learn More:** Check out the [Violation Reporting & Auditing](/docs/testing/violation-reporting) guide for full details on parallel worker sharding and CI gatekeeping (`fail_on_report`).
 
 ---
 

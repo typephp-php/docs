@@ -1,5 +1,14 @@
 [
   {
+    "title": "TypePHP v0.12.0: The Zero-Overhead Compile-Time Optimization Engine",
+    "url": "/blog/celebrating-v0.12.0-compile-time-optimization-engine",
+    "date": "October 28, 2026",
+    "readTime": "6 min read",
+    "badge": "Release",
+    "badgeClass": "badge-announcement",
+    "excerpt": "Celebrating v0.12.0! Featuring Compile-Time AST Check Elimination, lexical zero line-drift parsing, by-reference mutation tracking, and backed Enum bitmasks."
+  },
+  {
     "title": "The 'No More DocBlocks' Illusion: Why Native Generics Would Never Kill the Comment Tax in PHP",
     "url": "/blog/the-no-more-docblocks-illusion",
     "date": "September 26, 2026",
