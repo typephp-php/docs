@@ -1,7 +1,7 @@
 import DefaultTheme from 'vitepress/theme'
 import type { Theme } from 'vitepress'
 import { h, onMounted, watch, nextTick } from 'vue'
-import { useRoute } from 'vitepress'
+import { useRoute, useRouter } from 'vitepress'
 import GitHubStars from './components/GitHubStars.vue'
 import TypePHPSnippet from './components/TypePHPSnippet.vue'
 import './custom.css'
@@ -43,6 +43,37 @@ function enableTableSorting() {
   })
 }
 
+function checkAndRedirect(path: string): boolean {
+  if (typeof window === 'undefined') return false
+
+  if (path.startsWith('/docs/blog/')) {
+    const target = path.replace('/docs/blog/', '/blog/')
+    window.location.replace(target + window.location.search + window.location.hash)
+    return true
+  }
+
+  const docsSections = [
+    '/getting-started',
+    '/core-concepts',
+    '/supported-types',
+    '/generics',
+    '/testing',
+    '/advanced',
+    '/production',
+    '/troubleshooting',
+  ]
+
+  for (const section of docsSections) {
+    if (path.startsWith(section) && !path.startsWith('/docs/')) {
+      const target = '/docs' + path + window.location.search + window.location.hash
+      window.location.replace(target)
+      return true
+    }
+  }
+
+  return false
+}
+
 export default {
   extends: DefaultTheme,
   Layout() {
@@ -57,6 +88,10 @@ export default {
     const route = useRoute()
 
     onMounted(() => {
+      if (checkAndRedirect(window.location.pathname)) {
+        return
+      }
+
       enableTableSorting()
 
       if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
@@ -70,10 +105,12 @@ export default {
 
     watch(
       () => route.path,
-      () => {
-        nextTick(() => {
-          enableTableSorting()
-        })
+      (newPath) => {
+        if (!checkAndRedirect(newPath)) {
+          nextTick(() => {
+            enableTableSorting()
+          })
+        }
       }
     )
   }
