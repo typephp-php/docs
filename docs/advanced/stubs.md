@@ -8,7 +8,7 @@ TypePHP provides a **Stub System** (mirroring PHPStan and Psalm stub files) that
 
 Third-party libraries in `vendor/` frequently contain incomplete, outdated, or inaccurate DocBlocks:
 * A vendor method promises `list<string>`, but the code accepts `null`.
-* A third-party generic collection declares an invariant `@template T`, preventing you from using it covariantly (`Collection<Dog>` $\rightarrow$ `Collection<Animal>`).
+* A third-party generic collection declares an invariant `@template T`, preventing you from using it covariantly (`Collection<Dog>` $\to$ `Collection<Animal>`).
 * A vendor class lacks `@param` or `@return` DocBlocks entirely.
 
 Modifying files directly in `vendor/` is dangerous because running `composer update` will overwrite your changes.
@@ -19,19 +19,21 @@ Modifying files directly in `vendor/` is dangerous because running `composer upd
 
 ## How Stubs Work at Runtime
 
-```
-[ContractParser::parse('Vendor\BadService::execute')]
-                     │
-                     ▼
-       1. Check StubManager in RAM (O(1))
-                     │
-         ┌───────────┴───────────┐
-         ▼                       ▼
-   Stub Found?             No Stub Found
-         │                       │
-         ▼                       ▼
-Use Stub's DocBlock        Use Real Reflection
-(Corrected Contract)      DocBlock from vendor/
+```mermaid
+flowchart TD
+    A["`**ContractParser::parse**
+    *('Vendor\\BadService::execute')*`"] --> B{"Check StubManager in RAM"}
+    
+    B -->|Stub Found| C["`**Use Stub DocBlock**
+    *Corrected Contract Applied*`"]
+    
+    B -->|No Stub Found| D["`**Use Real Reflection**
+    *DocBlock read from vendor/*`"]
+
+    style A fill:#3b82f6,color:#fff,stroke-width:0px
+    style B fill:#1e293b,color:#e2e8f0,stroke:#3b82f6
+    style C fill:#10b981,color:#fff,stroke-width:0px
+    style D fill:#f59e0b,color:#fff,stroke-width:0px
 ```
 
 1. **PHPDoc-Only Extraction**: TypePHP extracts **only the DocBlocks** from the stub file. Method bodies remain empty shells (`public function find(int $id): void {}`), and native parameter/return types in the stub are ignored in favor of the real runtime class reflection.
@@ -40,16 +42,50 @@ Use Stub's DocBlock        Use Real Reflection
 
 ---
 
+## Reusing Existing PHPStan & Psalm Stubs
+
+Because TypePHP's docblock parser natively supports `@phpstan-*` and `@psalm-*` annotations, **you do not need to rewrite stub files from scratch** if your vendor packages or ecosystem extensions already ship with PHPStan or Psalm stubs.
+
+You can point the `'stubs'` array in `typephp.php` directly to existing stub directories in `vendor/`:
+
+```php:line-numbers
+// typephp.php
+return [
+    /*
+    |--------------------------------------------------------------------------
+    | Stub Files (DocBlock Overrides)
+    |--------------------------------------------------------------------------
+    | Include local custom stubs AND official third-party PHPStan/Psalm stubs.
+    */
+    'stubs' => [
+        'stubs/**',                                  // Local custom stubs
+        'vendor/phpstan/phpstan-doctrine/stubs/**',  // Official PHPStan Doctrine stubs
+        'vendor/phpstan/phpstan-symfony/stubs/**',   // Official PHPStan Symfony stubs
+        'vendor/ramsey/collection/stubs/**',         // Package-provided stubs
+    ],
+
+    // ...
+];
+```
+
+### Supported Community Stub Repositories
+You can require third-party stub packages via Composer and immediately reference them in `typephp.php`:
+* **`phpstan/phpstan-doctrine`**: Corrects Doctrine ORM collections and entity manager return contracts.
+* **`phpstan/phpstan-symfony`**: Corrects Symfony container, request, and response contracts.
+* **`phpdoc/stubs`**: Community stubs for legacy PHP extensions and packages.
+
+---
+
 ## Namespace & File Structure Guidelines
 
-To ensure TypePHP accurately maps your stub overrides to the target vendor classes, follow these rules:
+To ensure TypePHP accurately maps your stub overrides to target vendor classes, follow these rules:
 
 ### 1. In-File Namespace and Class Name Must Match the Target FQCN
 TypePHP indexes stubs using their **Fully Qualified Class Name (FQCN)**:
 * If the target class is `Vendor\Billing\BillingService`, the stub file **must** declare `namespace Vendor\Billing;` and `class BillingService`.
 * If the namespace is missing or renamed (e.g. `namespace App\Stubs;`), TypePHP will index the stub under the wrong key and will not apply the override.
 
-```php
+```php:line-numbers
 // Correct: Target FQCN matches exactly
 namespace Vendor\Billing;
 
@@ -74,7 +110,7 @@ As long as the file is located within a path matched by the `'stubs'` configurat
 ### 3. Multiple Namespaces and Classes Can Live in a Single File
 You can consolidate multiple vendor overrides into a single stub file by declaring multiple `namespace` blocks:
 
-```php
+```php:line-numbers
 <?php
 
 namespace Vendor\Auth;
@@ -94,33 +130,8 @@ class Invoice
 }
 ```
 
-### 4. Method Bodies and Implementations Must Be Empty Shells
+### 4. Method Bodies Must Be Empty Shells
 TypePHP only extracts the PHPDoc comments from stubs. Keep method bodies empty (`{}`) and omit unused internal methods to keep stub files clean and maintainable.
-
----
-
-## Configuring Stubs in `typephp.php`
-
-Register your stub file paths or directory globs in the `'stubs'` array in `typephp.php`:
-
-```php
-// typephp.php
-return [
-    /*
-    |--------------------------------------------------------------------------
-    | Stub Files (DocBlock Overrides for Third-Party & Vendor Packages)
-    |--------------------------------------------------------------------------
-    | Path globs or specific file paths containing stub files (.stub, .stub.php)
-    | that override inaccurate or missing DocBlocks in third-party packages.
-    */
-    'stubs' => [
-        'stubs/**',
-        // 'vendor/acme/my-extension/stubs/**',
-    ],
-
-    // ...
-];
-```
 
 ---
 
@@ -128,25 +139,27 @@ return [
 
 ### 1. Fixing Inaccurate Parameter Contracts in Vendor Packages
 
-Suppose a third-party class in `vendor/acme/legacy-package/src/BillingService.php` has a DocBlock that omits `|null`:
+Suppose a third-party class in `vendor/acme/legacy-package/src/BillingService.php` has an inaccurate DocBlock that forbids `null`, even though the underlying method parameter has a nullable default value:
 
-```php
-// vendor/acme/legacy-package/src/BillingService.php
+#### Target Vendor File (`vendor/acme/legacy-package/src/BillingService.php`):
+```php:line-numbers
 namespace Acme\Legacy;
 
 class BillingService
 {
     /**
-     * Inaccurate vendor DocBlock: says positive-int, but PHP parameter allows null default!
+     * Inaccurate vendor DocBlock: claims positive-int, but forbids null default!
      * @param positive-int $discountCode
      */
-    public function applyDiscount(?int $discountCode = null): void { ... }
+    public function applyDiscount(?int $discountCode = null): void
+    {
+        // ...
+    }
 }
 ```
 
-Create a stub file in `stubs/BillingService.stub`:
-
-```php
+#### Corrected Stub File (`stubs/BillingService.stub`):
+```php:line-numbers
 <?php
 
 namespace Acme\Legacy;
@@ -154,13 +167,11 @@ namespace Acme\Legacy;
 class BillingService
 {
     /**
-     * Corrected DocBlock from Stub!
+     * Corrected DocBlock from Stub File!
      *
      * @param positive-int|null $discountCode
      */
-    public function applyDiscount(?int $discountCode = null): void
-    {
-    }
+    public function applyDiscount(?int $discountCode = null): void {}
 }
 ```
 
@@ -174,9 +185,8 @@ By default, third-party collections (like `ramsey/collection` or `doctrine/colle
 
 To make them **covariant** so that `Collection<Dog>` can be passed into functions expecting `CollectionInterface<Animal>`:
 
-Create `stubs/ramsey-collection.stub.php`:
-
-```php
+#### Create `stubs/ramsey-collection.stub.php`:
+```php:line-numbers
 <?php
 
 namespace Ramsey\Collection;
@@ -207,7 +217,7 @@ Now, TypePHP treats `CollectionInterface` and `Collection` as covariant producer
 You can define `@phpstan-type` aliases on third-party classes inside stub files, and import them into your application using `@phpstan-import-type`:
 
 #### Inside `stubs/VendorService.stub`:
-```php
+```php:line-numbers
 <?php
 
 namespace Vendor\Package;
@@ -220,8 +230,8 @@ class VendorService
 }
 ```
 
-#### Inside your application `src/Services/AppService.php`:
-```php
+#### Inside your application (`src/Services/AppService.php`):
+```php:line-numbers
 namespace App\Services;
 
 use Vendor\Package\VendorService;
@@ -243,16 +253,20 @@ class AppService
 
 ---
 
-### 4. Overriding Property `@var` Contracts
+### 4. Overriding Property `@var` & Magic `@method` Annotations
 
-If a third-party class property lacks `@var` annotations or has loose types, define the property in a stub file:
+If a third-party class property lacks `@var` annotations or uses dynamic magic methods routed through `__call()`, declare `@var` and `@method` tags in a stub file:
 
-```php
+#### Inside `stubs/DynamicClient.stub`:
+```php:line-numbers
 <?php
 
 namespace Vendor\Package;
 
-class ConfiguredClient
+/**
+ * @method positive-int calculateScore(positive-int $baseScore, non-empty-string $category)
+ */
+class DynamicClient
 {
     /**
      * @var positive-int
@@ -261,28 +275,7 @@ class ConfiguredClient
 }
 ```
 
-Assigning `$client->timeout = -10` will now trigger a `TypeError` at runtime.
-
----
-
-### 5. Adding Dynamic Magic Methods (`@method`)
-
-If a third-party class routes dynamic method calls through `__call()`, declare `@method` tags in a stub file:
-
-```php
-<?php
-
-namespace Vendor\Package;
-
-/**
- * @method positive-int calculateScore(positive-int $baseScore, non-empty-string $category)
- */
-class DynamicRepository
-{
-}
-```
-
-Calling `$repo->calculateScore(-5, 'sports')` will be validated and rejected by TypePHP.
+Assigning `$client->timeout = -10` or invoking `$client->calculateScore(-5, 'sports')` will now be strictly validated and rejected by TypePHP at runtime.
 
 ---
 

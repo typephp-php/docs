@@ -134,21 +134,58 @@
           </svg>
         </button>
 
-        <!-- Share Snippet -->
+      <!-- Share Snippet -->
         <button
-          :class="['icon-action-btn', { success: copiedLink }]"
-          :title="copiedLink ? 'Share Link Copied!' : 'Share Snippet URL'"
+          :class="['icon-action-btn', { success: copiedLink, loading: isSharing }]"
+          :disabled="isSharing"
+          :title="isSharing ? 'Generating short link...' : (copiedLink ? 'Share Link Copied!' : 'Share Snippet URL')"
           aria-label="Share Snippet URL"
           @click="$emit('share')"
         >
-          <svg v-if="!copiedLink" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <!-- 1. Spinner while Supabase is creating the link -->
+          <svg
+            v-if="isSharing"
+            class="animate-spin"
+            viewBox="0 0 24 24"
+            width="14"
+            height="14"
+            fill="none"
+          >
+            <circle cx="12" cy="12" r="9" stroke="var(--vp-c-divider)" stroke-width="2.5" />
+            <path d="M12 3a9 9 0 0 1 9 9" stroke="var(--vp-c-brand-1)" stroke-width="2.5" stroke-linecap="round" />
+          </svg>
+
+          <!-- 2. Green checkmark after successfully copied -->
+          <svg
+            v-else-if="copiedLink"
+            viewBox="0 0 24 24"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="#10b981"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M20 6 9 17l-5-5" />
+          </svg>
+
+          <!-- 3. Default share icon -->
+          <svg
+            v-else
+            viewBox="0 0 24 24"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <circle cx="18" cy="5" r="3" />
             <circle cx="6" cy="12" r="3" />
             <circle cx="18" cy="19" r="3" />
             <path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98" />
-          </svg>
-          <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M20 6 9 17l-5-5" />
           </svg>
         </button>
       </div>
@@ -181,6 +218,7 @@ defineProps<{
   hasCustomConfig: boolean;
   copiedCode: boolean;
   copiedLink: boolean;
+  isSharing?: boolean; 
 }>();
 
 const emit = defineEmits<{
@@ -209,9 +247,24 @@ function onPresetChange(e: Event) {
 </script>
 
 <style scoped>
+.animate-spin {
+  animation: toolbar-spin 0.8s linear infinite;
+}
+
+@keyframes toolbar-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.icon-action-btn:disabled {
+  opacity: 0.7;
+  cursor: wait !important;
+}
+
 .playground-toolbar {
   position: relative;
-  z-index: 50; 
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -224,7 +277,6 @@ function onPresetChange(e: Event) {
   box-sizing: border-box;
 }
 
-/* Left Group */
 .toolbar-left {
   display: flex !important;
   align-items: center !important;
@@ -233,7 +285,6 @@ function onPresetChange(e: Event) {
   z-index: 1;
 }
 
-/* Document Title */
 .snippet-title-group {
   display: inline-flex;
   align-items: center;
@@ -275,9 +326,6 @@ function onPresetChange(e: Event) {
   font-weight: 500;
 }
 
-/* ========================================================
-   Presets Menu Button & Dropdown Popup (Dark & Light Mode Safe)
-   ======================================================== */
 .preset-select-wrapper {
   position: relative;
   display: inline-flex !important;
@@ -554,12 +602,58 @@ function onPresetChange(e: Event) {
 
 @keyframes pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
 
+@media (min-width: 861px) and (max-width: 1200px) {
+  .playground-toolbar {
+    padding: 0 10px !important;
+    gap: 8px !important;
+  }
+
+  .toolbar-center {
+    position: static !important;
+    transform: none !important;
+    margin: 0 auto !important;
+    gap: 6px !important;
+  }
+
+  .key-hint {
+    display: none !important;
+  }
+
+  .mode-label-desktop {
+    display: none !important;
+  }
+
+  .mode-label-mobile {
+    display: inline !important;
+  }
+
+  .snippet-title-input {
+    width: 130px !important;
+    max-width: 18vw !important;
+  }
+
+  .engine-badge {
+    display: none !important;
+  }
+}
+
+@media (min-width: 861px) and (max-width: 980px) {
+  .font-zoom-widget {
+    display: none !important;
+  }
+
+  .snippet-title-input {
+    width: 110px !important;
+  }
+}
+
 @media (max-width: 860px) {
   .playground-toolbar {
     height: auto !important;
     flex-wrap: wrap !important;
     padding: 6px 10px !important;
     gap: 8px !important;
+    justify-content: flex-start !important;
   }
 
   .toolbar-left {
@@ -587,6 +681,26 @@ function onPresetChange(e: Event) {
   .toolbar-center {
     position: static !important;
     transform: none !important;
+    margin: 0 !important;
+    width: auto !important;
+    justify-content: flex-start !important;
+  }
+
+  .toolbar-right {
+    margin: 0 !important;
+    width: auto !important;
+    justify-content: flex-start !important;
+  }
+
+  .config-btn-label {
+    display: none !important;
+  }
+
+  .config-trigger-btn {
+    padding: 0 !important;
+    width: 28px !important;
+    height: 28px !important;
+    justify-content: center !important;
   }
 
   .key-hint {

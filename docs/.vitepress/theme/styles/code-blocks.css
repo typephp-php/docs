@@ -1,0 +1,40 @@
+.vp-doc div[class*='language-'],
+.vp-doc [class*='language-'] {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+@media (max-width: 639px) {
+    .vp-doc div[class*='language-'],
+    .vp-doc [class*='language-'] {
+        margin: 16px 0 !important;
+        border-radius: 8px !important;
+        width: 100% !important;
+    }
+
+    .vp-doc [class*='language-'] pre {
+        padding: 16px !important;
+        overflow-x: auto !important;
+    }
+
+    .vp-doc [class*='language-'] code {
+        padding: 0 !important;
+        display: block !important;
+        width: fit-content !important;
+        min-width: 100% !important;
+    }
+}
+
+@media (min-width: 640px) {
+    .vp-doc [class*='language-'] pre {
+        padding: 20px 24px !important;
+        overflow-x: auto !important;
+    }
+
+    .vp-doc [class*='language-'] code {
+        padding: 0 !important;
+        display: block !important;
+        width: fit-content !important;
+        min-width: 100% !important;
+    }
+}

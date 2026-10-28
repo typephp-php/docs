@@ -4,50 +4,24 @@ TypePHP provides docblock suppression tags to skip type enforcement on legacy co
 
 ---
 
-## File-Level Suppression (`@typephp-ignore-file`)
-
-Place `@typephp-ignore-file` (or `@typephp-disable-file`) in a docblock at the top of a PHP file to skip AST transformation and type-checking for the entire file:
-
-```php
-<?php
-
-/**
- * @typephp-ignore-file
- */
-
-declare(strict_types=1);
-
-namespace App\Legacy;
-
-class UnfactoredLegacyService
-{
-    /**
-     * @param positive-int $id
-     */
-    public function process(int $id): void
-    {
-        // Type-checking is completely skipped for all code in this file!
-    }
-}
-```
-
-> **Technical Note & Coding Convention:** Under the hood, TypePHP scans the raw file contents for `@typephp-ignore-file` before performing AST transformations, meaning the tag will function regardless of its position in the file. However, you should always place `@typephp-ignore-file` at the very top of the file (right after `<?php`) as a clean coding convention.
-
----
-
 ## Function & Method Level Suppression (`@typephp-ignore`)
 
 Add `@typephp-ignore` (or `@typephp-disable`) to a function or class method docblock to skip contract enforcement for that specific function while keeping all other methods in the same class 100% type-checked:
 
-```php
-namespace App\Services;
+<TypePHPSnippet title="Method-Level Suppression (@typephp-ignore)" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
 
 class UserService
 {
     /**
-     * Active Type Checking
+     * Active Type Checking (Normal Method)
      *
      * @param positive-int $id
+     * @return array{id: positive-int}
      */
     public function findUser(int $id): array
     {
@@ -55,26 +29,39 @@ class UserService
     }
 
     /**
-     * Ignored Method - Type-checking skipped for this method only!
+     * Ignored Method: Type-checking skipped for this method only!
      *
      * @typephp-ignore
      * @param positive-int $id
+     * @return array{id: positive-int}
      */
-    public function legacyImport(int $id): void
+    public function legacyImport(int $id): array
     {
-        // ...
+        // Enforcing positive-int is completely skipped here!
+        return ['id' => $id];
     }
 }
 
 $service = new UserService();
 
-// Normal method still enforces positive-int
-$service->findUser(-5);
-// Throws: TypeError: UserService::findUser(): Argument $id must be of type positive-int
+// 1. Valid Call on normal method
+$res = $service->findUser(42);
+echo "✓ Normal method verified: ID={$res['id']}\n\n";
 
-// Ignored method skips type-checking!
-$service->legacyImport(-500); // Passes without error
+// 2. Ignored Method: Passes negative integer -500 without error!
+$legacy = $service->legacyImport(-500);
+echo "✓ Ignored legacy method accepted invalid ID={$legacy['id']} without error\n\n";
+
+// 3. Normal method strictly rejects negative integer
+try {
+    echo "Attempting to pass negative ID into un-ignored findUser()...\n";
+    $service->findUser(-10);
+} catch (\TypeError $e) {
+    echo "✗ Un-ignored method caught invalid argument:\n   " . $e->getMessage() . "\n";
+}
 ```
+
+</TypePHPSnippet>
 
 ---
 
@@ -84,28 +71,68 @@ In addition to tagging the target method itself, you can tag an **enclosing call
 
 When a type contract violation occurs anywhere downstream, TypePHP scans up the call stack. If any enclosing caller in the execution chain is marked with `@typephp-ignore` or `@typephp-disable`, the error is suppressed:
 
-```php
-namespace Tests\Feature;
+<TypePHPSnippet title="Caller-Level Downstream Suppression" default-view="source">
 
-use App\Services\PaymentService;
+```php:line-numbers
+<?php
 
-class PaymentPipelineTest
+declare(strict_types=1);
+
+class PaymentService
 {
     /**
-     * Deliberately pass invalid data through the pipeline for edge-case testing.
-     * Any type failure triggered downstream by this test method will be suppressed!
+     * Downstream service method: strictly requires positive-int!
+     *
+     * @param positive-int $amount
+     */
+    public function charge(int $amount): void
+    {
+        echo "Processing charge: \${$amount}\n";
+    }
+}
+
+class PipelineRunner
+{
+    public function __construct(private PaymentService $service) {}
+
+    /**
+     * Enclosing Caller: Tagged with @typephp-ignore!
+     * Any type violations triggered downstream by this method are suppressed.
      *
      * @typephp-ignore
      */
-    public function testNegativeBalanceHandling(): void
+    public function testNegativePipeline(): void
     {
-        $service = new PaymentService();
+        // Calling downstream method with invalid negative amount:
+        $this->service->charge(-100);
+    }
 
-        // Downstream method expects positive-int, but is suppressed by the caller's ignore tag
-        $service->charge(-100); 
+    /**
+     * Normal Caller: Not ignored!
+     */
+    public function standardPipeline(): void
+    {
+        $this->service->charge(-250);
     }
 }
+
+$service = new PaymentService();
+$pipeline = new PipelineRunner($service);
+
+// 1. Downstream failure suppressed by caller's @typephp-ignore tag:
+$pipeline->testNegativePipeline();
+echo "✓ Downstream violation suppressed by enclosing caller tag\n\n";
+
+// 2. Normal caller without ignore tag triggers TypeError from downstream:
+try {
+    echo "Executing normal pipeline caller with negative charge...\n";
+    $pipeline->standardPipeline();
+} catch (\TypeError $e) {
+    echo "✗ Un-ignored caller triggered downstream failure:\n   " . $e->getMessage() . "\n";
+}
 ```
+
+</TypePHPSnippet>
 
 ---
 
@@ -131,9 +158,7 @@ Modern PHP applications often route requests through multiple abstraction layers
 
 By default, TypePHP inspects up to **`25`** stack frames above a failing check to find an enclosing `@typephp-ignore` tag.
 
-### Customizing the Frame Window
-
-If your architecture uses deep pipelines, command buses, or recursive execution, you can expand the search window in `typephp.php`:
+### Customizing the Frame Window in `typephp.php`
 
 ```php
 // typephp.php
@@ -161,11 +186,91 @@ TypePHP::setConfig(['ignore_trace_depth' => 50]);
 
 ---
 
+### Interactive Demo: Deep Recursion & `ignore_trace_depth`
+
+The interactive snippet below simulates a deep execution chain using a recursive helper. 
+
+Notice that this snippet is configured with a shallow inspection window of **`ignoreTraceDepth: 5`**:
+1. The caller `testCallerWithIgnore()` is tagged with `@typephp-ignore`.
+2. It recurses down **8 frames** deep before calling `executeStrictTarget(-99)`.
+3. Because the ignore tag sits 9 frames above the failure, an `ignore_trace_depth` of 5 **cannot reach it**, so TypePHP catches and throws the error!
+
+<TypePHPSnippet 
+  title="Recursive Call-Stack Depth & Search Window" 
+  :config="{ ignoreTraceDepth: 5 }" 
+  default-view="source"
+>
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Target method strictly expecting positive-int:
+ *
+ * @param positive-int $value
+ */
+function executeStrictTarget(int $value): void
+{
+    echo "✓ Target executed with: {$value}\n";
+}
+
+/**
+ * Recursive helper to generate stack frames:
+ */
+function recurseFrames(int $depth): void
+{
+    if ($depth <= 1) {
+        // Failing call executed at depth!
+        executeStrictTarget(-99);
+        return;
+    }
+
+    recurseFrames($depth - 1);
+}
+
+/**
+ * Originating Caller tagged with @typephp-ignore:
+ *
+ * @typephp-ignore
+ */
+function testCallerWithIgnore(): void
+{
+    // Generate 8 stack frames down to the target:
+    recurseFrames(8);
+}
+
+// With ignoreTraceDepth = 5, the search window cannot reach 8+ frames up:
+try {
+    echo "Running 8-frame deep call with ignoreTraceDepth = 5...\n";
+    testCallerWithIgnore();
+    echo "✓ Suppressed successfully!\n";
+} catch (\TypeError $e) {
+    echo "✗ Failed to find ignore tag within 5 stack frames:\n   " . $e->getMessage() . "\n\n";
+    echo "👉 TRY THIS INTERACTIVE CHALLENGE:\n";
+    echo "1. Click the [⚙️ Config] button in the toolbar above.\n";
+    echo "2. Find 'Ignore Trace Depth' and increase it from 5 to 10 (or above).\n";
+    echo "3. Click [Run] again!\n";
+    echo "4. Watch the error disappear as TypePHP successfully reaches the @typephp-ignore tag!\n";
+}
+```
+
+</TypePHPSnippet>
+
+---
+
 ## Property & Property Hook Suppression (`@typephp-ignore`)
 
 Add `@typephp-ignore` to a class property or PHP 8.4 property hook docblock to skip property assignment and hook validation:
 
-```php
+<TypePHPSnippet title="Property & Property Hook Suppression" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 class UserProfile
 {
     /**
@@ -199,12 +304,67 @@ class UserProfile
 
 $profile = new UserProfile();
 
-// Ignored property assignment passes -500 without error!
+// 1. Ignored property assignment passes negative integer without error:
 $profile->unvalidatedId = -500;
+echo "✓ Ignored property assigned invalid value: {$profile->unvalidatedId}\n";
 
-// Ignored property hook assignment passes -500 without error!
-$profile->unvalidatedHook = -500;
+// 2. Ignored property hook assignment passes negative integer without error:
+$profile->unvalidatedHook = -250;
+echo "✓ Ignored property hook assigned invalid value: {$profile->unvalidatedHook}\n\n";
+
+// 3. Normal property assignment strictly rejects negative integer
+try {
+    echo "Attempting to assign negative value to normal property...\n";
+    $profile->id = -99;
+} catch (\TypeError $e) {
+    echo "✗ Normal property caught invalid assignment:\n   " . $e->getMessage() . "\n";
+}
 ```
+
+</TypePHPSnippet>
+
+---
+
+## File-Level Suppression (`@typephp-ignore-file`)
+
+Place `@typephp-ignore-file` (or `@typephp-disable-file`) in a docblock at the top of a PHP file to skip AST transformation and type-checking for the entire file:
+
+<TypePHPSnippet title="File-Level Suppression (@typephp-ignore-file)" default-view="source">
+
+```php:line-numbers
+<?php
+
+/**
+ * @typephp-ignore-file
+ */
+
+declare(strict_types=1);
+
+class LegacyCalculator
+{
+    /**
+     * @param positive-int $a
+     * @param positive-int $b
+     * @return positive-int
+     */
+    public function add(int $a, int $b): int
+    {
+        return $a + $b;
+    }
+}
+
+$calc = new LegacyCalculator();
+
+// Because the entire file has @typephp-ignore-file,
+// TypePHP completely bypasses AST transformation on this file.
+// Passing negative numbers runs at 100% native PHP C-speed without checks:
+$result = $calc->add(-50, -25);
+echo "✓ Entire file ignored: Result={$result} (zero checks executed)\n";
+```
+
+</TypePHPSnippet>
+
+> **Technical Note & Coding Convention:** Under the hood, TypePHP scans the raw file contents for `@typephp-ignore-file` before performing AST transformations, meaning the tag will function regardless of its position in the file. However, you should always place `@typephp-ignore-file` at the very top of the file (right after `<?php`) as a clean coding convention.
 
 ---
 
@@ -217,9 +377,49 @@ Set `'respect_ignore_tags' => false` in your `typephp.php` configuration or dyna
 ```php
 // In a CI/CD test setup or script:
 TypePHP::setConfig(['respect_ignore_tags' => false]);
-
-// All @typephp-ignore methods and files will now be strictly type-checked!
 ```
+
+The interactive snippet below is initialized with `:config="{ respectIgnoreTags: false }"`. Notice that the `@typephp-ignore` tag is **overridden**, causing the legacy call to be strictly validated and caught:
+
+<TypePHPSnippet 
+  title="Forcing Full Audit (respect_ignore_tags: false)" 
+  :config="{ respectIgnoreTags: false }" 
+  default-view="source"
+>
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+class AuditService
+{
+    /**
+     * Annotated with @typephp-ignore:
+     *
+     * @typephp-ignore
+     * @param positive-int $id
+     */
+    public function legacySync(int $id): void
+    {
+        echo "Synced: {$id}\n";
+    }
+}
+
+$service = new AuditService();
+
+// When respect_ignore_tags is false, TypePHP ignores the @typephp-ignore tag!
+// The method is strictly type-checked and catches the legacy bug:
+try {
+    echo "Executing legacySync(-42) during strict CI audit run...\n";
+    $service->legacySync(-42);
+} catch (\TypeError $e) {
+    echo "✗ Strict audit caught suppressed legacy bug:\n   " . $e->getMessage() . "\n";
+    echo "  (Tip: Click ⚙️ Config above, toggle 'Respect Ignore Tags' ON, and run again to see it pass!)\n";
+}
+```
+
+</TypePHPSnippet>
 
 > **Path Exclusions vs. DocBlock Suppression:**  
 > Setting `'respect_ignore_tags' => false` ONLY overrides DocBlock annotations (`@typephp-ignore` and `@typephp-ignore-file`).

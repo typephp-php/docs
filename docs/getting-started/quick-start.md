@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-TypePHP enforces PHPDoc type contracts at runtime during execution. Below is an overview of core concepts, framework setup, and code examples.
+TypePHP enforces PHPDoc type contracts at runtime during execution. Below is an overview of core concepts, framework setup, and interactive code examples.
 
 ---
 
@@ -16,10 +16,10 @@ Unlike traditional assertion libraries that force you to write repetitive manual
 
 While native PHP type hints (such as `int $id` or `string $name`) enforce basic scalar types, PHP's C-engine ignores PHPDoc annotations at runtime. This creates a dangerous safety gap at application boundaries:
 
-1. **Un-sanitized Dynamic Payloads:** HTTP API requests, Stripe webhooks, database query results, and JSON inputs frequently contain data that native PHP type hints allow through (such as passing a negative integer `-50` into a parameter expecting a `positive-int`).
-2. **The "DocBlock Lie" Problem:** Developers write DocBlocks assuming they are accurate, but dynamic runtime callers can pass invalid data that bypasses native PHP type hints, polluting database state or causing silent bugs.
-3. **Manual Validation Boilerplate:** Traditional runtime checkers force you to write imperative assertion calls (`Assert::positiveInteger($id)`) inside every function body or introduce custom attributes (`#[Validate]`). TypePHP removes all manual boilerplate by reading standard PHPDocs automatically.
-4. **Boundary Testing in Pest & PHPUnit:** TypePHP physically verifies that your application boundaries withstand real-world dynamic data during local testing and CI/CD runs.
+- **Un-sanitized Dynamic Payloads:** HTTP API requests, Stripe webhooks, database query results, and JSON inputs frequently contain data that native PHP type hints allow through (such as passing a negative integer `-50` into a parameter expecting a `positive-int`).
+- **The "DocBlock Lie" Problem:** Developers write DocBlocks assuming they are accurate, but dynamic runtime callers can pass invalid data that bypasses native PHP type hints, polluting database state or causing silent bugs.
+- **Manual Validation Boilerplate:** Traditional runtime checkers force you to write imperative assertion calls (`Assert::positiveInteger($id)`) inside every function body or introduce custom attributes (`#[Validate]`). TypePHP removes all manual boilerplate by reading standard PHPDocs automatically.
+- **Boundary Testing in Pest & PHPUnit:** TypePHP physically verifies that your application boundaries withstand real-world dynamic data during local testing and CI/CD runs.
 
 ---
 
@@ -27,9 +27,9 @@ While native PHP type hints (such as `int $id` or `string $name`) enforce basic 
 
 TypePHP does not force you into an "all-or-nothing" paradigm. You do not have to type-check your entire codebase or refactor legacy modules overnight. You can adopt TypePHP progressively at whatever granularity fits your project:
 
-1. **Path-Level Whitelisting:** Use `include` patterns in `typephp.php` to target specific mission-critical domain modules (such as `app/Domain/Billing/**`) while completely bypassing legacy directories.
-2. **Method-Level Suppression:** Add `@typephp-ignore` to specific legacy methods or un-refactored functions without removing their PHPDoc annotations.
-3. **Category-Level Feature Toggles:** Granularly enable or disable specific check categories (`inline_vars.scalars`, `inline_vars.arrays`, `params`, `returns`, `magic_properties`, `magic_methods`) in `typephp.php` depending on performance or migration needs.
+- **Path-Level Whitelisting:** Use `include` patterns in `typephp.php` to target specific mission-critical domain modules (such as `app/Domain/Billing/**`) while completely bypassing legacy directories.
+- **Method-Level Suppression:** Add `@typephp-ignore` to specific legacy methods or un-refactored functions without removing their PHPDoc annotations.
+- **Category-Level Feature Toggles:** Granularly enable or disable specific check categories (`inline_vars.scalars`, `inline_vars.arrays`, `params`, `returns`, `magic_properties`, `magic_methods`) in `typephp.php` depending on performance or migration needs.
 
 ---
 
@@ -37,10 +37,52 @@ TypePHP does not force you into an "all-or-nothing" paradigm. You do not have to
 
 TypePHP is **not a replacement** for static analysis tools like PHPStan, Psalm, Mago, or Phan. They are complementary partners designed to work together:
 
-* **Static Analysis (Compile-Time & IDE):** Lints your source code structure offline in your IDE and CI pipeline, catching static logic errors before your code ever runs.
-* **TypePHP (Runtime & Execution):** Validates actual dynamic data in RAM during execution, ensuring that incoming API payloads, database results, and test suite inputs strictly satisfy your PHPDoc contracts.
+- **Static Analysis (Compile-Time & IDE):** Lints your source code structure offline in your IDE and CI pipeline, catching static logic errors before your code ever runs.
+- **TypePHP (Runtime & Execution):** Validates actual dynamic data in RAM during execution, ensuring that incoming API payloads, database results, and test suite inputs strictly satisfy your PHPDoc contracts.
 
 > **Recommended Workflow:** Use PHPStan or Psalm in your IDE to lint code syntax, and use TypePHP during Pest/PHPUnit test runs and CI pipelines to guarantee runtime data integrity.
+
+---
+
+## Zero-Overhead on Proven Code (Compile-Time Check Elimination)
+
+A common concern with runtime type checking is execution overhead. To keep performance near native speeds, TypePHP does **not** blindly wrap every line of code with runtime assertion functions.
+
+During file transformation, TypePHP performs **compile-time AST analysis** (`eliminate_statically_proven_checks => true`). If a statement is mathematically or logically proven to satisfy its DocBlock contract at compile time, **TypePHP omits runtime checks entirely**:
+
+```php:line-numbers
+class UserService
+{
+    /** @var positive-int */
+    public int $timeout = 30; // Proven valid -> Zero constructor checks injected!
+
+    /** @return non-empty-string */
+    public function getVersion(): string
+    {
+        return '2.0.0'; // Literal string -> Injected check is completely omitted!
+    }
+
+    /** @return list<int> */
+    public function getEmptyDefaults(): array
+    {
+        return []; // Empty array -> Proven list<int> -> Check omitted!
+    }
+
+    /** @return $this */
+    public function enableFeature(): self
+    {
+        $this->active = true;
+        return $this; // $this identity -> Check omitted! Fluent chaining runs at native speed.
+    }
+}
+```
+
+- **Statically Proven Code:** Runs at **100% native PHP C-speed** with single `ZEND_RETURN` opcodes and zero runtime function calls.
+- **Dynamic Code:** Incoming API parameters, database query results, and variables containing runtime data are strictly intercepted and verified.
+
+::: tip Deep Dive into Check Elimination
+To learn more about how `StaticTypeEvaluator`, `ArrayLiteralEvaluator`, and `ScalarEvaluator` optimize bytecode, check out the dedicated [Compile-Time Check Elimination Guide](/advanced/compile-time-elimination).
+:::
 
 ---
 
@@ -48,19 +90,19 @@ TypePHP is **not a replacement** for static analysis tools like PHPStan, Psalm, 
 
 Because TypePHP integrates directly with Composer's autoloader (`vendor/autoload.php`), you don't always need to run code through the custom CLI binary.
 
-### 1. Frameworks, Consoles & Test Runners
+### Frameworks, Consoles & Test Runners
 If your application executes through a standard entry point—such as a web framework's **`public/index.php`**, Laravel's **`artisan`** console, or test runners like **`pest`** and **`phpunit`**—TypePHP boots automatically out of the box.
 
 In this mode, TypePHP transparently intercepts, transforms, and enforces types on any PHP file matching the `include` paths defined in your `typephp.php` configuration file.
 
-### 2. Standalone Scripts (`vendor/bin/typephp <script.php>`)
+### Standalone Scripts (`vendor/bin/typephp <script.php>`)
 For standalone scripts, benchmarks, or one-off files executed directly from the terminal, run them using the TypePHP CLI binary:
 
 ```bash
 vendor/bin/typephp script.php
 ```
 
-When invoked this way, the CLI runner automatically type-checks the specified file so **even if it is not registered in `typephp.php` or falls outside your configured `include` paths**. Any secondary dependencies required or included by the script will continue to respect your project's configured `include` and `exclude` paths.
+When invoked this way, the CLI runner automatically type-checks the specified file **even if it is not registered in `typephp.php` or falls outside your configured `include` paths**. Any secondary dependencies required or included by the script will continue to respect your project's configured `include` and `exclude` paths.
 
 ---
 
@@ -68,7 +110,7 @@ When invoked this way, the CLI runner automatically type-checks the specified fi
 
 TypePHP is fully aware of your file's namespace context and `use` import statements. You can write your docblocks using short imported names, relative names, aliased imports, or Fully Qualified Class Names (FQCN), and TypePHP will resolve them perfectly at runtime:
 
-```php
+```php:line-numbers
 <?php
 
 namespace App\Http\Controllers;
@@ -89,11 +131,19 @@ function processPayment(object $user, object $invoice, object $date): void
 
 ---
 
+## Interactive Examples: Try Them Live
+
+All code blocks below are interactive! Click **Run** to execute them live in your browser powered by real PHP 8.5 WebAssembly, or toggle **Transformed** to view the compiled AST code.
+
+---
+
 ## Parameter Contracts (`@param`)
 
-Write standard PHPDoc annotations on function or method parameters:
+Write standard PHPDoc annotations on function or method parameters. In the snippet below, passing `-5` triggers an immediate runtime `TypeError`:
 
-```php
+<TypePHPSnippet title="Function Parameter Contract Validation" default-view="source">
+
+```php:line-numbers
 <?php
 
 declare(strict_types=1);
@@ -104,16 +154,18 @@ declare(strict_types=1);
  */
 function processUser(int $id, string $username): void
 {
-    // ...
+    echo "✓ Verified User #{$id}: {$username}\n";
 }
 
-// Valid Call
+// 1. Valid Call
 processUser(42, 'Alice');
 
-// Invalid Call (Passing negative integer)
+// 2. Invalid Call: Passing negative integer violates positive-int!
+echo "Calling processUser with invalid ID -5...\n";
 processUser(-5, 'Alice');
-// Throws: TypeError: processUser(): Argument $id must be of type positive-int, negative int (-5) given
 ```
+
+</TypePHPSnippet>
 
 > **Execution Order Note:** Native PHP type hints (e.g., `int $id`, `string $username`) are evaluated by PHP's C-engine before function execution begins. TypePHP's extended DocBlock contracts (e.g., `positive-int`, `non-empty-string`) execute at function entry. If a native type hint fails, PHP throws its native `TypeError` before TypePHP guard rails execute.
 
@@ -123,80 +175,142 @@ processUser(-5, 'Alice');
 
 TypePHP validates function return values before they are returned to the caller:
 
-```php
+<TypePHPSnippet title="Function Return Contract Validation" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
  * @return array{id: positive-int, status: 'active'|'pending'}
  */
 function fetchUserData(int $id): array
 {
     if ($id <= 0) {
-        return ['id' => $id, 'status' => 'active']; // Invalid: $id is negative
+        // Bug! Returns negative id violating positive-int contract:
+        return ['id' => $id, 'status' => 'active'];
     }
 
     return ['id' => $id, 'status' => 'active'];
 }
 
+// Valid Call
+$user = fetchUserData(100);
+echo "✓ Fetched User #{$user['id']} (Status: {$user['status']})\n\n";
+
+// Invalid Call: Returns negative ID!
+echo "Calling fetchUserData(-10)...\n";
 fetchUserData(-10);
-// Throws: TypeError: fetchUserData(): Return value['id'] must be of type positive-int
 ```
+
+</TypePHPSnippet>
 
 ---
 
 ## Typed Arrays, Lists, and Shapes
 
-Enforce strict structure on arrays, sequential lists, and key-value maps:
+Enforce strict structure on arrays, sequential lists, key-value maps, and shapes:
 
-```php
+<TypePHPSnippet title="Typed Lists and Array Shapes" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
  * @param list<positive-int> $scores
  * @param array<string, non-empty-string> $headers
  */
 function processBatch(array $scores, array $headers): void
 {
-    // ...
+    echo "✓ Processed batch with " . count($scores) . " score(s)\n";
 }
 
-// Valid Call
+// 1. Valid Call
 processBatch([10, 20, 30], ['Authorization' => 'Bearer token']);
 
-// Invalid Call (Associative array passed where sequential list was expected)
-processBatch(['score' => 10], ['Authorization' => 'Bearer token']);
-// Throws: TypeError: processBatch(): Argument $scores must be a list
+// 2. Invalid Call: Associative array passed where list was expected!
+echo "Passing associative array where list was expected...\n";
+processBatch(['score_1' => 10], ['Authorization' => 'Bearer token']);
 ```
+
+</TypePHPSnippet>
 
 ---
 
 ## Inline Variable Validation (`@var`)
 
-Validate local variable assignments inside function bodies:
+Validate local variable assignments and compound operations inside function bodies:
 
-```php
+<TypePHPSnippet title="Inline Variable Validation" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /** @var positive-int $age */
 $age = 25; // Valid
+echo "✓ Initial Age: {$age}\n";
 
-$age = -10; 
-// Throws: TypeError: Variable $age must be of type positive-int, negative int (-10) given
+$age += 5; // Valid compound addition ($age = 30)
+echo "✓ Age after increment: {$age}\n\n";
+
+// Compound multiplication produces negative number, violating positive-int!
+echo "Multiplying age by -1...\n";
+$age *= -1;
 ```
+
+</TypePHPSnippet>
 
 ---
 
-## Runtime Generics with `WeakMap`
+## Runtime Generics with `\WeakMap`
 
-TypePHP binds generic template types (`T`) directly to object instances:
+TypePHP statefully binds generic template types (`T`) directly to object instances in memory using native `\WeakMap`:
 
-```php
-use TypePHP\Tests\Fixtures\Generics\Collection;
-use App\Models\User;
-use App\Models\Product;
+<TypePHPSnippet title="Runtime Reified Generics" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+use TypePHP\TypePHP;
+
+class User { public function __construct(public string $name) {} }
+class Product { public function __construct(public string $sku) {} }
+
+/**
+ * @template T
+ */
+class Collection 
+{
+    /** @var array<int, T> */
+    public array $items = [];
+
+    /** @param T $item */
+    public function add(mixed $item): void 
+    {
+        $this->items[] = $item;
+    }
+}
 
 /** @var Collection<User> $users */
 $users = new Collection();
 
 $users->add(new User('Alice')); // Valid
+echo "✓ Added User: {$users->items[0]->name}\n";
+echo "✓ Reified Memory Type: " . TypePHP::getGenericType($users) . "\n\n";
 
-$users->add(new Product('SKU-100')); 
-// Throws: TypeError: Argument $item (template T = User) must be of type User, Product given
+// Product violates Collection<User> bound in WeakMap memory!
+echo "Attempting to add Product into Collection<User>...\n";
+$users->add(new Product('SKU-100'));
 ```
+
+</TypePHPSnippet>
 
 ---
 
@@ -204,7 +318,13 @@ $users->add(new Product('SKU-100'));
 
 TypePHP validates dynamic property writes (`__set`) and dynamic method calls (`__call`) against class-level `@property` and `@method` annotations:
 
-```php
+<TypePHPSnippet title="Magic Annotations (@property & @method)" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
  * @phpstan-type StatusUnion 'active'|'pending'
  *
@@ -228,22 +348,31 @@ class DynamicModel
 
 $model = new DynamicModel();
 
-// Invalid Dynamic Property Assignment ($score = -50 violates positive-int)
-$model->score = -50;
-// Throws: TypeError: Property DynamicModel::$score must be of type positive-int
+// 1. Valid assignments
+$model->score = 100;
+$model->updateStatus('active');
+echo "✓ Score and status updated\n\n";
 
-// Invalid Dynamic Method Argument ($status = 'archived' violates StatusUnion)
-$model->updateStatus('archived');
-// Throws: TypeError: DynamicModel::updateStatus(): Argument $status must be of type ('active' | 'pending')
+// 2. Invalid dynamic property write ($score = -50 violates positive-int)
+echo "Assigning negative score to magic property...\n";
+$model->score = -50;
 ```
+
+</TypePHPSnippet>
 
 ---
 
 ## PHP 8.4 Property Hooks & Asymmetric Visibility
 
-TypePHP validates incoming and returned values on PHP 8.4 Property Hooks:
+TypePHP validates incoming values on `set` hooks and returned values on `get` hooks:
 
-```php
+<TypePHPSnippet title="PHP 8.4 Property Hooks" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 class UserProfile
 {
     /** @var positive-int */
@@ -259,9 +388,48 @@ class UserProfile
 }
 
 $profile = new UserProfile();
-$profile->username = '   '; 
-// Throws: TypeError: Property UserProfile::$username must be of type non-empty-string
+$profile->username = '  Bob  ';
+echo "✓ Username set: {$profile->username}\n\n";
+
+// Setting empty string violates non-empty-string on property hook!
+echo "Assigning empty string to hooked property...\n";
+$profile->username = '';
 ```
+
+</TypePHPSnippet>
+
+---
+
+## By-Reference Contracts & In-Place Mutations
+
+TypePHP actively protects all by-reference boundaries (`&$param`, `@param-out`, `$alias =& $var`, `$ref =& $obj->prop`, and by-reference `foreach` loops):
+
+<TypePHPSnippet title="By-Reference Mutation Protection" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+/** @var positive-int $score */
+$score = 10;
+
+// Alias $score by reference
+$alias =& $score;
+
+$alias += 5; // Valid (Score is 15)
+echo "✓ Score via alias: {$score}\n\n";
+
+// Mutating alias violates positive-int on the underlying variable!
+echo "Assigning negative score via reference alias...\n";
+$alias = -30;
+```
+
+</TypePHPSnippet>
+
+::: tip Complete By-Reference Guide
+To learn more about out-parameters (`@param-out`), by-reference `foreach` guards, and `CallableWrapper` signature-aware dispatching, read the dedicated [By-Reference Contracts & Mutations Guide](/core-concepts/by-reference-contracts).
+:::
 
 ---
 
@@ -273,7 +441,7 @@ TypePHP provides annotations to skip type enforcement on legacy code or performa
 
 Add `@typephp-ignore` to a function or class method docblock to skip type-checking for that specific function:
 
-```php
+```php:line-numbers
 /**
  * @typephp-ignore
  * @param positive-int $id
@@ -290,7 +458,7 @@ legacyProcess(-500); // Passes without error
 
 Place `@typephp-ignore-file` in a file-level docblock at the top of a file:
 
-```php
+```php:line-numbers
 <?php
 
 /**

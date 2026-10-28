@@ -3,6 +3,7 @@ import type { Theme } from 'vitepress'
 import { h, onMounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vitepress'
 import GitHubStars from './components/GitHubStars.vue'
+import TypePHPSnippet from './components/TypePHPSnippet.vue'
 import './custom.css'
 
 function enableTableSorting() {
@@ -49,12 +50,15 @@ export default {
       'nav-bar-content-after': () => h(GitHubStars),
     })
   },
+  enhanceApp({ app }) {
+    app.component('TypePHPSnippet', TypePHPSnippet)
+  },
   setup() {
     const route = useRoute()
 
     onMounted(() => {
       enableTableSorting()
-      
+
       if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then((registrations) => {
           for (const registration of registrations) {

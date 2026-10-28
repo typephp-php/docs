@@ -6,9 +6,11 @@
                     <span :class="['blog-badge', post.badgeClass || 'badge-guide']">
                         {{ post.badge }}
                     </span>
-                    <time>{{ post.date }}</time>
-                    <span class="dot">•</span>
-                    <span>{{ post.readTime }}</span>
+                    <div class="blog-post-info">
+                        <time>{{ post.date }}</time>
+                        <span class="dot">•</span>
+                        <span>{{ post.readTime }}</span>
+                    </div>
                 </div>
 
                 <h2 class="blog-post-title">

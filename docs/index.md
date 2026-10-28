@@ -95,7 +95,7 @@ vendor/bin/typephp report
     Line 88    return      return       expected list<int>, App\Enums\Role returned
 ```
 
-> **Learn More:** Check out the [Violation Reporting & Auditing](/core-concepts/violation-reporting) guide for full details on parallel worker sharding and CI gatekeeping (`fail_on_report`).
+> **Learn More:** Check out the [Violation Reporting & Auditing](/testing/violation-reporting) guide for full details on parallel worker sharding and CI gatekeeping (`fail_on_report`).
 
 ---
 

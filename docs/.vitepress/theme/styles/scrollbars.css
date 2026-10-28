@@ -1,0 +1,82 @@
+[class*='language-'],
+[class*='language-'] pre,
+div[class*='language-'],
+div[class*='language-'] pre,
+.vp-doc [class*='language-'],
+.vp-doc [class*='language-'] pre,
+.typephp-snippet-card .snippet-pre,
+.typephp-snippet-card .console-output {
+    scrollbar-width: thin;
+    scrollbar-color: var(--vp-c-divider) transparent;
+}
+
+[class*='language-']::-webkit-scrollbar,
+[class*='language-'] pre::-webkit-scrollbar,
+div[class*='language-']::-webkit-scrollbar,
+div[class*='language-'] pre::-webkit-scrollbar,
+.vp-doc [class*='language-']::-webkit-scrollbar,
+.vp-doc [class*='language-'] pre::-webkit-scrollbar,
+.typephp-snippet-card .snippet-pre::-webkit-scrollbar,
+.typephp-snippet-card .console-output::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+}
+
+[class*='language-']::-webkit-scrollbar-button,
+[class*='language-'] pre::-webkit-scrollbar-button,
+div[class*='language-']::-webkit-scrollbar-button,
+div[class*='language-'] pre::-webkit-scrollbar-button,
+.vp-doc [class*='language-']::-webkit-scrollbar-button,
+.vp-doc [class*='language-'] pre::-webkit-scrollbar-button,
+.typephp-snippet-card .snippet-pre::-webkit-scrollbar-button,
+.typephp-snippet-card .console-output::-webkit-scrollbar-button {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+[class*='language-']::-webkit-scrollbar-track,
+[class*='language-'] pre::-webkit-scrollbar-track,
+div[class*='language-']::-webkit-scrollbar-track,
+div[class*='language-'] pre::-webkit-scrollbar-track,
+.vp-doc [class*='language-']::-webkit-scrollbar-track,
+.vp-doc [class*='language-'] pre::-webkit-scrollbar-track,
+.typephp-snippet-card .snippet-pre::-webkit-scrollbar-track,
+.typephp-snippet-card .console-output::-webkit-scrollbar-track {
+    background: transparent !important;
+}
+
+[class*='language-']::-webkit-scrollbar-thumb,
+[class*='language-'] pre::-webkit-scrollbar-thumb,
+div[class*='language-']::-webkit-scrollbar-thumb,
+div[class*='language-'] pre::-webkit-scrollbar-thumb,
+.vp-doc [class*='language-']::-webkit-scrollbar-thumb,
+.vp-doc [class*='language-'] pre::-webkit-scrollbar-thumb,
+.typephp-snippet-card .snippet-pre::-webkit-scrollbar-thumb,
+.typephp-snippet-card .console-output::-webkit-scrollbar-thumb {
+    background: var(--vp-c-divider) !important;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+
+[class*='language-']::-webkit-scrollbar-thumb:hover,
+[class*='language-'] pre::-webkit-scrollbar-thumb:hover,
+div[class*='language-']::-webkit-scrollbar-thumb:hover,
+div[class*='language-'] pre::-webkit-scrollbar-thumb:hover,
+.vp-doc [class*='language-']::-webkit-scrollbar-thumb:hover,
+.vp-doc [class*='language-'] pre::-webkit-scrollbar-thumb:hover,
+.typephp-snippet-card .snippet-pre::-webkit-scrollbar-thumb:hover,
+.typephp-snippet-card .console-output::-webkit-scrollbar-thumb:hover {
+    background: var(--vp-c-text-3) !important;
+}
+
+[class*='language-']::-webkit-scrollbar-corner,
+[class*='language-'] pre::-webkit-scrollbar-corner,
+div[class*='language-']::-webkit-scrollbar-corner,
+div[class*='language-'] pre::-webkit-scrollbar-corner,
+.vp-doc [class*='language-']::-webkit-scrollbar-corner,
+.vp-doc [class*='language-'] pre::-webkit-scrollbar-corner,
+.typephp-snippet-card .snippet-pre::-webkit-scrollbar-corner,
+.typephp-snippet-card .console-output::-webkit-scrollbar-corner {
+    background: transparent !important;
+}

@@ -2,19 +2,22 @@
   <div ref="wrapperRef" class="config-popover-wrapper">
     <!-- Trigger Button -->
     <button
-      :class="['action-btn', 'config-trigger-btn', { active: isOpen, 'has-custom': hasCustomConfig }]"
+      :class="['action-btn', 'config-trigger-btn', { active: isOpen, 'has-custom': hasCustomConfig, compact: compact }]"
       title="TypePHP Engine Configuration"
       @click.stop="togglePopover"
     >
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+      <svg viewBox="0 0 24 24" :width="compact ? 13 : 13" :height="compact ? 13 : 13" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="3"></circle>
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
       </svg>
-      <span class="config-btn-label">Config</span>
+      <span v-if="!compact" class="config-btn-label">Config</span>
       <span v-if="hasCustomConfig" class="config-active-dot" title="Custom configuration active"></span>
     </button>
 
-    <!-- Popover Card -->
+    <!-- Fullscreen Backdrop on Mobile -->
+    <div v-if="isOpen" class="config-popover-backdrop" @click.stop="close"></div>
+
+    <!-- Popover Card / Modal Dialog -->
     <div v-if="isOpen" class="config-popover" @click.stop>
       <!-- Fixed Header -->
       <div class="popover-header">
@@ -39,7 +42,22 @@
           <span class="config-desc">Turn OFF to run pure native PHP for zero-overhead baseline benchmarking.</span>
         </div>
 
-        <!-- 1. Violation Strategy Banner (Throw | Warn | Report) -->
+        <!-- 1. Compile-Time AST Check Elimination Banner -->
+        <div class="config-card master-banner">
+          <div class="config-card-header">
+            <span class="config-label">Eliminate Proven Checks</span>
+            <button
+              :class="['toggle-switch', { active: modelValue.eliminateStaticallyProvenChecks }]"
+              title="Toggle compile-time AST check elimination"
+              @click="updateField('eliminateStaticallyProvenChecks', !modelValue.eliminateStaticallyProvenChecks)"
+            >
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
+          <span class="config-desc">Omit runtime assertions for code proven safe at compile time (literals, $this, empty arrays).</span>
+        </div>
+
+        <!-- 2. Violation Strategy Banner (Throw | Warn | Report) -->
         <div class="config-card strategy-banner">
           <div class="config-card-header">
             <span class="config-label">Violation Strategy</span>
@@ -56,7 +74,7 @@
               >Warn</button>
               <button
                 :class="['pill-btn', { active: modelValue.onViolation === 'report' }]"
-                title="Collect all violations and export structured JSON audit report"
+                title="Collect all violations silently"
                 @click="updateField('onViolation', 'report')"
               >Report</button>
             </div>
@@ -67,7 +85,7 @@
                 ? 'Strict mode: Halts execution immediately upon first contract violation.'
                 : (modelValue.onViolation === 'warn'
                     ? 'Non-blocking mode: Logs PHP warnings and lets execution complete.'
-                    : 'Audit mode: Collects all violations silently and outputs structured JSON report.')
+                    : 'Audit mode: Collects all violations silently into report document.')
             }}
           </span>
         </div>
@@ -235,10 +253,13 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import type { PlaygroundConfig, InlineVarsConfig } from '../presets';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   modelValue: PlaygroundConfig;
   hasCustomConfig: boolean;
-}>();
+  compact?: boolean;
+}>(), {
+  compact: false,
+});
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: PlaygroundConfig): void;
@@ -336,7 +357,7 @@ onUnmounted(() => {
 .config-popover-wrapper {
   position: relative;
   display: inline-flex;
-  z-index: 50;
+  z-index: 12;
 }
 
 .config-trigger-btn {
@@ -344,6 +365,34 @@ onUnmounted(() => {
   align-items: center;
   gap: 5px;
   position: relative;
+  padding: 3px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border: 1px solid var(--vp-c-divider);
+  background: var(--vp-c-bg);
+  color: var(--vp-c-text-1);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.config-trigger-btn.compact {
+  padding: 0 !important;
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: 4px !important;
+  justify-content: center !important;
+}
+
+.config-trigger-btn:hover {
+  border-color: var(--vp-c-brand-1);
+  color: var(--vp-c-brand-1);
+}
+
+.config-trigger-btn.active {
+  border-color: var(--vp-c-brand-1);
+  color: var(--vp-c-brand-1);
+  background: var(--vp-c-bg-mute);
 }
 
 .config-active-dot {
@@ -361,16 +410,16 @@ onUnmounted(() => {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  z-index: 100;
-  width: 580px;
+  z-index: 60;
+  width: 540px;
   max-width: calc(100vw - 24px);
-  max-height: calc(100vh - 120px); 
+  max-height: calc(100vh - 120px);
   display: flex;
   flex-direction: column;
   background: var(--vp-c-bg);
   border: 1px solid var(--vp-c-divider);
   border-radius: 8px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 0, 0, 0.08);
   overflow: hidden;
 }
 
@@ -629,7 +678,7 @@ onUnmounted(() => {
   user-select: none;
 }
 
-/* Fixed Footer: Always Pinned at Bottom */
+/* Popover Footer */
 .popover-footer {
   padding: 8px 14px;
   background: var(--vp-c-bg-soft);
@@ -654,51 +703,41 @@ onUnmounted(() => {
   color: var(--vp-c-text-3);
 }
 
-.action-btn {
-  padding: 3px 8px;
-  font-size: 11.5px;
-  font-weight: 600;
-  border: 1px solid var(--vp-c-divider);
-  background: var(--vp-c-bg);
-  color: var(--vp-c-text-1);
-  border-radius: 5px;
-  cursor: pointer;
-  transition: all 0.15s ease;
+.config-popover-backdrop {
+  display: none;
 }
 
-.action-btn:hover {
-  border-color: var(--vp-c-brand-1);
-  color: var(--vp-c-brand-1);
-}
-
-@media (max-width: 860px) {
-  .config-btn-label {
-    display: none !important;
-  }
-  .config-trigger-btn {
-    padding: 0 !important;
-    width: 28px !important;
-    height: 28px !important;
-    justify-content: center !important;
-  }
-}
-
+/* Mobile & Tablet Modal Dialog */
 @media (max-width: 768px) {
+  .config-popover-backdrop {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    background: rgba(0, 0, 0, 0.6) !important;
+    backdrop-filter: blur(4px) !important;
+    -webkit-backdrop-filter: blur(4px) !important;
+    z-index: 99 !important;
+  }
+
   .config-popover {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: min(340px, calc(100vw - 32px));
-    max-width: calc(100vw - 32px);
-    max-height: 85vh;
-    border-radius: 12px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45), 0 0 0 100vmax rgba(0, 0, 0, 0.4);
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    bottom: auto !important;
+    right: auto !important;
+    transform: translate(-50%, -50%) !important;
+    width: min(360px, calc(100vw - 28px)) !important;
+    max-width: calc(100vw - 28px) !important;
+    max-height: calc(100vh - 40px) !important;
+    max-height: calc(100dvh - 40px) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.75), 0 0 0 1px var(--vp-c-divider) !important;
+    z-index: 100 !important;
   }
 
   .config-grid {
-    grid-template-columns: 1fr;
-    gap: 6px;
+    grid-template-columns: 1fr !important;
+    gap: 6px !important;
   }
 }
 </style>

@@ -12,7 +12,9 @@ Union types specify that a value must satisfy **at least one** of the declared t
 
 Combine scalar types, refinements, and literal string/integer values:
 
-```php
+<TypePHPSnippet title="Scalar & Literal Value Unions" default-view="source">
+
+```php:line-numbers
 <?php
 
 declare(strict_types=1);
@@ -22,23 +24,52 @@ declare(strict_types=1);
  */
 function processStatus(int|string $value): void
 {
-    // Valid for 100, 'user_100', 'active', or 'pending'
+    echo "✓ Accepted valid union value: " . var_export($value, true) . "\n";
 }
 
-// Valid Calls
+// 1. Happy Path: Satisfies positive-int, non-empty-string, or literal union members
 processStatus(100);
+processStatus('user_profile_tag');
 processStatus('active');
 
-// Invalid Call (-50 is a negative integer; 'archived' is not in the literal union)
-processStatus(-50);
-// Throws: TypeError: processStatus(): Argument $value must be of type (positive-int | non-empty-string | 'active' | 'pending'), negative int (-50) given
+// 2. Negative integer violates positive-int and literal members
+try {
+    processStatus(-50);
+} catch (\TypeError $e) {
+    echo "✗ Caught negative int failure:\n   " . $e->getMessage() . "\n";
+}
+
+// 3. Empty string violates non-empty-string and literal members
+try {
+    processStatus('');
+} catch (\TypeError $e) {
+    echo "✗ Caught empty string failure:\n   " . $e->getMessage() . "\n";
+}
 ```
 
-### Tagged / Discriminated Union Array and Object Shapes
+</TypePHPSnippet>
 
-Define discriminated unions for API responses, domain events, or state machines based on a discriminator tag (e.g., `type`, `status`, `kind`):
+---
 
-```php
+### Tagged / Discriminated Unions & Smart Diagnostics
+
+Discriminated unions (tagged unions) are the industry standard for handling varying API payloads, domain events, or state machine transitions based on a discriminator field (e.g. `'type'`, `'kind'`, `'status'`).
+
+#### Discriminator-Aware Diagnostic Engine
+In standard naive validators, when an incoming payload fails a union branch, the error message erroneously blames the first member in the union (e.g. *"must be literal 'click'"* even when you passed `'hover'`).
+
+TypePHP features an intelligent **Discriminator-Aware Diagnostic Engine**:
+1. **Targeted Branch Isolation:** When incoming data matches a discriminator tag (e.g. `'type' => 'hover'` or `$event->kind === 'refund'`), TypePHP isolates that specific branch and diagnoses the **exact failing field** within it.
+2. **Support for Array & Object Shapes:** The engine scans discriminator fields across associative array keys (`$arr['type']`) as well as object properties (`$obj->kind` on `stdClass` or domain DTOs).
+3. **Unrecognized Discriminator Fallback:** When incoming data contains an entirely unknown discriminator value, TypePHP falls back to reporting the full union contract.
+
+<TypePHPSnippet title="Array Shape Tagged Union Diagnostics" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
  * @param array{type: 'click', x: int, y: int}
  *      | array{type: 'hover', element: non-empty-string}
@@ -46,35 +77,89 @@ Define discriminated unions for API responses, domain events, or state machines 
  */
 function handleEvent(array $event): void
 {
-    // ...
+    echo "✓ Handled event '{$event['type']}'\n";
 }
 
-// Valid Calls
+// 1. Happy Path: Valid event payloads
 handleEvent(['type' => 'click', 'x' => 10, 'y' => 20]);
 handleEvent(['type' => 'hover', 'element' => 'btn-submit']);
 handleEvent(['type' => 'scroll', 'offset' => 150]);
+
+echo "\n";
+
+// 2. Targeted Branch Diagnostic:
+// Discriminator 'type' => 'hover' is matched, so TypePHP isolates that branch
+// and pinpoints the exact failing field 'element' (rather than blaming 'click')!
+try {
+    handleEvent(['type' => 'hover', 'element' => '']);
+} catch (\TypeError $e) {
+    echo "✗ Targeted discriminator failure:\n   " . $e->getMessage() . "\n\n";
+}
+
+// 3. Unrecognized Discriminator Fallback:
+// 'type' => 'swipe' matches zero branches, reporting the full union contract:
+try {
+    handleEvent(['type' => 'swipe', 'distance' => 50]);
+} catch (\TypeError $e) {
+    echo "✗ Unrecognized discriminator fallback:\n   " . $e->getMessage() . "\n";
+}
 ```
 
-#### Discriminator-Aware Diagnostic Engine
-TypePHP includes an intelligent discriminator resolution engine:
-1. **Targeted Branch Isolation:** When incoming data matches a discriminator tag (e.g., `'type' => 'hover'`), TypePHP isolates and diagnoses the exact failing field within that specific branch:
-   ```php
-   handleEvent([
-       'type' => 'hover',
-       'element' => '', // Fails non-empty-string!
-   ]);
-   // Throws: TypeError: handleEvent(): Argument $event['element'] must be of type non-empty-string, empty string ('') given
-   ```
-   *(TypePHP will not falsely claim that `type` must be `'click'` simply because `'click'` was listed first in the DocBlock).*
+</TypePHPSnippet>
 
-2. **Unrecognized Discriminator Fallback:** When incoming data contains an unrecognized discriminator value, TypePHP falls back to reporting the full union contract:
-   ```php
-   handleEvent([
-       'type' => 'custom_unknown',
-       'data' => 123,
-   ]);
-   // Throws: TypeError: handleEvent(): Argument $event must be of type (array{type: 'click', x: int, y: int} | array{type: 'hover', element: non-empty-string} | array{type: 'scroll', offset: positive-int}), associative array (key 'type') given
-   ```
+#### Object Shape Discriminated Unions
+
+The same discriminator isolation applies seamlessly to dynamic object structures and DTOs:
+
+<TypePHPSnippet title="Object Shape Discriminated Unions" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+/**
+ * @param object{kind: 'payment', amount: positive-int, currency: 'USD'|'EUR'}
+ *      | object{kind: 'refund', transaction_id: non-empty-string, reason: string} $payload
+ */
+function processTransaction(object $payload): void
+{
+    echo "✓ Processed transaction payload of kind '{$payload->kind}'\n";
+}
+
+// 1. Valid payment object
+$payment = (object) [
+    'kind' => 'payment',
+    'amount' => 150,
+    'currency' => 'USD',
+];
+processTransaction($payment);
+
+// 2. Valid refund object
+$refund = (object) [
+    'kind' => 'refund',
+    'transaction_id' => 'tx_987654',
+    'reason' => 'Customer request',
+];
+processTransaction($refund);
+
+echo "\n";
+
+// 3. Failure on Matched Branch:
+// 'kind' => 'payment' is recognized, pinpointing the invalid negative amount!
+try {
+    $badPayment = (object) [
+        'kind' => 'payment',
+        'amount' => -25, // Fails positive-int!
+        'currency' => 'USD',
+    ];
+    processTransaction($badPayment);
+} catch (\TypeError $e) {
+    echo "✗ Targeted object discriminator error:\n   " . $e->getMessage() . "\n";
+}
+```
+
+</TypePHPSnippet>
 
 ---
 
@@ -88,32 +173,59 @@ Intersection types require an object or value to satisfy **all** declared interf
 
 ### Interface Intersections
 
-Enforce that an object implements multiple interfaces simultaneously. Shallow failures report the complete intersection contract matching PHP 8.1+ native behavior:
+Enforce that an object implements multiple interfaces simultaneously. When an object fails an intersection check, TypePHP reports the complete intersection contract, perfectly matching PHP 8.1+ native error formatting:
 
-```php
+<TypePHPSnippet title="Interface Intersections (Countable & ArrayAccess)" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+class CountableOnly implements Countable
+{
+    public function count(): int { return 0; }
+}
+
 /**
  * @param Countable&ArrayAccess $collection
  */
 function processCollection(object $collection): void
 {
-    // ...
+    echo "✓ Verified intersection: " . get_class($collection) . " implements both interfaces\n";
 }
 
-// Valid Call (Implements both Countable and ArrayAccess)
+// 1. Happy Path: ArrayObject implements both Countable and ArrayAccess
 processCollection(new ArrayObject([1, 2, 3]));
 
-// Invalid Call (Implements Countable only)
-class CountableOnly implements Countable { public function count(): int { return 0; } }
-
-processCollection(new CountableOnly());
-// Throws: TypeError: processCollection(): Argument $collection must be of type (Countable & ArrayAccess), CountableOnly given
+// 2. Failure: CountableOnly implements Countable, but fails ArrayAccess!
+try {
+    processCollection(new CountableOnly());
+} catch (\TypeError $e) {
+    echo "✗ Intersection failure:\n   " . $e->getMessage() . "\n";
+}
 ```
 
-### Array Shape Composition (`ShapeA & ShapeB`)
+</TypePHPSnippet>
 
-TypePHP supports schema composition by intersecting multiple sealed array shapes. Declared fields are merged into a single composite schema while preserving strict boundaries against unexpected keys:
+---
 
-```php
+## Array Shape Composition (`ShapeA & ShapeB`)
+
+In modular architectures, developers frequently compose schemas using intersections. 
+
+When you intersect multiple array shapes, TypePHP introduces **Schema Composition**:
+* **Schema Merging:** All declared fields across both shapes are merged into a unified composite schema at runtime.
+* **Overlapping Key Refinement:** When intersected shapes declare the same key with different constraints (e.g. `score: int` and `score: positive-int`), TypePHP unifies them into an intersected constraint (`score: int & positive-int`).
+* **Sealed Integrity:** Extra unexpected keys that do not belong to either schema are strictly rejected.
+
+<TypePHPSnippet title="Schema Composition (ShapeA & ShapeB)" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
  * @phpstan-type Identifiable array{id: positive-int, created_at: non-empty-string}
  * @phpstan-type Taggable     array{tags: list<non-empty-string>}
@@ -121,192 +233,280 @@ TypePHP supports schema composition by intersecting multiple sealed array shapes
  *
  * @param ArticleShape $article
  */
-function publishArticle(array $article): bool
+function publishArticle(array $article): void
 {
-    return true;
+    echo "✓ Published Article #{$article['id']} with " . count($article['tags']) . " tag(s)\n";
 }
 
-// Valid Call (Contains all required fields from both schemas)
+// 1. Happy Path: Contains all required fields merged from both schemas
 publishArticle([
     'id' => 101,
-    'created_at' => '2026-09-14',
-    'tags' => ['php', 'typephp'],
+    'created_at' => '2026-10-27',
+    'tags' => ['php', 'typephp', 'runtime'],
 ]);
 
-// Invalid Call (Missing required key from Taggable schema)
-publishArticle([
-    'id' => 101,
-    'created_at' => '2026-09-14',
-]);
-// Throws: TypeError: publishArticle(): Argument $article is missing required key 'tags'
+// 2. Missing Required Key from Taggable schema ('tags')
+try {
+    publishArticle([
+        'id' => 101,
+        'created_at' => '2026-10-27',
+    ]);
+} catch (\TypeError $e) {
+    echo "✗ Missing composed key:\n   " . $e->getMessage() . "\n";
+}
 
-// Invalid Call (Contains unexpected key not declared in either schema)
-publishArticle([
-    'id' => 101,
-    'created_at' => '2026-09-14',
-    'tags' => ['php'],
-    'unregistered_key' => true,
-]);
-// Throws: TypeError: publishArticle(): Argument $article contains unsealed unexpected key 'unregistered_key'
+// 3. Sealed Safety: Extra unexpected keys are strictly forbidden
+try {
+    publishArticle([
+        'id' => 101,
+        'created_at' => '2026-10-27',
+        'tags' => ['release'],
+        'unregistered_key' => true,
+    ]);
+} catch (\TypeError $e) {
+    echo "✗ Unsealed unexpected key:\n   " . $e->getMessage() . "\n";
+}
 ```
 
-#### Overlapping Key Refinement
-When intersected shapes declare the same key with different constraints, TypePHP unifies them into an intersected constraint (e.g., `score: int` and `score: positive-int` unifies to `score: int & positive-int`):
+</TypePHPSnippet>
 
-```php
-/**
- * @param array{score: int, label: string} & array{score: positive-int} $payload
- */
-function recordScore(array $payload): void { ... }
+---
 
-recordScore(['score' => 50, 'label' => 'good']); // Valid
-recordScore(['score' => -10, 'label' => 'bad']); // Throws: Argument $payload['score'] must be of type (int & positive-int)
-```
-
-### Unions of Intersections (Disjunctive Normal Form - DNF)
+## Unions of Intersections (Disjunctive Normal Form - DNF)
 
 Combine intersection members with unions using parentheses:
 
-```php
+<TypePHPSnippet title="Unions of Intersections (DNF)" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
- * Enclose each intersection member in parentheses
- *
  * @param (Countable&ArrayAccess)|(Iterator&Countable) $payload
  */
-function processPayload(object $payload): void
+function inspectAggregate(object $payload): void
 {
-    // ...
+    echo "✓ Accepted DNF structure: " . get_class($payload) . "\n";
 }
 
-// Valid Calls
-processPayload(new ArrayObject([1, 2]));   // Satisfies Countable & ArrayAccess
-processPayload(new ArrayIterator([1, 2])); // Satisfies Iterator & Countable
+// 1. Satisfies branch 1: Countable & ArrayAccess
+inspectAggregate(new ArrayObject([1, 2]));
+
+// 2. Satisfies branch 2: Iterator & Countable
+inspectAggregate(new ArrayIterator([1, 2]));
+
+// 3. Fails both branches: stdClass satisfies neither branch
+try {
+    inspectAggregate(new stdClass());
+} catch (\TypeError $e) {
+    echo "✗ Failed all DNF branches:\n   " . $e->getMessage() . "\n";
+}
 ```
+
+</TypePHPSnippet>
 
 ---
 
 ## Variadic Parameter Contracts (`...$items`)
 
-When a function parameter uses PHP's variadic syntax (`...$items`), TypePHP validates **every individual argument** passed in the variadic argument list.
+When a function parameter uses PHP's variadic syntax (`...$items`), TypePHP validates **every individual argument** passed in the variadic argument list:
 
-### Scalar Variadics
+<TypePHPSnippet title="Variadic Parameter Contracts" default-view="source">
 
-```php
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
  * @param positive-int ...$ids
  */
 function deleteBatch(int ...$ids): void
 {
-    // ...
+    echo "✓ Deleted " . count($ids) . " records\n";
 }
 
-// Valid Call
+/**
+ * @param array{id: positive-int, role: 'admin'|'user'} ...$users
+ */
+function registerBatch(array ...$users): void
+{
+    echo "✓ Registered " . count($users) . " user shapes\n";
+}
+
+// 1. Valid Variadic Calls
 deleteBatch(10, 20, 30);
-
-// Invalid Call (3rd item violates positive-int)
-deleteBatch(10, 20, -5);
-// Throws: TypeError: deleteBatch(): Argument $ids[2] must be of type positive-int, negative int (-5) given
-```
-
-### Variadic Unions and Shapes
-
-Combine variadic parameters with unions or array shapes:
-
-```php
-/**
- * Variadic Union
- *
- * @param (Dog|Cat) ...$animals
- */
-function processAnimals(Animal ...$animals): void {}
-
-// Variadic Array Shapes
-/**
- * @param array{id: positive-int, username: non-empty-string} ...$users
- */
-function processUsers(array ...$users): void {}
-
-processUsers(
-    ['id' => 1, 'username' => 'Alice'],
-    ['id' => 2, 'username' => 'Bob']
-); // Valid
-
-processUsers(
-    ['id' => 1, 'username' => 'Alice'],
-    ['id' => -5, 'username' => 'Bob'] // Invalid: id is negative
+registerBatch(
+    ['id' => 1, 'role' => 'admin'],
+    ['id' => 2, 'role' => 'user']
 );
-// Throws: TypeError: processUsers(): Argument $users[1]['id'] must be of type positive-int, negative int (-5) given
+
+echo "\n";
+
+// 2. Scalar Variadic Failure: 3rd item violates positive-int
+try {
+    deleteBatch(10, 20, -5);
+} catch (\TypeError $e) {
+    echo "✗ Variadic scalar failure:\n   " . $e->getMessage() . "\n";
+}
+
+// 3. Shape Variadic Failure: 2nd item has invalid role 'superadmin'
+try {
+    registerBatch(
+        ['id' => 1, 'role' => 'admin'],
+        ['id' => 2, 'role' => 'superadmin']
+    );
+} catch (\TypeError $e) {
+    echo "✗ Variadic shape failure:\n   " . $e->getMessage() . "\n";
+}
 ```
+
+</TypePHPSnippet>
 
 ---
 
-## Conditional Types
+## Conditional Types & Recursive Evaluation
 
 Conditional types allow you to dynamically alter parameter and return contracts based on the value of incoming parameters or bound generic templates.
 
-### Conditional Parameters
+TypePHP provides full support for **nested and recursive conditional types**, allowing you to construct multi-level decision trees, chained ternary expressions, and negated conditions (`is not`):
 
-Use `@param ($condition ? TypeA : TypeB)` to enforce that a parameter's expected type depends on the value of an earlier parameter. This is extremely useful for format discriminators and flag-based structures.
+$$\text{Syntax: } \mathbf{(\$param \text{ is } Target \text{ ? } (\dots \text{ ? } A \text{ : } B) \text{ : } C)}$$
 
-#### Parameter-Based Conditional Parameters
-```php
+---
+
+### Nested & Chained Conditional Parameters
+
+You can nest conditional expressions to inspect multiple parameters in sequence:
+
+<TypePHPSnippet title="Nested & Recursive Conditional Parameters" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
+ * Multi-level decision tree:
+ * - If $format is 'json' and $compressed is true: string (base64 gzip)
+ * - If $format is 'json' and $compressed is false: array<string, mixed>
+ * - If $format is 'xml': non-empty-string
+ *
  * @param 'json'|'xml' $format
- * @param ($format is 'json' ? array<string, mixed> : string) $payload
+ * @param bool $compressed
+ * @param ($format is 'json'
+ *     ? ($compressed is true ? non-empty-string : array<string, mixed>)
+ *     : non-empty-string
+ * ) $payload
  */
-function sendPayload(string $format, mixed $payload): void
+function transmit(string $format, bool $compressed, mixed $payload): void
 {
-    // ...
+    echo "✓ Payload transmitted for format '{$format}' (compressed=" . ($compressed ? 'true' : 'false') . ")\n";
 }
 
-// Evaluates $payload contract as array<string, mixed>
-sendPayload('json', ['status' => 'ok']); // Valid
+// 1. Format 'json' + uncompressed -> requires array
+transmit('json', false, ['status' => 'ok', 'code' => 200]);
 
-sendPayload('json', '<xml></xml>');
-// Throws: TypeError: sendPayload(): Argument $payload must be of type array, string '<xml></xml>' given
+// 2. Format 'json' + compressed -> requires string
+transmit('json', true, 'H4sICAAAAAAC/6tWKi5NTflqBgDCk...==');
 
-// Evaluates $payload contract as string
-sendPayload('xml', '<xml></xml>'); // Valid
+// 3. Format 'xml' -> requires non-empty-string
+transmit('xml', false, '<response>ok</response>');
+
+echo "\n";
+
+// 4. Nested Branch Violation:
+// $format is 'json' and $compressed is false, but string was given instead of array!
+try {
+    transmit('json', false, '{"status":"ok"}');
+} catch (\TypeError $e) {
+    echo "✗ Nested condition failure:\n   " . $e->getMessage() . "\n";
+}
+
+// 5. Negated Condition Support ($format is not 'json'):
+/**
+ * @param 'json'|'raw' $mode
+ * @param ($mode is not 'json' ? int : array<string, mixed>) $data
+ */
+function handleData(string $mode, mixed $data): void {}
+
+handleData('raw', 100); // Valid
+
+try {
+    handleData('raw', ['not' => 'int']);
+} catch (\TypeError $e) {
+    echo "✗ Negated condition failure:\n   " . $e->getMessage() . "\n";
+}
 ```
 
-#### Template-Based Conditional Parameters
-You can also build parameter conditions based on the runtime inferred type of a generic template `T`:
+</TypePHPSnippet>
 
-```php
+---
+
+### Template-Based Conditional Parameters
+
+You can also construct conditional parameter contracts based on the runtime inferred type of a generic template `T`:
+
+<TypePHPSnippet title="Template-Based Conditional Parameters (T is Target ? A : B)" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+abstract class Animal {}
+class Dog extends Animal {}
+class Cat extends Animal {}
+
 /**
- * @template T of Animal
+ * If T is Dog, $output must be list<Dog>; otherwise Cat
  *
+ * @template T of Animal
  * @param T $animal
  * @param (T is Dog ? list<T> : T) $output
  */
 function processAnimal(Animal $animal, mixed $output): void
 {
-    // ...
+    echo "✓ Processed " . get_class($animal) . " output cleanly\n";
 }
 
 $dog = new Dog();
 $cat = new Cat();
 
-// T is inferred as Dog -> $output must be list<Dog>
-processAnimal($dog, [$dog, new Dog()]); // Valid
+// 1. T is inferred as Dog -> $output must be list<Dog>
+processAnimal($dog, [$dog, new Dog()]);
 
-processAnimal($dog, $dog); 
-// Throws: TypeError: processAnimal(): Argument $output must be a list, TypePHP\Tests\Fixtures\Domain\Dog given
+// 2. T is inferred as Cat -> $output must be Cat
+processAnimal($cat, $cat);
 
-// T is inferred as Cat -> $output must be Cat
-processAnimal($cat, $cat); // Valid
+// 3. Failure: Passing single Dog when list<Dog> is required for T = Dog
+try {
+    processAnimal($dog, $dog);
+} catch (\TypeError $e) {
+    echo "✗ Caught template condition violation:\n   " . $e->getMessage() . "\n";
+}
 ```
+
+</TypePHPSnippet>
 
 ---
 
-### Conditional Return Types
+### Parameter-Based Conditional Returns
 
-Just like parameters, return types can conditionally resolve based on incoming values or generics using `@return ($condition ? ReturnA : ReturnB)`.
+Just like parameters, return contracts can conditionally resolve based on incoming parameter values:
 
-#### Parameter-Based Conditional Returns
+<TypePHPSnippet title="Parameter-Based Conditional Returns" default-view="source">
 
-```php
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
+ * If $asInt is true, returns positive-int; otherwise non-empty-string.
+ *
  * @param bool $asInt
  * @param mixed $value
  * @return ($asInt is true ? positive-int : non-empty-string)
@@ -316,43 +516,143 @@ function formatValue(bool $asInt, mixed $value): mixed
     return $value;
 }
 
-// Evaluates return contract as positive-int
-formatValue(true, 42); // Valid
+// 1. $asInt = true resolves return contract to positive-int
+$intVal = formatValue(true, 42);
+echo "✓ Integer branch verified: {$intVal}\n";
 
-formatValue(true, 'not_an_int');
-// Throws: TypeError: formatValue(): Return value must be of type positive-int, string 'not_an_int' returned
+// 2. $asInt = false resolves return contract to non-empty-string
+$strVal = formatValue(false, 'active_status');
+echo "✓ String branch verified: {$strVal}\n\n";
 
-// Evaluates return contract as non-empty-string
-formatValue(false, 'hello'); // Valid
+// 3. Failure: $asInt is true, but function returns a string!
+try {
+    formatValue(true, 'not_an_int');
+} catch (\TypeError $e) {
+    echo "✗ Return condition violation (asInt = true):\n   " . $e->getMessage() . "\n";
+}
 
-formatValue(false, '');
-// Throws: TypeError: formatValue(): Return value must be of type non-empty-string, empty string ('') returned
+// 4. Failure: $asInt is false, but function returns an empty string!
+try {
+    formatValue(false, '');
+} catch (\TypeError $e) {
+    echo "✗ Return condition violation (asInt = false):\n   " . $e->getMessage() . "\n";
+}
 ```
 
-#### Template-Based Conditional Returns
+</TypePHPSnippet>
 
-```php
+---
+
+### Nested & Recursive Conditional Returns
+
+Return types can also form recursive and nested decision trees. In `ConditionalChecker`, TypePHP unwraps nested ternary AST nodes recursively until a concrete terminal type is reached:
+
+<TypePHPSnippet title="Nested Recursive Conditional Returns" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
- * @template T
+ * Nested return decision tree based on two flags:
  *
- * @param T $input
+ * @param 'int'|'string'|'bool' $type
+ * @param bool $nullable
  * @param mixed $value
- * @return (T is string ? positive-int : bool)
+ * @return ($type is 'int'
+ *     ? ($nullable is true ? int|null : int)
+ *     : ($type is 'string' ? string : bool)
+ * )
  */
-function evaluateByTemplate(mixed $input, mixed $value): mixed
+function castValue(string $type, bool $nullable, mixed $value): mixed
 {
     return $value;
 }
 
-// T is inferred as string -> Return contract becomes positive-int
-evaluateByTemplate('input_string', 100); // Valid
+// 1. type='int', nullable=true -> int|null
+$val1 = castValue('int', true, null);
+echo "✓ Nested int|null branch verified: " . var_export($val1, true) . "\n";
 
-evaluateByTemplate('input_string', 'invalid_return');
-// Throws: TypeError: evaluateByTemplate(): Return value must be of type positive-int, string 'invalid_return' returned
+// 2. type='int', nullable=false -> strict int
+$val2 = castValue('int', false, 42);
+echo "✓ Strict int branch verified: {$val2}\n";
 
-// T is inferred as int -> Return contract becomes bool
-evaluateByTemplate(12345, true); // Valid
+// 3. type='string' -> strict string
+$val3 = castValue('string', false, 'hello');
+echo "✓ String branch verified: '{$val3}'\n\n";
 
-evaluateByTemplate(12345, 'not_a_bool');
-// Throws: TypeError: evaluateByTemplate(): Return value must be of type bool, string 'not_a_bool' returned
+// 4. Violation: type='int' with nullable=false, but null was returned!
+try {
+    castValue('int', false, null);
+} catch (\TypeError $e) {
+    echo "✗ Caught nested return failure (non-nullable int):\n   " . $e->getMessage() . "\n";
+}
+
+// 5. Violation: type='string', but integer was returned!
+try {
+    castValue('string', false, 12345);
+} catch (\TypeError $e) {
+    echo "✗ Caught nested return failure (expected string):\n   " . $e->getMessage() . "\n";
+}
 ```
+
+</TypePHPSnippet>
+
+---
+
+### Template-Based Conditional Decision Trees
+
+Conditional logic can also be chained against inferred generic template parameters `T`:
+
+<TypePHPSnippet title="Chained Generic Template Conditionals" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+class Dog {}
+class Cat {}
+class Bird {}
+
+/**
+ * Multi-branch template resolution:
+ * - If T is Dog  => positive-int
+ * - If T is Cat  => non-empty-string
+ * - Else         => bool
+ *
+ * @template T
+ * @param T $pet
+ * @param mixed $result
+ * @return (T is Dog
+ *     ? positive-int
+ *     : (T is Cat ? non-empty-string : bool)
+ * )
+ */
+function dispatchByPetType(object $pet, mixed $result): mixed
+{
+    return $result;
+}
+
+// 1. T is Dog => positive-int
+$resDog = dispatchByPetType(new Dog(), 100);
+echo "✓ Dog branch: {$resDog}\n";
+
+// 2. T is Cat => non-empty-string
+$resCat = dispatchByPetType(new Cat(), 'feline_ok');
+echo "✓ Cat branch: {$resCat}\n";
+
+// 3. T is Bird (fallback) => bool
+$resBird = dispatchByPetType(new Bird(), true);
+echo "✓ Fallback Bird branch: " . ($resBird ? 'true' : 'false') . "\n\n";
+
+// 4. Failure: T is Cat, but returning empty string!
+try {
+    dispatchByPetType(new Cat(), '');
+} catch (\TypeError $e) {
+    echo "✗ Cat branch violation:\n   " . $e->getMessage() . "\n";
+}
+```
+
+</TypePHPSnippet>

@@ -35,6 +35,29 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Eliminate Statically Proven Checks (Compile-Time Optimization)
+    |--------------------------------------------------------------------------
+    | When true (default), TypePHP analyzes AST expressions during file
+    | transformation and omits runtime assertions for code that is
+    | mathematically or logically proven to satisfy the DocBlock contract at
+    | compile time (e.g. literal returns, property defaults, empty arrays,
+    | constant wildcards, and exact non-generic object instantiations).
+    |
+    | Dynamic expressions, variables, and generic objects continue to be
+    | deferred to strict runtime checks.
+    |
+    | Set to false for deep debugging, tracing every single check in stack traces,
+    | or benchmarking unoptimized AST instrumentation.
+    |
+    | Can also be set via environment variable:
+    |   TYPEPHP_ELIMINATE_STATICALLY_PROVEN_CHECKS=false
+    | Can also be configured in root composer.json:
+    |   "extra": { "typephp": { "eliminate-statically-proven-checks": false } }
+    */
+    'eliminate_statically_proven_checks' => true,
+
+    /*
+    |--------------------------------------------------------------------------
     | Auto-Boot on Composer Autoload
     |--------------------------------------------------------------------------
     | When true (default), TypePHP automatically hooks into the stream wrapper
@@ -64,8 +87,8 @@ return [
     | 'report_file'        : Sets the target JSON output path when 'report' mode is active.
     | 'fail_on_report'     : When true, terminates the process with exit code 1 at shutdown
     |                        if the violation report is non-empty. Useful for CI gates.
-    | 'fail_on_zero_files' : When true, terminates with exit code 1 if 0 application files
-    |                        were instrumented. Prevents CI passes when include patterns match nothing.
+    | 'fail_on_zero_files' : When true, terminates the process with exit code 1 if 0 application
+    |                        files were instrumented. Prevents CI passes when include patterns match nothing.
     */
     'on_violation'       => 'throw',
     'report_file'        => null,
@@ -192,9 +215,8 @@ return [
     | Respect Native Parameter Nullability
     |--------------------------------------------------------------------------
     | When true (default), if a native PHP parameter explicitly declares
-    | nullable syntax (e.g. ?array $param = null or int|null $id = null),
-    | TypePHP permits null even if the DocBlock author omitted "|null"
-    | (e.g. @param string[] $param).
+    | nullable syntax (e.g. ?array $param = null), TypePHP permits null even
+    | if the DocBlock author omitted "|null" (e.g. @param string[] $param).
     |
     | Set to false for strict pedantic enforcement where DocBlocks are the
     | absolute law and null is rejected unless explicitly typed in the DocBlock.
@@ -213,7 +235,7 @@ return [
     | inside your project, e.g., __DIR__ . '/storage/framework/typephp'.
     | TypePHP will automatically protect this directory from being re-transformed.
     */
-    'cache'     => true,
+    'cache' => true,
     'cache_dir' => null,
 
     /*
@@ -279,30 +301,58 @@ return [
     | Included Paths & Whitelisting
     |--------------------------------------------------------------------------
     | Globs or specific file paths that should be intercepted and type-checked.
+    |
+    | Pattern Specificity:
+    | More specific patterns take precedence over broader rules.
     | You can specify directory globs (e.g. 'src/**'), single vendor packages
-    | (e.g. 'vendor/my-org/my-package/**'), or single specific files.
+    | (e.g. 'vendor/my-org/my-package/**'), or single specific files
+    | (e.g. 'vendor/monolog/monolog/src/Monolog/Logger.php').
     */
     'include' => [
         'src/**',
         'app/**',
-        'internals/**',
         'tests/**',
-        // 'vendor/my-org/my-package/**', // Whitelist a specific vendor package
+        // 'vendor/my-org/my-package/**', // Whitelist a vendor package
     ],
 
     /*
     |--------------------------------------------------------------------------
-    | Excluded Paths
+    | Excluded Paths & Single-File Blacklisting
     |--------------------------------------------------------------------------
     | Globs or specific file paths that should be ignored by the type checker.
+    | You can exclude entire directories (e.g. 'vendor/**') or blacklist
+    | single legacy files inside included directories (e.g. 'src/Legacy/UnsafeFile.php').
     */
     'exclude' => [
         'vendor/**',
         'storage/**',
         'var/**',
         'cache/**',
+        // 'src/Legacy/UnsafeFile.php', // Blacklist a single specific file
     ],
 ];
+```
+
+---
+
+## Violation Handling Strategy Flow
+
+When a type contract is violated, TypePHP routes execution based on your `'on_violation'` configuration:
+
+```mermaid
+flowchart TD
+    V["Type Violation Detected"] --> S{"'on_violation'"}
+    S -->|"'throw' (Default)"| T["`**Throw TypeError**
+    *Halts execution immediately*`"]
+    S -->|"'warn'"| W["`**Emit E_USER_WARNING**
+    *Logs caller location & continues*`"]
+    S -->|"'report'"| R["`**Record to JSON Audit**
+    *Aggregates in RAM & exports report*`"]
+
+    style V fill:#3b82f6,color:#fff,stroke-width:0px
+    style T fill:#ef4444,color:#fff,stroke-width:0px
+    style W fill:#f59e0b,color:#fff,stroke-width:0px
+    style R fill:#10b981,color:#fff,stroke-width:0px
 ```
 
 ---
@@ -311,7 +361,7 @@ return [
 
 In addition to `typephp.php`, key project-level options can be configured directly inside your root `composer.json` file under the `"extra.typephp"` key. 
 
-This allows team repositories, monorepos, and packages to enforce project-level booting and reporting rules without requiring developers to create a separate `typephp.php` file:
+This allows team repositories, monorepos, and packages to enforce project-level booting, optimization, and reporting rules without requiring developers to create a separate `typephp.php` file:
 
 ```json
 {
@@ -322,6 +372,7 @@ This allows team repositories, monorepos, and packages to enforce project-level 
   "extra": {
     "typephp": {
       "auto-boot": false,
+      "eliminate-statically-proven-checks": true,
       "on-violation": "report",
       "report-file": "var/typephp-report.json",
       "fail-on-report": true,
@@ -335,47 +386,42 @@ This allows team repositories, monorepos, and packages to enforce project-level 
 ### Supported `composer.json` Options
 
 * **`"auto-boot"`**: Controls whether TypePHP automatically hooks into the stream wrapper on `vendor/autoload.php`. Set to `false` to require manual `\TypePHP\TypePHP::boot()` initialization (such as in `tests/bootstrap.php`).
+* **`"eliminate-statically-proven-checks"`**: Controls whether TypePHP analyzes AST expressions during file transformation to skip injecting assertions for code that is proven valid at compile time.
 * **`"on-violation"`**: Sets the violation handling mode (`"throw"`, `"report"`, or `"warn"`).
 * **`"report-file"`**: Sets the JSON report output file path.
 * **`"fail-on-report"`**: Enables CI gatekeeping (exits with status `1` at shutdown if the audit report contains violations).
 * **`"fail-on-zero-files"`**: Controls whether TypePHP terminates with exit code `1` if zero application files were instrumented. Prevents CI builds from falsely passing when include patterns match nothing.
 * **`"redact-values"`**: Enables global value redaction across all exception messages and audit reports.
 
-### Configuration Precedence Hierarchy
+---
+
+## Configuration Precedence Hierarchy
 
 TypePHP resolves configuration settings using a deterministic priority hierarchy:
 
-$$\text{1. Environment Variables} \quad \longrightarrow \quad \text{2. } \mathbf{typephp.php} \quad \longrightarrow \quad \text{3. } \mathbf{composer.json \text{ (extra.typephp)}}$$
+```mermaid
+flowchart LR
+    A["`**1. Environment Variables**
+    *(Highest Priority)*
+    <code>TYPEPHP_*</code>`"] --> B["`**2. typephp.php**
+    *(Project Configuration)*
+    <code>return [...]</code>`"]
+    B --> C["`**3. composer.json**
+    *(Package Defaults)*
+    <code>extra.typephp</code>`"]
+    C --> D["`**4. Base Defaults**
+    *(Engine Fallbacks)*`"]
 
-1. **Environment Variables (Highest Priority):** `TYPEPHP_AUTO_BOOT`, `TYPEPHP_ON_VIOLATION`, `TYPEPHP_REPORT_FILE`, `TYPEPHP_FAIL_ON_REPORT`, `TYPEPHP_FAIL_ON_ZERO_FILES`, `TYPEPHP_REDACT_VALUES`.
+    style A fill:#3b82f6,color:#fff,stroke-width:0px
+    style B fill:#10b981,color:#fff,stroke-width:0px
+    style C fill:#f59e0b,color:#fff,stroke-width:0px
+    style D fill:#64748b,color:#fff,stroke-width:0px
+```
+
+1. **Environment Variables (Highest Priority):** `TYPEPHP_AUTO_BOOT`, `TYPEPHP_ELIMINATE_STATICALLY_PROVEN_CHECKS`, `TYPEPHP_ON_VIOLATION`, `TYPEPHP_REPORT_FILE`, `TYPEPHP_FAIL_ON_REPORT`, `TYPEPHP_FAIL_ON_ZERO_FILES`, `TYPEPHP_REDACT_VALUES`.
 2. **`typephp.php` Config File:** Overrides `composer.json` settings if explicitly defined in `typephp.php`.
 3. **`composer.json` (`extra.typephp`):** Used when `typephp.php` does not explicitly set the option.
-4. **Base Defaults:** `auto_boot: true`, `on_violation: 'throw'`, `report_file: null`, `fail_on_report: false`, `fail_on_zero_files: false`, `redact_values: false`.
-
----
-
-## Project Root & Config Discovery in Monorepos
-
-TypePHP resolves the project root and configuration file using a deterministic search order designed for standard projects, monorepos, and custom Composer directory structures:
-
-```
-1. getcwd() . '/typephp.php'             (Takes top priority if present where you run)
-                │ (Not found)
-                ▼
-2. Composer Root Package install_path    (Discovered via Composer\InstalledVersions)
-                │ (Not found)
-                ▼
-3. Upward directory walk (5 levels)      (Searching for typephp.php or composer.json)
-```
-
-### Subdirectory `composer.json` (e.g. `app/composer.json`)
-If your repository has `typephp.php` in the repository root (`/repo/typephp.php`), but `composer.json` lives in a subdirectory (`/repo/app/composer.json` with a custom `vendor-dir`), running tests or commands from `/repo` will **strictly prioritize `/repo/typephp.php`**.
-
-### Ambiguity Warning
-If a `typephp.php` file exists in your current working directory, but the project root was resolved to a subdirectory that lacks a configuration file, TypePHP emits a warning:
-```text
-[TypePHP Warning] Configuration file found at '/repo/typephp.php', but project root resolved to '/repo/app' (where no typephp.php exists). Using default configuration.
-```
+4. **Base Defaults:** `eliminate_statically_proven_checks: true`, `auto_boot: true`, `on_violation: 'throw'`, `report_file: null`, `fail_on_report: false`, `fail_on_zero_files: false`, `redact_values: false`.
 
 ---
 
@@ -384,6 +430,7 @@ If a `typephp.php` file exists in your current working directory, but the projec
 | Configuration Option | Default | Description |
 | :--- | :--- | :--- |
 | **`'enabled'`** | `true` | Global master switch for runtime type enforcement. |
+| **`'eliminate_statically_proven_checks'`** | `true` | Enables compile-time AST check elimination. When enabled, TypePHP inspects AST expressions during file transformation and skips injecting runtime wrappers for statements mathematically or logically proven to be valid at compile time (e.g. literal returns, property defaults, empty arrays, constant wildcards, and exact non-generic class instantiations). Can also be configured in `composer.json` (`extra.typephp.eliminate-statically-proven-checks`) or via `TYPEPHP_ELIMINATE_STATICALLY_PROVEN_CHECKS`. |
 | **`'auto_boot'`** | `true` | Controls whether TypePHP automatically registers its stream wrapper upon `vendor/autoload.php`. Set to `false` to disable auto-booting project-wide and initialize manually via `\TypePHP\TypePHP::boot()`. Can also be configured in `composer.json` (`extra.typephp.auto-boot`). |
 | **`'on_violation'`** | `'throw'` | Violation handling strategy: `'throw'` (immediately throws `TypeError`), `'report'` (silent audit mode exporting to JSON report), or `'warn'` (emits `E_USER_WARNING` to logs). Can also be set in `composer.json` (`extra.typephp.on-violation`) or via `TYPEPHP_ON_VIOLATION`. |
 | **`'report_file'`** | `null` | Output file path for JSON audit report when `'report'` mode is active. Can also be set in `composer.json` (`extra.typephp.report-file`) or via `TYPEPHP_REPORT_FILE`. |
@@ -410,119 +457,3 @@ If a `typephp.php` file exists in your current working directory, but the projec
 | **`'inline_vars'`** | `[...]` | Fine-grained configuration for local `@var` variable validations. |
 | **`'include'`** | `[...]` | Path globs to intercept and type-check. |
 | **`'exclude'`** | `[...]` | Path globs to ignore and leave untouched. |
-
----
-
-## Global Value Redaction (`redact_values`)
-
-By default, TypePHP provides rich, diagnostic error messages that display the actual offending runtime value to make debugging effortless:
-
-```
-TypeError: Argument $apiKey must be of type non-empty-string, empty string ('') given
-TypeError: Argument $pin must be of type positive-int, negative int (-42) given
-TypeError: Argument $role must be of type ('admin' | 'user'), string 'superadmin' given
-```
-
-However, in **production environments**, **staging error log sinks (Sentry, Datadog, Bugsnag)**, or compliance-restricted industries (**HIPAA, GDPR, SOC2, PCI-DSS**), printing raw values can risk leaking sensitive information such as API secrets, passwords, authentication tokens, or personally identifiable information (PII).
-
-### Enabling Global Redaction
-
-You can enable value redaction project-wide in any of the following ways:
-
-#### 1. In `typephp.php`:
-```php
-return [
-    'redact_values' => true,
-];
-```
-
-#### 2. In `composer.json`:
-```json
-{
-  "extra": {
-    "typephp": {
-      "redact-values": true
-    }
-  }
-}
-```
-
-#### 3. Via Environment Variable (Zero Config / Cloud Deployments):
-```bash
-export TYPEPHP_REDACT_VALUES=true
-```
-
----
-
-### Before vs. After Value Redaction
-
-When `'redact_values' => true` is active, TypePHP strips all literal and scalar values from exception messages and audit reports, outputting only their native type names:
-
-| Violation Context | Standard Output (`redact_values => false`) | Redacted Output (`redact_values => true`) |
-|---|---|---|
-| **Empty string** | `...must be non-empty-string, empty string ('') given` | `...must be non-empty-string, string given` |
-| **Literal strings / tokens** | `...must be 'admin', string 'secret_token_123' given` | `...must be 'admin', string given` |
-| **Negative numbers** | `...must be positive-int, negative int (-42) given` | `...must be positive-int, int given` |
-| **Integer ranges** | `...must be <= 100, 250 given` | `...must be <= 100, int given` |
-| **Class-strings** | `...must be a class-string of User, 'App\Std' given` | `...must be a class-string of User, string given` |
-| **Return values** | `...Return value must be positive-int, -9999 returned` | `...Return value must be positive-int, int returned` |
-
-### Coexistence with PHP 8.2+ `#[SensitiveParameter]`
-
-TypePHP natively supports PHP 8.2's `#[SensitiveParameter]` attribute out of the box, ensuring that any parameter annotated with the attribute is redacted even when `'redact_values'` is `false`.
-
-Enabling `'redact_values' => true` extends this protection **globally** to every parameter, return value, class property, and local variable in your application without requiring you to manually attach `#[SensitiveParameter]` attributes across thousands of classes.
-
----
-
-## Ignore Tag Stack Trace Resolution (`ignore_trace_depth`)
-
-When an application or test deliberately passes invalid data through a subsystem (for example, negative-testing a serializer, testing command validation, or exercising edge-case error pipelines), you can annotate the caller or test method with `@typephp-ignore` or `@typephp-disable`.
-
-However, modern PHP frameworks frequently decouple callers from the execution point through layers of abstraction:
-
-```
-[Your Test or Controller Method] (Annotated with @typephp-ignore)
-       │  Frame 20
-       ▼
-[Command Bus / Pipeline Dispatcher]
-       │  Frame 15
-       ▼
-[Middleware Stack / Interceptor Pipeline]
-       │  Frame 10
-       ▼
-[Serializer / Normalizer Dispatcher]
-       │  Frame 5
-       ▼
-[Target Service / Entity Method] ──► Fails strict type contract!
-```
-
-### How Frame Inspection Works
-
-1. **Failure-Only Activation (Zero Happy-Path Overhead):** TypePHP **never** inspects the call stack during successful executions. The call stack is only traversed when a type contract violation is detected.
-2. **Upward Frame Scanning:** TypePHP inspects up to `ignore_trace_depth` frames (default: `25`) above the point of failure. If any enclosing class or method in that execution chain declares `@typephp-ignore` or `@typephp-disable`, the error is suppressed.
-3. **$O(1)$ Decision Caching:** Inspected methods and callers are memoized in memory. Repeated calls through the same stack frames resolve in sub-microseconds.
-
----
-
-## Vendor Boundary Isolation (`vendor_boundary_only`)
-
-When you whitelist a third-party vendor class (such as `Illuminate\Support\Collection` or a Symfony component), that class is often called thousands of times by the framework's own internal subsystems.
-
-```
-[Your Application Code] ──calls──► [Vendor Class] ──► TypePHP STRICTLY ENFORCES types!
-[Vendor / Framework]    ──calls──► [Vendor Class] ──► TypePHP BYPASSES (Native execution speed)
-[Vendor Internal Self]  ──calls──► [Vendor Class] ──► TypePHP BYPASSES (Internal implementation detail)
-```
-
-1. **Calls from Application Code:** When your code in `app/`, `src/`, or `tests/` calls a method on a whitelisted vendor class (e.g. `$collection->add(4)` on a `Collection<int, string>`), TypePHP **strictly validates all parameters and returns**.
-2. **Calls from Vendor Code:** When an excluded vendor package or framework internal calls that same method, TypePHP **instantly short-circuits** with zero overhead, allowing the framework to operate with native speed and flexibility.
-
----
-
-## Emergency Kill-Switches
-
-To disable TypePHP immediately without modifying application code:
-
-1. **Environment Level (Full Prevention):** Set `TYPEPHP_DISABLE=true` in your server environment or `.env` file before autoloading.
-2. **Config Level (Pass-Through):** Set `'enabled' => false` in `typephp.php` or call `TypePHP::setConfig(['enabled' => false])`.

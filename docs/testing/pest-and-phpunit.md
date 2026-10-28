@@ -47,7 +47,7 @@ TYPEPHP_ON_VIOLATION=report TYPEPHP_REPORT_FILE=var/typephp-report.json ./vendor
 4. **Batch Remediation:** Review the report and address all violations in one pass—either by fixing stale DocBlocks, adding `@typephp-ignore` annotations, or blacklisting legacy paths in `typephp.php`.
 
 ::: tip Dedicated Violation Reporting Guide
-For complete details on JSON report schemas, violation categories (`kind`), and warning modes (`'warn'`), see the dedicated [Violation Reporting & Auditing](/core-concepts/violation-reporting) guide.
+For complete details on JSON report schemas, violation categories (`kind`), and warning modes (`'warn'`), see the dedicated [Violation Reporting & Auditing](/testing/violation-reporting) guide.
 :::
 
 ---

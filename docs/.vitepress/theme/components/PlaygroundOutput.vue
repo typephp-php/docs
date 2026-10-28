@@ -1,14 +1,10 @@
 <template>
-  <!-- Floating tab when collapsed in side dock mode -->
-  <button
-    v-if="position === 'side' && isCollapsed"
-    class="floating-edge-tab"
-    title="Click to expand Console"
-    @click="toggleCollapse"
-  >
+  <button v-if="mode === 'drawer' && position === 'side' && isCollapsed" class="floating-edge-tab"
+    title="Click to expand Console" @click="toggleCollapse">
     <span class="tab-icon-wrapper">
       <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
-        <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zm-2-1h-6v-2h6v2zM7.5 17l-1.4-1.4 3.1-3.1-3.1-3.1L7.5 8l4.5 4.5-4.5 4.5z"/>
+        <path
+          d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zm-2-1h-6v-2h6v2zM7.5 17l-1.4-1.4 3.1-3.1-3.1-3.1L7.5 8l4.5 4.5-4.5 4.5z" />
       </svg>
     </span>
 
@@ -28,31 +24,31 @@
     </span>
   </button>
 
-  <div
-    v-show="!(position === 'side' && isCollapsed)"
-    :class="['drawer-container', `pos-${position}`, { collapsed: isCollapsed }]"
-    :style="containerStyle"
-  >
-    <!-- Resizer Handle -->
-    <div
-      v-if="!isCollapsed"
-      class="resize-handle"
-      :title="position === 'bottom' ? 'Drag to resize height' : 'Drag to resize width'"
-      @mousedown="startResize"
-    >
+  <div v-show="mode === 'embedded' || !(position === 'side' && isCollapsed)" :class="[
+    'drawer-container',
+    `pos-${position}`,
+    {
+      collapsed: mode === 'drawer' && isCollapsed,
+      'is-maximized': mode === 'drawer' && isMaximized,
+      'is-resizing': isResizing,
+      'is-embedded': mode === 'embedded'
+    }
+  ]" :style="containerStyle">
+    <!-- Resizer Handle with Mouse and Touch Support (Drawer only) -->
+    <div v-if="mode === 'drawer' && !isCollapsed && !isMaximized" class="resize-handle"
+      :title="position === 'bottom' ? 'Drag to resize height' : 'Drag to resize width'" @mousedown="startResize"
+      @touchstart="startTouchResize">
       <div class="resize-grip"></div>
     </div>
 
-    <!-- Drawer Header with Multi-Tabs -->
-    <div class="drawer-header" @click="toggleCollapse">
+    <!-- Header with Multi-Tabs -->
+    <div class="drawer-header" @click="mode === 'drawer' ? toggleCollapse() : null">
       <div class="header-left" @click.stop>
         <!-- Tab 1: Terminal Console -->
-        <button
-          :class="['drawer-tab-btn', { active: activeTab === 'console' }]"
-          @click="activeTab = 'console'"
-        >
+        <button :class="['drawer-tab-btn', { active: activeTab === 'console' }]" @click="selectTab('console')">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
-            <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zm-2-1h-6v-2h6v2zM7.5 17l-1.4-1.4 3.1-3.1-3.1-3.1L7.5 8l4.5 4.5-4.5 4.5z"/>
+            <path
+              d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zm-2-1h-6v-2h6v2zM7.5 17l-1.4-1.4 3.1-3.1-3.1-3.1L7.5 8l4.5 4.5-4.5 4.5z" />
           </svg>
           <span>Console</span>
           <span v-if="exitCode !== null" :class="['exit-badge', exitCode === 0 ? 'success' : 'error']">
@@ -61,19 +57,17 @@
         </button>
 
         <!-- Tab 2: Audit Report -->
-        <button
-          v-if="report !== null || isReportModeActive"
-          :class="['drawer-tab-btn', { active: activeTab === 'report' }]"
-          @click="activeTab = 'report'"
-        >
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button v-if="report !== null || isReportModeActive"
+          :class="['drawer-tab-btn', { active: activeTab === 'report' }]" @click="selectTab('report')">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
             <polyline points="14 2 14 8 20 8"></polyline>
             <line x1="16" y1="13" x2="8" y2="13"></line>
             <line x1="16" y1="17" x2="8" y2="17"></line>
             <polyline points="10 9 9 9 8 9"></polyline>
           </svg>
-          <span>Audit Report</span>
+          <span><span class="hide-mobile">Audit </span>Report</span>
           <span v-if="totalReportViolations > 0" class="report-count-badge error">
             {{ totalReportViolations }}
           </span>
@@ -87,13 +81,29 @@
 
       <!-- Header Right Action Tools -->
       <div class="header-right" @click.stop>
-        <!-- Dock Position Toggle -->
-        <button
-          class="icon-action-btn dock-btn"
-          :title="position === 'bottom' ? 'Dock to right sidebar' : 'Dock to bottom'"
-          @click="$emit('toggle-position')"
-        >
-          <svg v-if="position === 'bottom'" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+        <!-- Maximize / Restore Toggle (Drawer only) -->
+        <button v-if="mode === 'drawer' && !isCollapsed" class="icon-action-btn maximize-btn"
+          :title="isMaximized ? 'Restore height' : 'Maximize (Full screen)'" @click="toggleMaximize">
+          <svg v-if="isMaximized" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor"
+            stroke-width="2">
+            <polyline points="4 14 10 14 10 20" />
+            <polyline points="20 10 14 10 14 4" />
+            <line x1="14" y1="10" x2="21" y2="3" />
+            <line x1="3" y1="21" x2="10" y2="14" />
+          </svg>
+          <svg v-else viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 3 21 3 21 9" />
+            <polyline points="9 21 3 21 3 15" />
+            <line x1="21" y1="3" x2="14" y2="10" />
+            <line x1="3" y1="21" x2="10" y2="14" />
+          </svg>
+        </button>
+
+        <!-- Dock Position Toggle (Drawer only) -->
+        <button v-if="mode === 'drawer'" class="icon-action-btn dock-btn"
+          :title="position === 'bottom' ? 'Dock to right sidebar' : 'Dock to bottom'" @click="$emit('toggle-position')">
+          <svg v-if="position === 'bottom'" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+            stroke-width="2">
             <rect x="3" y="3" width="18" height="18" rx="2" />
             <line x1="15" y1="3" x2="15" y2="21" />
           </svg>
@@ -104,57 +114,49 @@
         </button>
 
         <!-- Copy Output / Report Action -->
-        <button
-          v-if="(activeTab === 'console' && (stdout || stderr)) || (activeTab === 'report' && report)"
+        <button v-if="(activeTab === 'console' && (stdout || stderr)) || (activeTab === 'report' && report)"
           class="icon-action-btn"
           :title="copied ? 'Copied to clipboard' : (activeTab === 'report' ? 'Copy JSON Report' : 'Copy console output')"
-          @click="copyActiveContent"
-        >
-          <svg v-if="!copied" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+          @click="copyActiveContent">
+          <svg v-if="!copied" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor"
+            stroke-width="2">
             <rect x="9" y="9" width="13" height="13" rx="2" />
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
           </svg>
-          <svg v-else viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#10b981" stroke-width="2">
+          <svg v-else viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#10b981" stroke-width="2.5">
             <polyline points="20 6 9 17 4 12" />
           </svg>
         </button>
 
         <!-- Clear Action -->
-        <button
-          v-if="(activeTab === 'console' && (stdout || stderr)) || (activeTab === 'report' && report)"
-          class="icon-action-btn"
-          :title="activeTab === 'report' ? 'Clear & Delete Report' : 'Clear console'"
-          @click="handleClear"
-        >
+        <button v-if="(activeTab === 'console' && (stdout || stderr)) || (activeTab === 'report' && report)"
+          class="icon-action-btn" :title="activeTab === 'report' ? 'Clear & Delete Report' : 'Clear console'"
+          @click="handleClear">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10" />
             <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
           </svg>
         </button>
 
-        <!-- Collapse Toggle -->
-        <button
-          class="icon-action-btn collapse-toggle-btn"
-          :title="isCollapsed ? 'Expand' : 'Collapse'"
-          @click="toggleCollapse"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            width="14"
-            height="14"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            :class="{ rotated: !isCollapsed }"
-          >
+        <!-- Close Action (Embedded snippet mode) -->
+        <button v-if="mode === 'embedded'" class="icon-action-btn close-btn" title="Close Output"
+          @click="$emit('close')">
+          &times;
+        </button>
+
+        <!-- Collapse Toggle (Drawer only) -->
+        <button v-if="mode === 'drawer'" class="icon-action-btn collapse-toggle-btn"
+          :title="isCollapsed ? 'Expand' : 'Collapse'" @click="toggleCollapse">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+            :class="{ rotated: !isCollapsed }">
             <polyline points="18 15 12 9 6 15" />
           </svg>
         </button>
       </div>
     </div>
 
-    <!-- Drawer Body -->
-    <div v-show="!isCollapsed" class="drawer-body">
+    <!-- Body -->
+    <div v-show="mode === 'embedded' || !isCollapsed" class="drawer-body">
       <!-- 1. Console Stream Tab View -->
       <div v-if="activeTab === 'console'" class="console-view">
         <div v-if="isRunning" class="running-indicator">
@@ -165,12 +167,14 @@
 
         <!-- Segmented STDERR Output (Warnings in Amber, Fatal Errors in Red) -->
         <template v-for="(block, idx) in parsedStderrBlocks" :key="idx">
-          <pre :class="['stderr-stream', block.type === 'warning' ? 'is-warning' : 'is-error']">{{ block.content }}</pre>
+          <pre
+            :class="['stderr-stream', block.type === 'warning' ? 'is-warning' : 'is-error']">{{ block.content }}</pre>
         </template>
 
         <div v-if="!stdout && !stderr && !isRunning && exitCode === null" class="empty-state">
           <p class="empty-state-text">
-            Click <strong>Run</strong> <span class="hide-mobile">(or press <kbd>Ctrl</kbd> + <kbd>Enter</kbd>)</span> to execute.
+            Click <strong>Run</strong><span v-if="mode !== 'embedded'" class="hide-mobile"> (or press <kbd>Ctrl</kbd> +
+              <kbd>Enter</kbd>)</span> to execute.
           </p>
         </div>
       </div>
@@ -182,7 +186,7 @@
           <div class="report-summary-bar">
             <div class="summary-stats">
               <div class="summary-chip">
-                <span class="stat-label">Total Violations:</span>
+                <span class="stat-label"><span class="hide-mobile">Total </span>Violations:</span>
                 <span class="stat-val error">{{ report.summary.total_violations }}</span>
               </div>
               <div class="summary-chip hide-mobile">
@@ -195,23 +199,17 @@
             <div class="summary-actions">
               <!-- Cards vs JSON Toggle -->
               <div class="report-subview-toggle">
-                <button
-                  :class="['subview-btn', { active: reportViewMode === 'cards' }]"
-                  @click="$emit('update:reportViewMode', 'cards')"
-                >Cards</button>
-                <button
-                  :class="['subview-btn', { active: reportViewMode === 'json' }]"
-                  @click="$emit('update:reportViewMode', 'json')"
-                >JSON</button>
+                <button :class="['subview-btn', { active: reportViewMode === 'cards' }]"
+                  @click="$emit('update:reportViewMode', 'cards')">Cards</button>
+                <button :class="['subview-btn', { active: reportViewMode === 'json' }]"
+                  @click="$emit('update:reportViewMode', 'json')">JSON</button>
               </div>
 
               <!-- Dedicated Copy JSON Button -->
-              <button
-                :class="['report-action-btn', { success: copiedReportJson }]"
-                :title="copiedReportJson ? 'JSON Copied!' : 'Copy raw JSON report'"
-                @click="copyReportJson"
-              >
-                <svg v-if="!copiedReportJson" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+              <button :class="['report-action-btn', { success: copiedReportJson }]"
+                :title="copiedReportJson ? 'JSON Copied!' : 'Copy raw JSON report'" @click="copyReportJson">
+                <svg v-if="!copiedReportJson" viewBox="0 0 24 24" width="12" height="12" fill="none"
+                  stroke="currentColor" stroke-width="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" />
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                 </svg>
@@ -222,12 +220,9 @@
               </button>
 
               <!-- Dedicated Download JSON Button -->
-              <button
-                class="report-action-btn"
-                title="Download typephp-report.json file"
-                @click="downloadReportJson"
-              >
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <button class="report-action-btn" title="Download typephp-report.json file" @click="downloadReportJson">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                   <polyline points="7 10 12 15 17 10"></polyline>
                   <line x1="12" y1="15" x2="12" y2="3"></line>
@@ -239,11 +234,7 @@
 
           <!-- Cards View -->
           <div v-if="reportViewMode === 'cards'" class="violation-cards-scroll">
-            <div
-              v-for="(v, idx) in report.violations"
-              :key="idx"
-              class="violation-card"
-            >
+            <div v-for="(v, idx) in report.violations" :key="idx" class="violation-card">
               <div class="card-meta-line">
                 <span class="badge-pill line-badge">Line {{ v.line }}</span>
                 <span class="badge-pill kind-badge">{{ v.kind }}</span>
@@ -281,7 +272,9 @@
           </div>
           <span class="clean-report-title">No Contract Violations</span>
           <p class="clean-report-desc">
-            All data structures, parameter inputs, and function return boundaries satisfied their type contracts cleanly in audit mode.
+            All data structures, parameter inputs, and function return boundaries satisfied their type contracts cleanly
+            in
+            audit mode.
           </p>
         </div>
       </div>
@@ -304,11 +297,13 @@ const props = withDefaults(defineProps<{
   report?: AuditReportDocument | null;
   isReportModeActive?: boolean;
   reportViewMode?: 'cards' | 'json';
+  mode?: 'drawer' | 'embedded'; // <-- Added mode
 }>(), {
   position: 'bottom',
   report: null,
   isReportModeActive: false,
   reportViewMode: 'cards',
+  mode: 'drawer',
 });
 
 const emit = defineEmits<{
@@ -316,12 +311,19 @@ const emit = defineEmits<{
   (e: 'clear-report'): void;
   (e: 'toggle-position'): void;
   (e: 'update:reportViewMode', mode: 'cards' | 'json'): void;
+  (e: 'close'): void; // <-- Added close emit
 }>();
 
 const activeTab = ref<'console' | 'report'>('console');
 const isCollapsed = ref<boolean>(false);
+const isMaximized = ref<boolean>(false);
+const isResizing = ref<boolean>(false);
 const drawerHeight = ref<number>(240);
-const drawerWidth = ref<number>(620);
+const drawerWidth = ref<number>(
+  typeof window !== 'undefined'
+    ? Math.min(560, Math.max(300, Math.round(window.innerWidth * 0.42)))
+    : 480
+);
 const copied = ref<boolean>(false);
 const copiedReportJson = ref<boolean>(false);
 
@@ -382,7 +384,6 @@ const parsedStderrBlocks = computed<StderrBlock[]>(() => {
   return blocks;
 });
 
-// 1. Synchronize active tab when switching modes or when report data changes
 watch(
   [() => props.isReportModeActive, () => props.report],
   ([isReportMode, newReport]) => {
@@ -395,7 +396,6 @@ watch(
   { immediate: true }
 );
 
-// 2. When a new run initiates in non-report mode, guarantee console view is active
 watch(() => props.isRunning, (running) => {
   if (running && !props.isReportModeActive) {
     activeTab.value = 'console';
@@ -403,21 +403,65 @@ watch(() => props.isRunning, (running) => {
 });
 
 const containerStyle = computed(() => {
-  if (props.position === 'bottom') {
+  if (props.mode === 'embedded') {
     return {
-      height: isCollapsed.value ? '38px' : `${drawerHeight.value}px`,
+      height: 'auto',
+      maxHeight: '340px',
       width: '100%',
     };
   }
 
+  if (props.position === 'bottom') {
+    let targetHeight = `${drawerHeight.value}px`;
+    if (isCollapsed.value) {
+      targetHeight = '38px';
+    } else if (isMaximized.value) {
+      targetHeight = '100%';
+    }
+
+    return {
+      height: targetHeight,
+      width: '100%',
+      flexShrink: 0,
+    };
+  }
+
+  let targetWidth = `${drawerWidth.value}px`;
+  if (isMaximized.value) {
+    targetWidth = '80vw';
+  }
+
   return {
     height: '100%',
-    width: `${drawerWidth.value}px`,
+    width: targetWidth,
+    maxWidth: isMaximized.value ? '95vw' : '50vw',
+    minWidth: '280px',
+    flexShrink: 0,
   };
 });
 
 function toggleCollapse() {
-  isCollapsed.value = !isCollapsed.value;
+  if (props.mode === 'embedded') return;
+  if (isCollapsed.value) {
+    isCollapsed.value = false;
+  } else {
+    isCollapsed.value = true;
+    isMaximized.value = false;
+  }
+}
+
+function toggleMaximize() {
+  if (isCollapsed.value) {
+    isCollapsed.value = false;
+  }
+  isMaximized.value = !isMaximized.value;
+}
+
+function selectTab(tab: 'console' | 'report') {
+  activeTab.value = tab;
+  if (isCollapsed.value) {
+    isCollapsed.value = false;
+  }
 }
 
 function handleClear() {
@@ -472,18 +516,28 @@ function downloadReportJson() {
 }
 
 function startResize(e: MouseEvent) {
+  if (props.mode === 'embedded') return;
   e.preventDefault();
+  if (isCollapsed.value || isMaximized.value) return;
+
+  isResizing.value = true;
+  document.body.style.userSelect = 'none';
 
   if (props.position === 'bottom') {
+    document.body.style.cursor = 'ns-resize';
     const startY = e.clientY;
     const startHeight = drawerHeight.value;
 
     function onMouseMove(moveEvent: MouseEvent) {
       const delta = startY - moveEvent.clientY;
-      drawerHeight.value = Math.max(100, Math.min(window.innerHeight * 0.75, startHeight + delta));
+      const maxHeight = Math.max(120, window.innerHeight - 130);
+      drawerHeight.value = Math.max(80, Math.min(maxHeight, startHeight + delta));
     }
 
     function onMouseUp() {
+      isResizing.value = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     }
@@ -491,21 +545,79 @@ function startResize(e: MouseEvent) {
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
   } else {
+    document.body.style.cursor = 'ew-resize';
     const startX = e.clientX;
     const startWidth = drawerWidth.value;
 
     function onMouseMove(moveEvent: MouseEvent) {
       const delta = startX - moveEvent.clientX;
-      drawerWidth.value = Math.max(260, Math.min(window.innerWidth * 0.65, startWidth + delta));
+      const maxWidth = Math.max(280, window.innerWidth * 0.7);
+      drawerWidth.value = Math.max(260, Math.min(maxWidth, startWidth + delta));
     }
 
     function onMouseUp() {
+      isResizing.value = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     }
 
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
+  }
+}
+
+function startTouchResize(e: TouchEvent) {
+  if (props.mode === 'embedded') return;
+  if (e.touches.length !== 1 || isCollapsed.value || isMaximized.value) return;
+
+  isResizing.value = true;
+
+  if (props.position === 'bottom') {
+    const startY = e.touches[0].clientY;
+    const startHeight = drawerHeight.value;
+
+    function onTouchMove(moveEvent: TouchEvent) {
+      if (moveEvent.touches.length !== 1) return;
+      const currentY = moveEvent.touches[0].clientY;
+      const delta = startY - currentY;
+      const maxHeight = Math.max(120, window.innerHeight - 110);
+      drawerHeight.value = Math.max(80, Math.min(maxHeight, startHeight + delta));
+    }
+
+    function onTouchEnd() {
+      isResizing.value = false;
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchEnd);
+    }
+
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('touchcancel', onTouchEnd);
+  } else {
+    const startX = e.touches[0].clientX;
+    const startWidth = drawerWidth.value;
+
+    function onTouchMove(moveEvent: TouchEvent) {
+      if (moveEvent.touches.length !== 1) return;
+      const currentX = e.touches[0].clientX;
+      const delta = startX - currentX;
+      const maxWidth = Math.max(260, window.innerWidth * 0.85);
+      drawerWidth.value = Math.max(200, Math.min(maxWidth, startWidth + delta));
+    }
+
+    function onTouchEnd() {
+      isResizing.value = false;
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchEnd);
+    }
+
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('touchcancel', onTouchEnd);
   }
 }
 
@@ -580,11 +692,59 @@ defineExpose({
   background: var(--vp-c-bg-soft);
   position: relative;
   overflow: hidden;
-  transition: height 0.15s ease-out;
+  flex-shrink: 0;
+  transition: height 0.15s ease-out, width 0.15s ease-out;
 }
 
-.drawer-container.pos-bottom {
+/* Embedded Snippet Mode */
+.drawer-container.is-embedded {
+  border-top: 1px solid var(--vp-c-divider) !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-bottom: none !important;
+  border-bottom-left-radius: 7px;
+  border-bottom-right-radius: 7px;
+  transition: none !important;
+}
+
+.drawer-container.is-embedded .drawer-header {
+  cursor: default !important;
+}
+
+.drawer-container.is-embedded .drawer-body {
+  max-height: 280px;
+}
+
+.drawer-container.is-resizing {
+  transition: none !important;
+}
+
+.drawer-container.pos-bottom:not(.is-embedded) {
   border-top: 1px solid var(--vp-c-divider);
+}
+
+.drawer-container.pos-bottom.collapsed {
+  height: 38px !important;
+  min-height: 38px !important;
+  max-height: 38px !important;
+}
+
+.drawer-container.pos-bottom.is-maximized {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 100% !important;
+  max-height: 100% !important;
+  z-index: 35;
+}
+
+.drawer-container.pos-side.is-maximized {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  z-index: 35;
 }
 
 .drawer-container.pos-bottom .resize-handle {
@@ -592,23 +752,27 @@ defineExpose({
   top: 0;
   left: 0;
   right: 0;
-  height: 6px;
+  height: 12px;
   cursor: ns-resize;
-  z-index: 20;
+  z-index: 25;
   display: flex;
   align-items: center;
   justify-content: center;
+  touch-action: none;
 }
 
 .drawer-container.pos-bottom .resize-grip {
-  width: 36px;
-  height: 2px;
+  width: 44px;
+  height: 3px;
   border-radius: 2px;
   background: var(--vp-c-divider);
+  transition: background-color 0.15s ease, height 0.15s ease;
 }
 
-.drawer-container.pos-side {
+.drawer-container.pos-side:not(.is-embedded) {
   border-left: 1px solid var(--vp-c-divider);
+  max-width: 50vw;
+  min-width: 280px;
 }
 
 .drawer-container.pos-side .resize-handle {
@@ -616,19 +780,21 @@ defineExpose({
   top: 0;
   bottom: 0;
   left: 0;
-  width: 6px;
+  width: 10px;
   cursor: ew-resize;
-  z-index: 20;
+  z-index: 25;
   display: flex;
   align-items: center;
   justify-content: center;
+  touch-action: none;
 }
 
 .drawer-container.pos-side .resize-grip {
-  width: 2px;
-  height: 36px;
+  width: 3px;
+  height: 44px;
   border-radius: 2px;
   background: var(--vp-c-divider);
+  transition: background-color 0.15s ease, width 0.15s ease;
 }
 
 .resize-handle:hover .resize-grip {
@@ -656,7 +822,6 @@ defineExpose({
   flex: 1;
 }
 
-/* Tab buttons inside header */
 .drawer-tab-btn {
   display: inline-flex;
   align-items: center;
@@ -670,6 +835,8 @@ defineExpose({
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap !important;
+  flex-shrink: 0;
 }
 
 .drawer-tab-btn:hover {
@@ -683,7 +850,8 @@ defineExpose({
   border-color: var(--vp-c-divider);
 }
 
-.exit-badge, .report-count-badge {
+.exit-badge,
+.report-count-badge {
   font-size: 10px;
   font-weight: 700;
   padding: 1px 5px;
@@ -691,12 +859,14 @@ defineExpose({
   font-family: var(--vp-font-family-mono);
 }
 
-.exit-badge.success, .report-count-badge.success {
+.exit-badge.success,
+.report-count-badge.success {
   background: rgba(16, 185, 129, 0.15);
   color: #10b981;
 }
 
-.exit-badge.error, .report-count-badge.error {
+.exit-badge.error,
+.report-count-badge.error {
   background: rgba(239, 68, 68, 0.15);
   color: #ef4444;
 }
@@ -729,6 +899,11 @@ defineExpose({
   transition: all 0.15s ease;
 }
 
+.icon-action-btn.close-btn {
+  font-size: 15px;
+  line-height: 1;
+}
+
 .icon-action-btn:hover {
   border-color: var(--vp-c-brand-1);
   color: var(--vp-c-brand-1);
@@ -744,11 +919,32 @@ defineExpose({
 
 .drawer-body {
   flex: 1;
-  overflow: auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   font-family: var(--vp-font-family-mono);
   font-size: var(--playground-font-size, 13px);
   line-height: 1.5;
   background: var(--vp-c-bg-soft);
+  scrollbar-width: thin;
+  scrollbar-color: var(--vp-c-divider) transparent;
+}
+
+.drawer-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.drawer-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.drawer-body::-webkit-scrollbar-thumb {
+  background: var(--vp-c-divider);
+  border-radius: 3px;
+}
+
+.drawer-body::-webkit-scrollbar-thumb:hover {
+  background: var(--vp-c-text-3);
 }
 
 .console-view {
@@ -824,9 +1020,6 @@ defineExpose({
   animation: spin 0.8s linear infinite;
 }
 
-/* ========================================================
-   Audit Report Layout & Cards View
-   ======================================================== */
 .report-view {
   display: flex;
   flex-direction: column;
@@ -879,7 +1072,6 @@ defineExpose({
   color: #ef4444;
 }
 
-/* Actions Group inside Summary Bar */
 .summary-actions {
   display: flex;
   align-items: center;
@@ -911,7 +1103,6 @@ defineExpose({
   color: #fff;
 }
 
-/* Dedicated Copy & Download Action Buttons */
 .report-action-btn {
   display: inline-flex;
   align-items: center;
@@ -1060,7 +1251,6 @@ defineExpose({
   word-break: break-word;
 }
 
-/* Empty Clean Report View */
 .empty-report-state {
   display: flex;
   flex-direction: column;
@@ -1097,7 +1287,11 @@ defineExpose({
   font-family: var(--vp-font-family-base);
 }
 
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 @media (max-width: 960px) {
   .dock-btn {
@@ -1116,6 +1310,26 @@ defineExpose({
 
   .report-action-btn {
     padding: 2px 5px;
+  }
+
+  .drawer-tab-btn {
+    padding: 3px 6px;
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  .report-layout {
+    gap: 6px;
+    padding: 6px 8px;
+  }
+
+  .report-summary-bar {
+    padding: 4px 8px;
+  }
+
+  .raw-json-stream {
+    padding: 8px 10px;
+    font-size: 11px;
   }
 }
 </style>

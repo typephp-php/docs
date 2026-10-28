@@ -1,0 +1,109 @@
+html,
+body {
+    overflow-x: hidden;
+    max-width: 100%;
+}
+
+#app,
+.VPApp,
+.VPContent,
+.VPDoc,
+.VPHome {
+    max-width: 100% !important;
+}
+
+.VPNavScreen {
+    z-index: 100 !important;
+    background-color: var(--vp-c-bg) !important;
+}
+
+.VPNavBar {
+    background-color: var(--vp-nav-bg-color, var(--vp-c-bg)) !important;
+}
+
+.VPNavBarTitle {
+    flex-shrink: 0 !important;
+}
+
+.VPNavBarTitle .title {
+    white-space: nowrap !important;
+}
+
+.VPNavBarHamburger {
+    flex-shrink: 0 !important;
+}
+
+@media (min-width: 960px) {
+    .VPNavBar:not(.has-sidebar) .wrapper {
+        max-width: 100% !important;
+        padding: 0 !important;
+    }
+
+    .VPNavBar:not(.has-sidebar) .container {
+        max-width: 100% !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 32px !important;
+        box-sizing: border-box !important;
+    }
+
+    .VPNavBar:not(.has-sidebar) .content {
+        padding-left: 16px !important;
+        padding-right: 0 !important;
+    }
+}
+
+.VPDocAsideOutline .outline-link,
+.VPDocOutlineItem .outline-link {
+    white-space: normal !important;
+    line-height: 1.5 !important;
+    word-break: break-word !important;
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+    display: block !important;
+}
+
+.VPDocAsideOutline .outline-item,
+.VPDocOutlineItem,
+.VPDocAsideOutline ul>li {
+    margin-top: 6px !important;
+    margin-bottom: 8px !important;
+}
+
+.VPDocAsideOutline .nested {
+    padding-left: 14px !important;
+    margin-top: 4px !important;
+    margin-bottom: 4px !important;
+}
+
+.VPSidebarItem.is-link .text {
+    white-space: normal !important;
+    line-height: 1.4 !important;
+    word-break: break-word !important;
+}
+
+@media (min-width: 1440px) {
+    .VPDoc.has-aside .aside {
+        max-width: 270px !important;
+    }
+
+    .VPDoc.has-aside .aside-container {
+        width: 270px !important;
+    }
+}
+
+.mermaid .node foreignObject {
+  overflow: visible !important;
+}
+
+.mermaid .node foreignObject div {
+  line-height: 1.35 !important;
+  font-size: 13px !important;
+  font-family: var(--vp-font-family-base) !important;
+}
+
+.mermaid .node rect,
+.mermaid .node polygon {
+  rx: 6px !important;
+  ry: 6px !important;
+}

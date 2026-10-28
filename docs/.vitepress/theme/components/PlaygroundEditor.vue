@@ -41,7 +41,12 @@ const { isDark } = useData();
 
 const baseTheme = EditorView.theme({
   '&': { height: '100%', fontSize: 'var(--playground-font-size, 13.5px)' },
-  '.cm-scroller': { overflow: 'auto', fontFamily: 'var(--vp-font-family-mono)' },
+  '.cm-scroller': { 
+    overflow: 'auto', 
+    fontFamily: 'var(--vp-font-family-mono)',
+    scrollbarWidth: 'thin',
+    scrollbarColor: 'var(--vp-c-divider) transparent'
+  },
   '.cm-phpdoc-tag, .cm-phpdoc-tag *': { color: '#c678dd !important', fontWeight: '700 !important', fontStyle: 'normal !important' },
   '.cm-phpdoc-type, .cm-phpdoc-type *': { color: '#e5c07b !important', fontWeight: '600 !important', fontStyle: 'normal !important' },
   '.cm-phpdoc-generic-bracket, .cm-phpdoc-generic-bracket *': { color: '#e06c75 !important', fontWeight: '700 !important', fontStyle: 'normal !important' },
@@ -161,6 +166,36 @@ defineExpose({
 
 .playground-editor-wrapper :deep(.cm-editor) {
   font-size: var(--playground-font-size, 13.5px) !important;
+  height: 100%;
+}
+
+.playground-editor-wrapper :deep(.cm-scroller) {
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+  scrollbar-width: thin;
+  scrollbar-color: var(--vp-c-divider) transparent;
+}
+
+.playground-editor-wrapper :deep(.cm-scroller::-webkit-scrollbar) {
+  width: 6px;
+  height: 6px;
+}
+
+.playground-editor-wrapper :deep(.cm-scroller::-webkit-scrollbar-track) {
+  background: transparent !important;
+}
+
+.playground-editor-wrapper :deep(.cm-scroller::-webkit-scrollbar-thumb) {
+  background: var(--vp-c-divider);
+  border-radius: 3px;
+}
+
+.playground-editor-wrapper :deep(.cm-scroller::-webkit-scrollbar-thumb:hover) {
+  background: var(--vp-c-text-3);
+}
+
+.playground-editor-wrapper :deep(.cm-scroller::-webkit-scrollbar-corner) {
+  background: transparent;
 }
 
 .xray-floating-badge {

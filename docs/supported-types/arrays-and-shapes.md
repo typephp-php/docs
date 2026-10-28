@@ -1,6 +1,6 @@
 # Arrays & Shapes
 
-TypePHP provides runtime enforcement for sequential lists, key-value generic maps, typed class arrays, positional tuples, sealed and unsealed array shapes, shape composition, homogeneous/heterogeneous unions, variadic array wrapping, key/value extractions, offset access, and object shapes.
+TypePHP provides runtime enforcement for sequential lists, key-value generic maps, typed arrays, positional tuples, sealed and unsealed array shapes, schema composition, homogeneous/heterogeneous unions, variadic array wrapping, key/value extractions, offset access, and object shapes.
 
 ---
 
@@ -8,7 +8,9 @@ TypePHP provides runtime enforcement for sequential lists, key-value generic map
 
 A `list<T>` represents a sequential, 0-indexed integer key array without gaps (`0, 1, 2, ...`). TypePHP validates lists at runtime using PHP's native `array_is_list()` function in C:
 
-```php
+<TypePHPSnippet title="Sequential Lists & Refinements" default-view="source">
+
+```php:line-numbers
 <?php
 
 declare(strict_types=1);
@@ -17,48 +19,121 @@ declare(strict_types=1);
  * @param list<non-empty-string> $tags
  * @param non-empty-list<positive-int> $scores
  */
-function processList(array $tags, array $scores): void
+function processMetrics(array $tags, array $scores): void
 {
-    // ...
+    echo "✓ Verified list of " . count($scores) . " score(s)\n";
+    echo "✓ Tags: " . implode(', ', $tags) . "\n\n";
 }
 
 // 1. Valid Call
-processList(['php', 'pest', 'typephp'], [10, 20, 30]);
+processMetrics(['php', 'pest', 'typephp'], [10, 20, 30]);
 
-// 2. Invalid Call (Associative array passed where list was expected)
-processList(['tag1' => 'php'], [10, 20]);
-// Throws: TypeError: processList(): Argument $tags must be a list, associative array (key 'tag1') given
-
-// 3. Invalid Call (Empty array passed where non-empty-list was expected)
-processList(['php'], []);
-// Throws: TypeError: processList(): Argument $scores must be a non-empty list, empty array ([]) given
+// 2. Invalid Call (Associative array passed where sequential list is expected)
+echo "Passing associative keys where list is expected...\n";
+processMetrics(['tag1' => 'php'], [10, 20]);
 ```
+
+</TypePHPSnippet>
 
 ---
 
 ## Array Validation Strategies (`full` vs `hybrid`)
 
-TypePHP provides two collection validation strategies configured in `typephp.php`:
+Validating collection structures (`list<T>`, `array<K, V>`, `Type[]`) can be configured in `typephp.php` via `'array_validation'`:
 
-```php
+```php:line-numbers
 // typephp.php
 return [
     'array_validation' => 'full', // 'full' (default) or 'hybrid'
 ];
 ```
 
-### 1. Strict Full Mode (`'array_validation' => 'full'`, Default)
-* **Exhaustive O(n) Check:** Validates every single element in the collection regardless of size.
-* **100% Deterministic Guarantee:** Guarantees that any offending item anywhere in an array will trigger an immediate `TypeError`.
-* **Zero-Allocation Happy Path:** Context path strings are constructed only when a validation check fails, ensuring zero throwaway string allocations in memory during valid iterations.
+TypePHP provides two strategies inspired by Cecil Curry's work on Python's Beartype: **Strict Full Mode** ($O(n)$) and **Beartype Hybrid Mode** ($O(1)$).
 
-### 2. Beartype Hybrid Mode (`'array_validation' => 'hybrid'`)
-* **Small Collections ($N \le 128$ items):** Executes a 100% full scan.
-* **Large Collections ($N > 128$ items):** Executes O(1) constant-time sampling:
-  1. Shallow check via native `array_is_list()` in C.
-  2. Boundary checks on the first element (`$arr[0]`) and last element (`$arr[count - 1]`).
-  3. Random walk sampling across 3 internal elements.
-* Reduces validation latency on massive 100,000-item arrays from **81 seconds to 0.83 seconds (97x faster)**.
+---
+
+### Comparing Full Mode vs. Hybrid Mode
+
+| Feature / Trait | Strict Full Mode (`'full'`, Default) | Beartype Hybrid Mode (`'hybrid'`) |
+| :--- | :--- | :--- |
+| **Complexity** | $O(n)$ linear time | $O(1)$ constant time for $N > 128$ items |
+| **Coverage** | 100% exhaustive scan | 100% on $N \le 128$; boundary + 3 random samples on $N > 128$ |
+| **Offending Elements** | Guaranteed to catch every single violation | High probabilistic certainty; always catches boundary issues |
+| **Throughput Impact** | Increases with dataset size | Flat, predictable sub-millisecond execution regardless of size |
+| **Best Used For** | Unit tests, CI/CD pipelines, local dev, small-to-medium payloads | High-throughput web servers, massive database batches, ETL pipelines |
+
+---
+
+### Strict Full Mode (`'full'`)
+
+Full mode scans every element from index `0` to `count - 1`.
+
+- **Pros:**
+  - **100% Deterministic Guarantee:** Impossible for an invalid item to slip through unnoticed, even if it is a single corrupt row hidden in the middle of 50,000 items.
+  - **Zero Heuristics:** Ideal for unit testing, CI pipelines, and financial/audit systems where data integrity is paramount.
+  - **Optimized Happy Path:** Zero string allocations during successful passes; error context paths are constructed only upon failure.
+- **Cons:**
+  - **Linear Latency Growth:** Validating 50,000–100,000 elements in a single request can add tens of milliseconds of CPU execution time.
+
+---
+
+### Beartype Hybrid Mode (`'hybrid'`)
+
+Hybrid mode provides constant-time $O(1)$ validation for collections exceeding 128 items (`Config::HYBRID_SAMPLE_THRESHOLD`):
+1. Verifies overall container integrity in C via native `array_is_list()`.
+2. Validates boundaries: the first element (`$arr[0]`) and last element (`$arr[count - 1]`).
+3. Validates 3 random internal elements picked via pseudo-random sampling.
+
+- **Pros:**
+  - **Massive Performance Boost:** Validating 100,000 items drops from **~80 ms down to ~0.8 ms (up to 97x faster)**.
+  - **Predictable Request Lifetimes:** Eliminates tail latency spikes in web APIs processing large JSON or database result sets.
+  - **Automatic Fallback:** Arrays with $\le 128$ items automatically receive a 100% full scan, ensuring smaller lists never skip checks.
+- **Cons:**
+  - **Probabilistic Catching on Huge Arrays:** If an invalid item is buried at index `42,109` of an otherwise valid 100,000-item array, random sampling may miss it on that specific pass unless it falls on the boundaries or sampled indices.
+
+---
+
+### Benchmark: Full $O(n)$ vs. Hybrid $O(1)$ Sampling
+
+The snippet below generates a list of 15,000 positive integers and measures validation time using `microtime(true)`:
+
+<TypePHPSnippet 
+  title="Array Validation Benchmark (Full vs. Hybrid)" 
+  :config="{ arrayValidation: 'full' }" 
+  default-view="source"
+>
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+/**
+ * @param list<positive-int> $dataset
+ */
+function validateLargeDataset(array $dataset): void {}
+
+// Generate 15,000 positive integers
+$data = range(1, 15000);
+
+echo "Starting validation of " . count($data) . " items...\n";
+
+$start = microtime(true);
+for ($i = 0; $i < 5; $i++) {
+    validateLargeDataset($data);
+}
+$elapsed = (microtime(true) - $start) * 1000;
+
+echo sprintf("✓ Completed 5 passes in %.2f ms\n", $elapsed);
+```
+
+</TypePHPSnippet>
+
+### Try the Performance Challenge:
+1. Click **Run** on the snippet above while in default **Full Mode** and check the elapsed time.
+2. Open the snippet's **Configuration (⚙️)** menu.
+3. Switch **Array Validation** from **Full** to **Hybrid**.
+4. Click **Run** again! Notice how the execution time drops into constant $O(1)$ nanoseconds.
 
 ---
 
@@ -66,403 +141,477 @@ return [
 
 TypePHP enforces specific key and value types on associative or indexed arrays:
 
-### Generic Key-Value Arrays (`array<K, V>`)
+<TypePHPSnippet title="Generic Key-Value Arrays" default-view="source">
 
-```php
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
- * @param array<string, positive-int> $userScores
+ * @param array<string, int<1, 100>> $thresholds
  */
-function recordScores(array $userScores): void
+function configureThresholds(array $thresholds): void
 {
-    // ...
+    echo "✓ Configured " . count($thresholds) . " threshold rule(s)\n\n";
 }
 
-// 1. Valid Call
-recordScores(['alice' => 100, 'bob' => 95]);
+// 1. Valid map matching string keys and 1-100 integer range bounds
+configureThresholds([
+    'cpu_alert'  => 85,
+    'disk_alert' => 90,
+]);
 
-// 2. Invalid Call (Key 0 is integer instead of string)
-recordScores([0 => 100]);
-// Throws: TypeError: recordScores(): Argument $userScores key must be of type string, int (0) given
-
-// 3. Invalid Call (Value -5 violates positive-int)
-recordScores(['alice' => -5]);
-// Throws: TypeError: recordScores(): Argument $userScores['alice'] must be of type positive-int, negative int (-5) given
+// 2. Invalid Call: Integer key passed where string key is required!
+echo "Passing integer key where string key was expected...\n";
+configureThresholds([
+    100 => 85,
+]);
 ```
 
-> **Associative Hybrid Validation:** In hybrid mode, associative arrays validate both the key and the value on the first pair, the last pair, and 3 random internal pairs in O(1) time.
+</TypePHPSnippet>
 
-### Typed Scalar, Refinement, & Callable Arrays (`positive-int[]`, `non-empty-string[]`, `callable[]`)
+### Typed Scalar, Refinement & Callable Arrays (`positive-int[]`, `callable[]`)
 
 In addition to typed class arrays (`User[]`), TypePHP validates arrays of primitives, scalar refinements, callables, or shapes using `T[]` syntax:
 
-```php
+<TypePHPSnippet title="Typed Scalar and Callable Arrays" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
  * @param positive-int[] $ids
- * @param non-empty-string[] $tags
  * @param callable[] $callbacks
- * @param array{id: positive-int}[] $userShapes
  */
-function processTypedArrays(array $ids, array $tags, array $callbacks, array $userShapes): void
+function processQueue(array $ids, array $callbacks): void
 {
-    // ...
+    echo "✓ Queue processed with " . count($ids) . " items\n\n";
 }
 
-// Valid Call
-processTypedArrays(
+// 1. Valid Call
+processQueue(
     ids: [10, 20, 30],
-    tags: ['php', 'pest'],
-    callbacks: [fn () => null, 'strlen'],
-    userShapes: [['id' => 1], ['id' => 2]]
+    callbacks: [fn () => null, 'strlen']
 );
 
-// Invalid Call (-50 violates positive-int[])
-processTypedArrays(
+// 2. Invalid Call: -50 violates positive-int[]!
+echo "Passing negative integer into positive-int[]...\n";
+processQueue(
     ids: [10, -50, 30],
-    tags: ['php', 'pest'],
-    callbacks: [fn () => null],
-    userShapes: [['id' => 1]]
+    callbacks: [fn () => null]
 );
-// Throws: TypeError: processTypedArrays(): Argument $ids[1] must be of type positive-int, negative int (-50) given
 ```
+
+</TypePHPSnippet>
 
 > **WeakMap Object Memoization:** When validating arrays of objects (such as `User[]`), TypePHP memoizes previously checked object instances in a `\WeakMap`. If the same object instance appears multiple times in a collection, its type is checked once and retrieved in $O(1)$ time on subsequent accesses.
 
 ---
 
-## Homogeneous vs. Heterogeneous Collections
+## Array Covariance & Dynamic Safety (vs. Java's Mistake)
 
-TypePHP strictly differentiates between **homogeneous collections** (where every item must share the exact same type) and **heterogeneous collections** (where items may vary according to a union or wildcard):
-
-### 1. Homogeneous Arrays (`int[]`, `list<string>`, `array<string, User>`)
-Every item in the collection must strictly satisfy a single concrete type.
-
-```php
-/** @param list<string> $items */
-function processHomogeneous(array $items): void {}
-
-processHomogeneous(['a', 'b', 'c']); // Valid
-processHomogeneous(['a', 10, 'c']);   // Throws: TypeError: Argument $items[1] must be of type string, int (10) given
-```
-
-### 2. Heterogeneous Arrays (`list<int|string>`, `(Dog|Cat)[]`, `array<string, mixed>`)
-Elements within the same array can freely mix types as long as each element satisfies the union:
-
-```php
-/**
- * Heterogeneous collection: items can be an integer, string, or boolean
- *
- * @param list<int|string|bool> $mixedData
- */
-function processHeterogeneous(array $mixedData): void {}
-
-processHeterogeneous([10, 'hello', true, 42, false]); // Valid
-processHeterogeneous([10, 'hello', new stdClass()]);  // Throws: TypeError: Argument $mixedData[2] must be of type (int | string | bool), stdClass given
-```
+In TypePHP, **arrays and lists are covariant**: a `list<Dog>` can be safely passed anywhere a `list<Animal>` or `Animal[]` is expected.
 
 ---
 
-## The Union Precedence Pitfall: `A[] | B[]` vs `(A | B)[]`
+### The Java Dilemma: Loss of Compile-Time Safety on Shared Heap Buffers
 
-In formal type theory (PHPDoc, PHPStan, Psalm, TypeScript), the array bracket suffix `[]` has **higher operator precedence** than the union operator `|`.
+In statically compiled languages like Java, array covariance is widely considered one of the language's early architectural design mistakes. In Java, arrays are mutable reference types pointing to a shared memory buffer on the heap:
 
-| Type Syntax | Formal Interpretation | Validation Behavior |
-| :--- | :--- | :--- |
-| **`TypeA[] \| TypeB[]`** | `(Array<TypeA>) \| (Array<TypeB>)`<br>*(Homogeneous Union)* | The array must be **100% `TypeA`** OR **100% `TypeB`**. Mixed arrays containing both types are **strictly rejected**. |
-| **`(TypeA \| TypeB)[]`**<br>or `array<TypeA \| TypeB>` | `Array<TypeA \| TypeB>`<br>*(Heterogeneous Array)* | The array may freely contain a **mix of `TypeA` and `TypeB`** elements. |
+```java
+// Java:
+Dog[] dogs = new Dog[2];
+Object[] objects = dogs; // Allowed via Java's array covariance
 
-### Example: The Precedence Mistake
+// Runtime crash! Both variables point to the exact same memory buffer.
+// Java lost compile-time safety and must check every write at runtime, throwing ArrayStoreException!
+objects[0] = new Cat(); 
+```
 
-```php
-use App\Models\User;
-use App\Models\Admin;
+Because Java arrays are shared pointers on the heap, allowing covariance broke compile-time safety, leaving developers vulnerable to runtime crashes.
+
+---
+
+### Why Array Covariance is Safe in TypePHP
+
+TypePHP avoids this pitfall through two fundamental mechanics: **Zend Engine Value Semantics** and **Dynamic Reified Checks**.
+
+#### 1. Copy-on-Write (COW) Value Semantics
+Unlike Java, PHP arrays are values governed by Copy-on-Write (`zend_array`). Passing an array to a function passes an isolated value. If the receiving function attempts to write an element (`$animals[] = new Cat()`), PHP duplicates the internal array buffer on the spot. **The caller's original array is never modified or corrupted.**
+
+#### 2. Reified Dynamic Verification
+Because TypePHP evaluates types dynamically at runtime boundaries rather than erasing them, container types remain active. If an array crosses into a function, TypePHP verifies the items on entry and enforces return boundaries on exit.
+
+<TypePHPSnippet title="Array Covariance & Copy-on-Write Safety" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+abstract class Animal { public function __construct(public string $name) {} }
+class Dog extends Animal {}
+class Cat extends Animal {}
 
 /**
- * Homogeneous Union: Expects an array of ALL Users OR an array of ALL Admins
+ * Accepts list<Animal> - Covariance safely allows list<Dog>!
+ *
+ * @param list<Animal> $animals
+ */
+function inspectAnimals(array $animals): void
+{
+    echo "✓ Read " . count($animals) . " animal(s) safely via covariance\n";
+
+    // PHP's Copy-on-Write duplicates the array buffer here!
+    // The caller's original array is never modified or corrupted.
+    $animals[] = new Cat('Felix'); 
+    echo "  (Internal array modified with Cat via Copy-on-Write)\n";
+}
+
+/** @var list<Dog> */
+$dogs = [new Dog('Buddy'), new Dog('Rex')];
+
+// 1. Array covariance permits passing list<Dog> where list<Animal> is expected
+inspectAnimals($dogs);
+
+// 2. The caller's array remains 100% list<Dog> due to PHP's Copy-on-Write!
+echo "\nCaller dogs count: " . count($dogs) . " (Still pristine Dog list!)\n";
+foreach ($dogs as $dog) {
+    echo "  • {$dog->name}: " . get_class($dog) . "\n";
+}
+```
+
+</TypePHPSnippet>
+
+---
+
+### The Alternative: Why Invariant Arrays Would Hurt Developer Experience
+
+If TypePHP treated native arrays as strictly invariant (demanding an exact match where `list<Dog>` is rejected by `list<Animal>`), working with everyday PHP arrays would become excruciatingly rigid:
+- Composing array schemas, pipeline transforms, and data mappers would require manual `array_map()` casts just to change the type label of an array.
+- Polymorphic functions that only read data would reject specialized lists, forcing developers into verbose workarounds.
+
+Array covariance preserves the natural, ergonomic flexibility of PHP arrays while remaining safe under value semantics.
+
+---
+
+### Need Strictly Invariant Arrays? Use a Generic Collection Class
+
+If your domain model requires strict invariance (for example, a shared read-write storage buffer where pushing a subtype must be explicitly forbidden), **wrap the array in a generic invariant class**:
+
+```php:line-numbers
+/**
+ * Generic classes are INVARIANT by default in TypePHP!
+ *
+ * @template T
+ */
+class InvariantCollection
+{
+    /** @var array<int, T> */
+    public array $items = [];
+
+    /** @param T $item */
+    public function add(mixed $item): void
+    {
+        $this->items[] = $item;
+    }
+}
+```
+
+Because generic classes are invariant by default, `InvariantCollection<Dog>` will be strictly rejected if passed to `InvariantCollection<Animal>`, protecting mutable shared object references from contamination.
+
+::: tip Learn More About Class Invariance
+Explore how TypePHP reifies generic classes and enforces invariance on mutable objects in the [Class Generics & Upper Bounds](/generics/class-generics-and-upper-bounds) guide.
+:::
+
+---
+
+### By-Reference Array Mutations (Actively Guarded by TypePHP)
+
+The only scenario where array covariance could introduce corruption in PHP is when an array is modified **by reference (`&$array`)** or via a reference alias (`&$item`), opting out of Copy-on-Write.
+
+Unlike Java, TypePHP actively guards by-reference mutations:
+- **Out-Parameters (`@param-out`):** Validates the modified array upon function exit.
+- **By-Reference Loops (`foreach ($dogs as &$dog)`):** Automatically injects a post-boundary check to verify that no incompatible subtypes were assigned inside the loop.
+
+<TypePHPSnippet title="Guarded By-Reference Array Mutation" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+abstract class Animal { public function __construct(public string $name) {} }
+class Dog extends Animal {}
+class Cat extends Animal {}
+
+/** @var list<Dog> */
+$dogs = [
+    new Dog('Buddy'), 
+    new Dog('Max'),
+];
+
+echo "Iterating dogs by reference and attempting mutation...\n";
+
+// Modifying an element by reference opts out of Copy-on-Write:
+foreach ($dogs as &$dog) {
+    if ($dog->name === 'Max') {
+        // Attempting to sneak a Cat into what must remain a list<Dog>!
+        $dog = new Cat('Imposter');
+    }
+}
+unset($dog);
+
+echo "This line will never be reached due to loop post-boundary check!\n";
+```
+
+</TypePHPSnippet>
+
+When the loop concludes, TypePHP's injected boundary assertion inspects the container, catches the `Cat`, and halts execution:
+
+```text
+Fatal error: Uncaught TypePHP\Exception\TypeError: Variable $dogs[1] must be of type Dog, Cat given in playground.php on line 27
+```
+---
+
+## Homogeneous vs. Heterogeneous Collections
+
+TypePHP strictly differentiates between **homogeneous collections** (where every item must share the exact same type) and **heterogeneous collections** (where items may vary according to a union):
+
+- **Homogeneous Union (`User[] | Admin[]`):** The array must be **100% `User`** OR **100% `Admin`**. Mixed arrays containing both types are strictly rejected.
+- **Heterogeneous Array (`(User | Admin)[]` or `list<User|Admin>`):** The array may freely contain a **mix of `User` and `Admin`** elements.
+
+<TypePHPSnippet title="Homogeneous vs. Heterogeneous Arrays" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+class User {}
+class Admin {}
+
+/**
+ * Homogeneous Union: Must be an array of all Users OR all Admins
  *
  * @param User[]|Admin[] $accounts
  */
-function processHomogeneousUnion(array $accounts): void {}
+function processHomogeneous(array $accounts): void
+{
+    echo "✓ Homogeneous accounts verified\n";
+}
 
 /**
- * Heterogeneous Array: Expects an array that can mix Users and Admins
+ * Heterogeneous Array: Accepts a mixed list of Users and Admins
  *
  * @param (User|Admin)[] $accounts
  */
-function processHeterogeneousArray(array $accounts): void {}
+function processHeterogeneous(array $accounts): void
+{
+    echo "✓ Heterogeneous accounts verified\n\n";
+}
 
-$mixedAccounts = [new User('Alice'), new Admin('Bob')];
+$mixedAccounts = [new User(), new Admin()];
 
-// 1. Fails Homogeneous Union check (contains both Users and Admins):
-processHomogeneousUnion($mixedAccounts);
-// Throws: TypeError: Argument $accounts[1] must be of type User, Admin given
+// 1. Passes Heterogeneous Array check
+processHeterogeneous($mixedAccounts);
 
-// 2. Passes Heterogeneous Array check:
-processHeterogeneousArray($mixedAccounts); // Valid
+// 2. Fails Homogeneous Union check (contains both Users and Admins)!
+echo "Passing mixed array to Homogeneous Union (User[]|Admin[])...\n";
+processHomogeneous($mixedAccounts);
 ```
+
+</TypePHPSnippet>
 
 ---
 
-## Variadic Parameters & Array Contracts (`...$items`)
+## Sealed vs. Unsealed Array Shapes
 
-When PHP executes a variadic parameter (`function foo(Type ...$items)`), the Zend Engine collects all passed arguments into a sequential wrapper list (`$items = [0 => arg1, 1 => arg2, ...]`).
+Array shapes define exact key-value contracts for associative arrays:
 
-TypePHP automatically wraps and unpacks variadic DocBlock contracts:
+- **Sealed Shapes (Default):** Extra unexpected keys are strictly forbidden.
+- **Unsealed Shapes (`...<K, V>`):** Extra dynamic key-value pairs matching `<K, V>` are permitted.
 
-### 1. Scalar & Object Variadics (`@param positive-int ...$ids`)
+<TypePHPSnippet title="Sealed vs. Unsealed Shapes" default-view="source">
 
-```php
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
- * @param positive-int ...$ids
+ * Sealed: Extra keys strictly forbidden
+ * @param array{id: positive-int, username: non-empty-string} $data
  */
-function sumIds(int ...$ids): int
+function processSealed(array $data): void
 {
-    return array_sum($ids);
+    echo "✓ Sealed user verified: {$data['username']}\n";
 }
 
-sumIds(10, 20, 30); // Valid: [10, 20, 30]
-
-sumIds(10, -5, 30);
-// Throws: TypeError: Argument $ids[1] must be of type positive-int, negative int (-5) given
-```
-
-### 2. Variadic Generic Collections (`@param array<K, V> ...$arrays`)
-
-When a variadic parameter accepts arrays (e.g. array helper operations like `diffKeys` or `merge`), each passed argument is an array. Inside PHP, `$arrays` is an array of arrays (`list<array<K, V>>`):
-
-```php
 /**
- * @template TKey of array-key
- * @template TValue
- *
- * @param array<TKey, TValue> $array
- * @param array<TKey, mixed> ...$arrays Each variadic argument is an array<TKey, mixed>
- *
- * @return array<TKey, TValue>
+ * Unsealed: Allows additional string metadata
+ * @param array{id: positive-int, ...<string, string>} $data
  */
-function diffKeys(array $array, array ...$arrays): array
+function processUnsealed(array $data): void
 {
-    return array_diff_key($array, ...$arrays);
+    echo "✓ Unsealed verified with " . count($data) . " item(s)\n\n";
 }
 
-$initial = ['first_name' => 'John', 'last_name' => 'Doe', 'age' => 42];
+// 1. Valid calls
+processSealed(['id' => 1, 'username' => 'Alice']);
+processUnsealed(['id' => 1, 'role' => 'admin', 'dept' => 'engineering']);
 
-// Valid: Passed variadic arrays with matching TKey (string)
-diffKeys($initial, ['age' => 10], ['last_name' => true]);
-
-// Invalid: Variadic argument #2 has integer key 123 instead of string TKey
-diffKeys($initial, [123 => 'value']);
-// Throws: TypeError: Argument $arrays[0] key must be of type string, int (123) given
-```
-
-### 3. Homogeneous Variadic Templates (`@template T` with `@param T ...$items`)
-
-When a function declares an unbounded generic template `@template T` on a variadic parameter `@param T ...$items`, **all variadic arguments in that call must be of the same type `T`**:
-
-```php
-/**
- * @template T
- *
- * @param T ...$items
- *
- * @return list<T>
- */
-function collectSameType(mixed ...$items): array
-{
-    return array_values($items);
-}
-
-// 1. Valid: All variadic items are integers (T = int)
-collectSameType(10, 20, 30); // Valid
-
-// 2. Invalid: Inconsistent types (Item 0 is int, Item 2 is string)
-collectSameType(10, 20, 'invalid');
-// Throws: TypeError: Argument $items[2] (template T = int) must be of type int, string 'invalid' given
-```
-
-> **Template Bound Widening:** If the template declares an upper bound (e.g. `@template T of int|float`), TypePHP dynamically widens `T` to accommodate all arguments that satisfy the bound:
-> ```php
-> /**
->  * @template T of int|float
->  * @param T ...$numbers
->  * @return list<T>
->  */
-> function sumAll(int|float ...$numbers): array {}
-> 
-> sumAll(1, 2.5, 3); // Valid: T is widened to int|float because both satisfy the bound
-> ```
-
-### 4. Heterogeneous Variadics (`mixed ...$values`)
-
-If a function is designed to accept multiple arguments of **different types in the same call** (e.g. `append(1, 'b', ['a' => 'b'])`), declare the parameter as `mixed ...$values`:
-
-```php
-class Collection
-{
-    /**
-     * Accepts arbitrary heterogeneous values in a single call
-     *
-     * @param mixed ...$values
-     */
-    public function append(mixed ...$values): self
-    {
-        // ...
-        return $this;
-    }
-}
-
-$col = new Collection();
-$col->append(1, 'foo', ['nested' => 'array'], false); // Valid
-```
-
----
-
-## Deeply Nested Arrays & Lists (`array<K, list<V>>`)
-
-TypePHP recursively validates deeply nested array structures down to any depth:
-
-```php
-/**
- * @param array<string, list<positive-int>> $matrix
- */
-function processMatrix(array $matrix): void
-{
-    // ...
-}
-
-// 1. Valid Call
-processMatrix([
-    'math' => [100, 95],
-    'science' => [88, 92],
+// 2. Extra key triggers TypeError on sealed shape
+echo "Passing unexpected key 'draft' to sealed shape...\n";
+processSealed([
+    'id' => 1,
+    'username' => 'Alice',
+    'draft' => true,
 ]);
-
-// 2. Invalid Call (Nested list item -50 violates positive-int)
-processMatrix([
-    'math' => [100, -50],
-]);
-// Throws: TypeError: processMatrix(): Argument $matrix['math'][1] must be of type positive-int, negative int (-50) given
 ```
+
+</TypePHPSnippet>
 
 ---
 
-## Array Shapes (`array{key: type}`)
+## Schema Composition via Intersections (`ShapeA & ShapeB`)
 
-Array shapes define exact key-value contracts for associative arrays.
+TypePHP supports schema composition by intersecting multiple sealed or unsealed array shapes. Declared fields are merged into a single composite schema while preserving strict sealed boundaries against unexpected keys:
 
-### Required vs. Optional Keys
+<TypePHPSnippet title="Array Shape Composition (ShapeA & ShapeB)" default-view="source">
 
-Mark optional keys with a question mark (`key?: type`):
+```php:line-numbers
+<?php
 
-```php
-/**
- * @param array{id: positive-int, username: non-empty-string, role?: 'admin'|'user'} $payload
- */
-function saveUserPayload(array $payload): void
-{
-    // ...
-}
+declare(strict_types=1);
 
-// 1. Valid Call (Optional 'role' key omitted)
-saveUserPayload(['id' => 10, 'username' => 'Alice']);
-
-// 2. Valid Call (Optional 'role' key provided)
-saveUserPayload(['id' => 10, 'username' => 'Alice', 'role' => 'admin']);
-
-// 3. Invalid Call (Missing required 'username' key)
-saveUserPayload(['id' => 10]);
-// Throws: TypeError: saveUserPayload(): Argument $payload is missing required key 'username'
-```
-
-### Sealed vs. Unsealed Shapes
-
-By default, array shapes are **sealed**. Any unexpected extra keys in the array will trigger a `TypeError`.
-
-To allow additional dynamic keys, define an **unsealed shape** using `...<K, V>` syntax:
-
-```php
-/**
- * Unsealed Shape: Requires 'id', but permits additional string-string pairs
- *
- * @param array{id: positive-int, ...<string, string>} $options
- */
-function processUnsealedOptions(array $options): void
-{
-    // ...
-}
-
-// 1. Valid Call (Includes extra string key 'category')
-processUnsealedOptions(['id' => 10, 'category' => 'admin']);
-
-// 2. Invalid Call (Extra key 'code' has integer value 999 instead of string)
-processUnsealedOptions(['id' => 10, 'code' => 999]);
-// Throws: TypeError: processUnsealedOptions(): Argument $options['code'] must be of type string, int (999) given
-```
-
-### Array Shape Composition via Intersections (`ShapeA & ShapeB`)
-
-TypePHP supports composing sealed and unsealed array shapes using intersection (`&`) operators. When shapes intersect, declared fields are merged into a single composite schema while preserving strict boundaries against unexpected keys:
-
-```php
 /**
  * @phpstan-type Identifiable array{id: positive-int, created_at: non-empty-string}
  * @phpstan-type Taggable     array{tags: list<non-empty-string>}
- * @phpstan-type ArticleShape Identifiable & Taggable
- *
- * @param ArticleShape $article
+ * @phpstan-type ArticlePayload Identifiable & Taggable
  */
-function publishArticle(array $article): bool
+class ArticleService
 {
-    return true;
+    /**
+     * @param ArticlePayload $payload
+     */
+    public function publish(array $payload): void
+    {
+        echo "✓ Published Article #{$payload['id']} with " . count($payload['tags']) . " tag(s)\n";
+    }
 }
 
-// 1. Valid Call (Contains all required fields from both schemas)
-publishArticle([
+$service = new ArticleService();
+
+// 1. Valid: Merges both schemas seamlessly
+$service->publish([
     'id' => 101,
-    'created_at' => '2026-09-14',
-    'tags' => ['php', 'typephp'],
+    'created_at' => '2026-09-26',
+    'tags' => ['php', 'typephp', 'runtime'],
 ]);
 
-// 2. Invalid Call (Missing required key from Taggable schema)
-publishArticle([
-    'id' => 101,
-    'created_at' => '2026-09-14',
+// 2. Sealed Safety: Extra unexpected keys are strictly rejected!
+echo "\nPassing unexpected extra key 'draft'...\n";
+$service->publish([
+    'id' => 102,
+    'created_at' => '2026-09-26',
+    'tags' => ['release'],
+    'draft' => true,
 ]);
-// Throws: TypeError: publishArticle(): Argument $article is missing required key 'tags'
-
-// 3. Invalid Call (Contains unexpected key not declared in either schema)
-publishArticle([
-    'id' => 101,
-    'created_at' => '2026-09-14',
-    'tags' => ['php'],
-    'unregistered_key' => true,
-]);
-// Throws: TypeError: publishArticle(): Argument $article contains unsealed unexpected key 'unregistered_key'
 ```
 
-#### Overlapping Key Refinement
-When intersected shapes declare the same key with different constraints, TypePHP unifies them into an intersected constraint (e.g., `score: int` and `score: positive-int` unifies to `score: int & positive-int`):
+</TypePHPSnippet>
 
-```php
+::: tip Composing Schemas with Type Aliases
+Notice how `@phpstan-type` enables defining modular, reusable shape contracts that compose cleanly via intersections (`Identifiable & Taggable`). 
+
+To learn how to define, export, and import modular schemas across different classes, check out the [Type Aliases (`@phpstan-type`) Guide](/supported-types/type-aliases).
+:::
+
+### Overlapping Key Refinement
+
+When intersected shapes declare the same key with different constraints, TypePHP unifies them into an intersected constraint (e.g. `score: int` and `score: positive-int` unifies to `score: int & positive-int`):
+
+<TypePHPSnippet title="Overlapping Key Refinement in Composed Shapes" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
- * @param array{score: int, label: string} & array{score: positive-int} $payload
+ * @param (array{score: int, label: non-empty-string} & array{score: positive-int}) $payload
  */
 function recordScore(array $payload): void
 {
-    // ...
+    echo "✓ Recorded score: {$payload['score']} ({$payload['label']})\n";
 }
 
-recordScore(['score' => 50, 'label' => 'good']); // Valid
+// 1. Valid: 50 satisfies (int & positive-int)
+recordScore(['score' => 50, 'label' => 'passed']);
 
-recordScore(['score' => -10, 'label' => 'bad']);
-// Throws: TypeError: Argument $payload['score'] must be of type (int & positive-int), negative int (-10) given
+// 2. Invalid: -10 satisfies int, but fails positive-int constraint in the intersection!
+echo "\nPassing negative score into intersected shape...\n";
+recordScore(['score' => -10, 'label' => 'failed']);
 ```
+
+</TypePHPSnippet>
+
+
+---
+
+## Discriminator-Aware Tagged Unions
+
+When validating discriminated unions (tagged unions where branches share a discriminator field like `type` or `status`), TypePHP isolates the matching branch and diagnoses the **exact failing field** within it rather than falsely blaming the discriminator key:
+
+<TypePHPSnippet title="Discriminator-Aware Tagged Unions" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+/**
+ * @param array{type: 'click', x: int, y: int}
+ *      | array{type: 'hover', element: non-empty-string}
+ *      | array{type: 'scroll', offset: positive-int} $event
+ */
+function handleEvent(array $event): void
+{
+    echo "✓ Handled event: {$event['type']}\n";
+}
+
+// 1. Valid calls
+handleEvent(['type' => 'click', 'x' => 10, 'y' => 20]);
+handleEvent(['type' => 'scroll', 'offset' => 150]);
+
+// 2. TypePHP pinpoints the exact failing field ('element') on the matched branch!
+// It does NOT falsely claim type must be 'click'.
+echo "\nPassing hover event with empty element string...\n";
+handleEvent([
+    'type' => 'hover',
+    'element' => '',
+]);
+```
+
+</TypePHPSnippet>
 
 ---
 
 ## Positional Tuple Shapes (`array{0: T1, 1: T2}` & Keyless Tuples)
 
-Define fixed-length, positional array tuples:
+Define fixed-length, positional array tuples with required and optional items:
 
-```php
+<TypePHPSnippet title="Positional Tuple Shapes" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
  * Positional Tuple with Optional Trailing Element
  *
@@ -470,7 +619,7 @@ Define fixed-length, positional array tuples:
  */
 function processTuple(array $tuple): void
 {
-    // ...
+    echo "✓ Tuple item #{$tuple[0]}: {$tuple[1]}\n";
 }
 
 // 1. Valid Call (Optional index 2 omitted)
@@ -480,134 +629,105 @@ processTuple([100, 'success']);
 processTuple([100, 'success', true]);
 
 // 3. Invalid Call (Index 0 is negative integer)
+echo "\nPassing negative ID into index 0...\n";
 processTuple([-5, 'success']);
-// Throws: TypeError: processTuple(): Argument $tuple['0'] must be of type positive-int, negative int (-5) given
 ```
 
-### Implicit Keyless Tuple Syntax (`array{T1, T2}`)
+</TypePHPSnippet>
 
-TypePHP fully supports implicit keyless tuple syntax (e.g. `array{list<positive-int>, non-empty-string}`):
+---
 
-```php
+## Implicit Keyless Tuple Syntax (`array{T1, T2}`)
+
+TypePHP fully supports implicit keyless tuple syntax (e.g. `array{list<positive-int>, non-empty-string}`), automatically mapping sequential indices to their respective type contracts:
+
+<TypePHPSnippet title="Implicit Keyless Tuples" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
+ * Index 0 must be list<positive-int>, Index 1 must be non-empty-string
+ *
  * @param array{list<positive-int>, non-empty-string} $bundle
  */
 function processBundle(array $bundle): void
 {
-    // ...
+    echo "✓ Processed bundle with " . count($bundle[0]) . " items: {$bundle[1]}\n";
 }
 
-processBundle([[10, 20], 'bundle_tag']); // Valid
+// 1. Valid Call
+processBundle([[10, 20, 30], 'active_bundle']);
+
+// 2. Invalid Call: Nested list contains negative integer -5!
+echo "\nPassing bundle with negative integer in nested list...\n";
+processBundle([[10, -5, 30], 'active_bundle']);
 ```
+
+</TypePHPSnippet>
 
 ---
 
 ## Key & Value Extraction (`key-of<T>` & `value-of<T>`)
 
-TypePHP supports dynamically restricting function parameters, return types, property writes, or array shape fields to the keys or values of an array constant, an array shape, or a PHP 8.1 Enum using `key-of<T>` and `value-of<T>` type operators.
+TypePHP supports dynamically restricting parameters, return types, or shape fields to the keys or values of an array constant, an array shape, or an Enum using `key-of<T>` and `value-of<T>`:
 
-> **Performance & Visibility:** TypePHP caches array and enum extractions in static memory, guaranteeing **$O(1)$ constant lookup times** during execution. Furthermore, it safely resolves `private` and `protected` class constants (e.g. `key-of<self::PRIVATE_MAP>`) without visibility violations.
+<TypePHPSnippet title="key-of and value-of Extractions" default-view="source">
 
-| Annotation | Supported Targets `T` | Validation Rule |
-| :--- | :--- | :--- |
-| **`key-of<T>`** | Array Constant, Array Shape, UnitEnum, BackedEnum | Validates that the value matches a valid **array key**, shape key, or **Enum case name** (e.g. `'Active'`, `'Hearts'`). |
-| **`value-of<T>`** | Array Constant, BackedEnum | Validates that the value matches a valid **array value** or **BackedEnum backing value** (e.g. `'active'`, `1`). |
+```php:line-numbers
+<?php
 
----
+declare(strict_types=1);
 
-### 1. Extracting from Class Constants
-
-```php
-namespace App\Database;
-
-class DriverManager
+enum TransactionStatus: string 
 {
-    private const DRIVER_MAP = [
-        'pdo_mysql'  => 'PDO\MySQL\Driver',
-        'pdo_sqlite' => 'PDO\SQLite\Driver',
+    case PENDING = 'pending';
+    case COMPLETED = 'completed';
+    case FAILED = 'failed';
+}
+
+class DatabaseMap 
+{
+    public const DRIVERS = [
+        'mysql' => 'PDO\\MySQL\\Driver',
+        'pgsql' => 'PDO\\PgSQL\\Driver',
     ];
-
-    /**
-     * @param key-of<self::DRIVER_MAP> $driverKey
-     * @param value-of<self::DRIVER_MAP> $driverClass
-     */
-    public function connect(string $driverKey, string $driverClass): void
-    {
-        // ...
-    }
-}
-
-$manager = new DriverManager();
-
-// Valid Call
-$manager->connect('pdo_mysql', 'PDO\MySQL\Driver');
-
-// Invalid Driver Key
-$manager->connect('pdo_pgsql', 'PDO\MySQL\Driver');
-// Throws: TypeError: Argument $driverKey must be a key of App\Database\DriverManager::DRIVER_MAP, string 'pdo_pgsql' given
-
-// Invalid Driver Class Value
-$manager->connect('pdo_mysql', 'PDO\PgSQL\Driver');
-// Throws: TypeError: Argument $driverClass must be a value of App\Database\DriverManager::DRIVER_MAP, string 'PDO\PgSQL\Driver' given
-```
-
----
-
-### 2. Extracting from Enums (UnitEnums vs. BackedEnums)
-
-* **UnitEnums (`enum Suit { case Hearts; case Spades; }`):**
-  * `key-of<Suit>` validates case **names** (`'Hearts'`, `'Spades'`).
-  * `value-of<Suit>` strictly rejects all values with a `TypeError` because pure UnitEnums possess no backing values.
-* **BackedEnums (`enum Status: string { case Active = 'active'; }` or `enum Code: int`):**
-  * `key-of<Status>` validates case **names** (`'Active'`).
-  * `value-of<Status>` validates **backing values** (`'active'`).
-
-```php
-enum Suit
-{
-    case Hearts;
-    case Spades;
-}
-
-enum StatusEnum: string
-{
-    case Active = 'active';
-    case Pending = 'pending';
 }
 
 /**
- * @param key-of<Suit> $suitName          // Expects: 'Hearts' | 'Spades'
- * @param key-of<StatusEnum> $caseName    // Expects: 'Active' | 'Pending'
- * @param value-of<StatusEnum> $caseValue // Expects: 'active' | 'pending'
+ * @param key-of<TransactionStatus> $statusName
+ * @param value-of<TransactionStatus> $statusValue
+ * @param key-of<DatabaseMap::DRIVERS> $driverKey
  */
-function configureStatus(string $suitName, string $caseName, string $caseValue): void
+function configurePayment(string $statusName, string $statusValue, string $driverKey): void 
 {
-    // ...
+    echo "✓ Configured: Status={$statusName} ({$statusValue}), Driver={$driverKey}\n";
 }
 
-// 1. Valid Call
-configureStatus('Hearts', 'Active', 'active');
+// 1. Valid call
+configurePayment('COMPLETED', 'completed', 'mysql');
 
-// 2. Invalid Case Name (Passing lowercase 'active' where case name 'Active' was expected)
-configureStatus('Hearts', 'active', 'active');
-// Throws: TypeError: Argument $caseName must be a key of enum StatusEnum, string 'active' given
-
-// 3. Invalid UnitEnum value-of usage (UnitEnums have no backing values)
-function testBadUnitEnumValue(mixed $val): void {}
-/** @param value-of<Suit> $val */
-// Throws: TypeError: Argument $val must be a value of enum Suit
+// 2. Passing invalid driver key triggers TypeError!
+echo "\nPassing invalid driver key 'sqlite'...\n";
+configurePayment('COMPLETED', 'completed', 'sqlite');
 ```
+
+</TypePHPSnippet>
 
 ---
 
 ## Offset Access Types (`T[K]` & `T[K1][K2]`)
 
-TypePHP supports evaluating offset access lookups on array shapes, constant arrays, and `@phpstan-type` aliases at runtime using `T[K]` and multi-level `T[K1][K2]` syntax.
+TypePHP evaluates offset access lookups on array shapes, constant arrays, and `@phpstan-type` aliases at the AST level before validation runs, executing type checks at **$O(1)$ constant speed**:
 
-> **AST Reduction:** TypePHP evaluates and reduces offset access lookups (e.g. `UserShape['id']` $\rightarrow$ `positive-int`) at the AST level before validation runs, executing type checks at **$O(1)$ constant speed**.
+<TypePHPSnippet title="Offset Access Types (T[K])" default-view="source">
 
-```php
-namespace App\Services;
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
 
 /**
  * @phpstan-type DatabaseConfig array{
@@ -617,92 +737,143 @@ namespace App\Services;
  *     }
  * }
  */
-class UserService
+class DatabaseService
 {
-    public const CONFIG_MAP = [
-        'mysql' => 'PDO\MySQL\Driver',
+    public const DRIVERS = [
+        'mysql' => 'PDO\\MySQL\\Driver',
     ];
 
     /**
      * Resolves Multi-Level Offset DatabaseConfig['connection']['port'] -> int<1, 65535>
-     * Resolves Constant Offset self::CONFIG_MAP['mysql'] -> literal 'PDO\MySQL\Driver'
+     * Resolves Constant Offset self::DRIVERS['mysql'] -> literal 'PDO\MySQL\Driver'
      *
      * @param DatabaseConfig['connection']['port'] $port
-     * @param self::CONFIG_MAP['mysql'] $driverClass
+     * @param self::DRIVERS['mysql'] $driverClass
      */
     public function configure(int $port, string $driverClass): void
     {
-        // ...
+        echo "✓ Configured on port {$port} with {$driverClass}\n";
     }
 }
 
-$service = new UserService();
+$service = new DatabaseService();
 
-// 1. Valid Call
-$service->configure(3306, 'PDO\MySQL\Driver');
+// 1. Valid call
+$service->configure(3306, 'PDO\\MySQL\\Driver');
 
-// 2. Invalid Port (70000 exceeds int<1, 65535> extracted from nested offset)
-$service->configure(70000, 'PDO\MySQL\Driver');
-// Throws: TypeError: Argument $port must be <= 65535, int (70000) given
-
-// 3. Invalid Driver Class ('PDO\PgSQL\Driver' violates literal 'PDO\MySQL\Driver')
-$service->configure(3306, 'PDO\PgSQL\Driver');
-// Throws: TypeError: Argument $driverClass must be literal 'PDO\MySQL\Driver', string 'PDO\PgSQL\Driver' given
+// 2. Invalid port: 70000 exceeds int<1, 65535> extracted from offset!
+echo "\nPassing port 70000 exceeding int<1, 65535>...\n";
+$service->configure(70000, 'PDO\\MySQL\\Driver');
 ```
+
+</TypePHPSnippet>
 
 ---
 
 ## Object Shapes (`object{prop: type}` & `stdClass{prop: type}`)
 
-Define property shape contracts for generic objects or strictly for `stdClass` instances:
+While array shapes enforce structure on associative arrays, **Object Shapes** enforce structural contracts on PHP objects (`object{prop: type}` or `stdClass{prop: type}`). 
+
+This is particularly useful when decoding dynamic JSON payloads via `json_decode($json, false)`, interacting with third-party HTTP SDKs, or validating un-typed DTOs.
 
 ### Generic Object Shapes (`object{prop: type}`)
 
-Accepts any object instance or `stdClass` matching the declared property shape:
+A generic object shape accepts **any** object instance (whether a `stdClass`, an anonymous class, or a concrete typed class) as long as it exposes the required properties:
 
-```php
+<TypePHPSnippet title="Generic Object Shapes (object{...})" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
- * @param object{id: positive-int, name: non-empty-string, role?: string} $user
+ * Accepts ANY object with id and username properties
+ *
+ * @param object{id: positive-int, username: non-empty-string, role?: 'admin'|'user'} $user
  */
-function processObjectShape(object $user): void
+function renderUserBadge(object $user): void
 {
-    // ...
+    $role = $user->role ?? 'standard';
+    echo "✓ Rendered badge for #{$user->id}: {$user->username} ({$role})\n";
 }
 
+// 1. Valid: stdClass (e.g. from json_decode)
 $std = new stdClass();
 $std->id = 42;
-$std->name = 'Alice';
+$std->username = 'Alice';
+renderUserBadge($std);
 
-processObjectShape($std); // Valid
+// 2. Valid: Custom Class with typed properties
+class AppUser {
+    public function __construct(public int $id, public string $username, public string $role) {}
+}
+renderUserBadge(new AppUser(101, 'Bob', 'admin'));
 
-class CustomUser { public int $id = 42; public string $name = 'Alice'; }
-processObjectShape(new CustomUser()); // Valid
+// 3. Invalid: Missing required username property!
+echo "\nPassing stdClass missing required username property...\n";
+$incomplete = new stdClass();
+$incomplete->id = 50;
+renderUserBadge($incomplete);
 ```
 
-### Strict `stdClass` Shapes (`stdClass{prop: type}`)
+</TypePHPSnippet>
 
-Strictly requires a `\stdClass` instance, rejecting custom class instances:
+---
 
-```php
+## Strict `stdClass` Shapes (`stdClass{prop: type}`)
+
+If an API specifically demands raw dynamic objects from `json_decode()` and must strictly reject custom domain classes, you can specify `stdClass{prop: type}`:
+
+<TypePHPSnippet title="Strict stdClass Shapes (stdClass{...})" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
- * @param stdClass{id: positive-int, name: non-empty-string} $payload
+ * Strictly requires stdClass! Custom domain classes are rejected.
+ *
+ * @param stdClass{id: positive-int, token: non-empty-string} $session
  */
-function processStrictStdClass(object $payload): void
+function authenticateJsonSession(stdClass $session): void
 {
-    // ...
+    echo "✓ Authenticated stdClass session #{$session->id}\n";
 }
 
-class CustomUser { public int $id = 42; public string $name = 'Alice'; }
+class CustomSession
+{
+    public int $id = 1;
+    public string $token = 'tok_123';
+}
 
-processStrictStdClass(new CustomUser());
-// Throws: TypeError: processStrictStdClass(): Argument $payload must be an instance of stdClass, CustomUser given
+// 1. Valid stdClass instance
+$rawJsonSession = new stdClass();
+$rawJsonSession->id = 10;
+$rawJsonSession->token = 'secret_bearer_token';
+authenticateJsonSession($rawJsonSession);
+
+// 2. Invalid: Custom domain class is rejected!
+echo "\nPassing CustomSession class to strict stdClass contract...\n";
+authenticateJsonSession(new CustomSession());
 ```
 
-### Deep Property Chains & Diagnostic Breadcrumbs (3+ Levels Deep)
+</TypePHPSnippet>
+
+---
+
+## Deep Property Chains & Diagnostic Breadcrumbs (4+ Levels Deep)
 
 TypePHP recursively evaluates deeply nested object and array shapes down to any depth, constructing accurate diagnostic breadcrumbs:
 
-```php
+<TypePHPSnippet title="Deep Object Shape Diagnostics" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
  * 4-level deep object shape
  *
@@ -710,11 +881,23 @@ TypePHP recursively evaluates deeply nested object and array shapes down to any 
  */
 function assignLead(object $user): void
 {
-    // ...
+    echo "✓ Assigned lead: {$user->company->department->lead->name}\n";
 }
 
-// 1. Deep Field Error (Preserves complete property path)
-$user = (object)[
+// 1. Valid deep object shape
+$validUser = (object)[
+    'company' => (object)[
+        'department' => (object)[
+            'lead' => (object)[
+                'name' => 'Alice',
+            ],
+        ],
+    ],
+];
+assignLead($validUser);
+
+// 2. Deep Field Error: Pinpoints the 4th level down!
+$invalidUser = (object)[
     'company' => (object)[
         'department' => (object)[
             'lead' => (object)[
@@ -724,35 +907,17 @@ $user = (object)[
     ],
 ];
 
-assignLead($user);
-// Throws: TypeError: assignLead(): Argument $user->company->department->lead->name must be of type non-empty-string, empty string ('') given
-
-// 2. Deep Missing Property (Accurately identifies parent object)
-$userMissingLead = (object)[
-    'company' => (object)[
-        'department' => (object)[
-            // 'lead' is missing
-        ],
-    ],
-];
-
-assignLead($userMissingLead);
-// Throws: TypeError: assignLead(): Argument $user->company->department is missing required property 'lead'
-
-// 3. Deep Hybrid Object-Array Chains
-/**
- * @param object{branches: list<object{manager: object{email: non-empty-string}}>} $org
- */
-function notifyManagers(object $org): void { ... }
-
-// Throws: TypeError: notifyManagers(): Argument $org->branches[1]->manager->email must be of type non-empty-string, empty string ('') given
+echo "\nPassing deep object with empty lead name...\n";
+assignLead($invalidUser);
 ```
+
+</TypePHPSnippet>
 
 ### Safe Inspection of Uninitialized Readonly Properties
 
 If an object instance contains uninitialized PHP 8.1+ `readonly` properties, TypePHP's `ObjectShapeValidator` safely inspects property initialization states using Reflection before attempting reads:
 
-```php
+```php:line-numbers
 class UserContainer
 {
     public readonly int $id; // Uninitialized

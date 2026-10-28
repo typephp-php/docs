@@ -1,19 +1,19 @@
 # Property Validation
 
-TypePHP validates class property assignments and PHP 8.4 Property Hooks against declared `@var` annotations.
+TypePHP validates class property assignments, `readonly` initializations, and PHP 8.4 Property Hooks against their declared `@var` annotations at runtime.
 
 ---
 
-## Instance and Static Property Assignments
+## Instance & Static Property Assignments
 
-When you annotate a class property with `@var`, TypePHP intercepts assignments to that property and validates the value before the write occurs:
+When you annotate a class property with `@var`, TypePHP intercepts assignments to that property and validates the value *before* the write occurs:
 
-```php
+<TypePHPSnippet title="Instance & Static Properties" default-view="source">
+
+```php:line-numbers
 <?php
 
 declare(strict_types=1);
-
-namespace App\Models;
 
 class ConfiguredProperty
 {
@@ -33,36 +33,52 @@ class ConfiguredProperty
 
     public function updateId(int $newId): void
     {
-        $this->id = $newId; // Validated against @var positive-int
+        // Validated against @var positive-int
+        $this->id = $newId; 
     }
 
     public static function updateTitle(string $newTitle): void
     {
-        self::$appTitle = $newTitle; // Validated against @var non-empty-string
+        // Validated against @var non-empty-string
+        self::$appTitle = $newTitle; 
     }
 }
 
 $config = new ConfiguredProperty();
 
-// Valid Update
+// 1. Valid Updates
 $config->updateId(42);
+ConfiguredProperty::updateTitle('Production App');
+echo "✓ Properties updated successfully!\n\n";
 
-// Invalid Update ($newId is negative)
+// 2. Invalid Static Update: Empty string violates non-empty-string!
+try {
+    echo "Attempting to assign empty string to static property...\n";
+    ConfiguredProperty::updateTitle('');
+} catch (\TypeError $e) {
+    echo "Caught: " . $e->getMessage() . "\n\n";
+}
+
+// 3. Invalid Instance Update: Negative int violates positive-int!
+echo "Attempting to assign negative ID to instance property...\n";
 $config->updateId(-5);
-// Throws: TypeError: Property App\Models\ConfiguredProperty::$id must be of type positive-int, negative int (-5) given
-
-// Invalid Static Update ($newTitle is empty string)
-ConfiguredProperty::updateTitle('');
-// Throws: TypeError: Property App\Models\ConfiguredProperty::$appTitle must be of type non-empty-string
 ```
+
+</TypePHPSnippet>
 
 ---
 
-## PHP 8.1+ Readonly Properties and Classes
+## PHP 8.1+ Readonly Properties
 
-TypePHP validates PHP 8.1+ `readonly` properties and PHP 8.2+ `readonly` classes during initialization:
+TypePHP flawlessly validates PHP 8.1+ `readonly` properties and PHP 8.2+ `readonly` classes during their one-time initialization:
 
-```php
+<TypePHPSnippet title="Readonly Property Validation" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 class Order
 {
     /**
@@ -77,25 +93,35 @@ class Order
         int $id,
         public readonly string $sku
     ) {
-        $this->id = $id; // Validated against @var positive-int!
+        // Validated against @var positive-int during initialization!
+        $this->id = $id; 
     }
 }
 
-// Valid Instance
+// 1. Valid Instance
 $order = new Order(100, 'SKU-500');
+echo "✓ Order initialized with ID: {$order->id}\n\n";
 
-// Invalid Instance ($id is negative)
+// 2. Invalid Instance ($id is negative, violating positive-int)
+echo "Attempting to initialize Order with negative ID...\n";
 new Order(-50, 'SKU-500');
-// Throws: TypeError: Property Order::$id must be of type positive-int
 ```
+
+</TypePHPSnippet>
 
 ---
 
 ## PHP 8.4 Asymmetric Visibility (`public private(set)`)
 
-TypePHP seamlessly supports PHP 8.4 Asymmetric Property Visibility. Type contracts on asymmetric properties are enforced when writes occur inside authorized class methods:
+TypePHP seamlessly supports PHP 8.4 Asymmetric Property Visibility. Type contracts on asymmetric properties are enforced when writes occur inside the authorized class scope:
 
-```php
+<TypePHPSnippet title="PHP 8.4 Asymmetric Visibility" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 class UserProfile
 {
     /**
@@ -107,36 +133,51 @@ class UserProfile
 
     public function setId(int $newId): void
     {
-        $this->id = $newId; // TypePHP validates assignment inside the class!
+        // TypePHP validates the assignment inside the class!
+        $this->id = $newId; 
     }
 }
 
 $profile = new UserProfile();
+
+$profile->setId(42); // Valid
+echo "✓ Profile ID set to: {$profile->id}\n\n";
+
+echo "Attempting to set negative profile ID...\n";
 $profile->setId(-100);
-// Throws: TypeError: Property UserProfile::$id must be of type positive-int
 ```
+
+</TypePHPSnippet>
 
 ---
 
 ## PHP 8.4 Property Hooks (`get` & `set`)
 
-TypePHP intercepts PHP 8.4 `get` and `set` property hooks, validating incoming values on `set` hooks and returned values on `get` hooks:
+TypePHP intercepts PHP 8.4 `get` and `set` property hooks. It automatically validates incoming values assigned to `set` hooks, and returned values produced by `get` hooks!
 
-```php
+<TypePHPSnippet title="PHP 8.4 Property Hooks" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 class PropertyHookDemo
 {
     /**
-     * @var int[]
+     * @var list<int>
      */
     public array $shortGetNumbers {
-        get => ['hello', 1]; // Returns invalid string 'hello' instead of int
+        // Bug! Returns invalid string 'hello' instead of int
+        get => ['hello', 1]; 
     }
 
     /**
      * @var positive-int
      */
     public int $shortSetNumber {
-        set => $this->_shortSetNumber = $value; // Validates incoming $value
+        // TypePHP intercepts and validates $value before execution!
+        set => $this->_shortSetNumber = $value; 
     }
 
     public int $_shortSetNumber = 10;
@@ -144,22 +185,34 @@ class PropertyHookDemo
 
 $demo = new PropertyHookDemo();
 
-// Invalid Get Hook Return
-$value = $demo->shortGetNumbers;
-// Throws: TypeError: Property PropertyHookDemo::$shortGetNumbers[0] must be of type int, string 'hello' given
+// 1. Invalid Get Hook Return
+try {
+    echo "Reading from buggy get hook...\n";
+    $value = $demo->shortGetNumbers;
+} catch (\TypeError $e) {
+    echo "Caught: " . $e->getMessage() . "\n\n";
+}
 
-// Invalid Set Hook Write
+// 2. Invalid Set Hook Write (Violates positive-int)
+echo "Writing negative number to set hook...\n";
 $demo->shortSetNumber = -5;
-// Throws: TypeError: Property PropertyHookDemo::$shortSetNumber must be of type positive-int
 ```
+
+</TypePHPSnippet>
 
 ---
 
-## PHP 8.4 Interface Property Inheritance
+## Interface Property Inheritance (PHP 8.4)
 
-If a class implements a PHP 8.4 Interface containing property hooks, the implementing class property inherits the interface property's `@var` docblock contract:
+If a class implements a PHP 8.4 Interface containing property hooks, the implementing class property automatically inherits the interface property's `@var` docblock contract:
 
-```php
+<TypePHPSnippet title="Interface Property Inheritance" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 interface HookedInterfaceProperty
 {
     /**
@@ -170,7 +223,7 @@ interface HookedInterfaceProperty
 
 class HookedInterfaceImplementation implements HookedInterfaceProperty
 {
-    // Inherits @var positive-int from HookedInterfaceProperty interface!
+    // Inherits @var positive-int from HookedInterfaceProperty!
     public int $interfaceProp {
         get => $this->_val;
     }
@@ -179,11 +232,15 @@ class HookedInterfaceImplementation implements HookedInterfaceProperty
 }
 
 $fixture = new HookedInterfaceImplementation();
+
+// By directly altering the backing value, we corrupt the get hook return
 $fixture->_val = -5;
 
+echo "Attempting to read interface property returning negative value...\n";
 $value = $fixture->interfaceProp;
-// Throws: TypeError: Property HookedInterfaceImplementation::$interfaceProp must be of type positive-int
 ```
+
+</TypePHPSnippet>
 
 ---
 
@@ -191,7 +248,13 @@ $value = $fixture->interfaceProp;
 
 Properties declared inside Traits inherit their `@var` docblock contracts when used by a class:
 
-```php
+<TypePHPSnippet title="Trait Property Inheritance" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 trait TraitWithProperties
 {
     /**
@@ -211,17 +274,29 @@ class ClassUsingTrait
 }
 
 $app = new ClassUsingTrait();
+
+$app->setTraitProp(100); // Valid
+echo "✓ Trait property updated\n\n";
+
+echo "Attempting to assign negative value to trait property...\n";
 $app->setTraitProp(-50);
-// Throws: TypeError: Property ClassUsingTrait::$traitInstanceProp must be of type positive-int
 ```
+
+</TypePHPSnippet>
 
 ---
 
 ## Generic Template Substitution in Properties
 
-When a class property uses a class-level generic template (`@var array<int, T> $items`), TypePHP automatically substitutes `T` with the object instance's bound generic type:
+When a class property uses a class-level generic template (e.g. `@var array<int, T> $items`), TypePHP automatically substitutes `T` with the object instance's dynamically bound generic type!
 
-```php
+<TypePHPSnippet title="Generic Template Properties" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
 /**
  * @template T
  */
@@ -235,21 +310,28 @@ class GenericHookedCollection
     }
 }
 
-/** @var GenericHookedCollection<positive-int> $collection */
+// Bind T = positive-int to this instance
+/** @var GenericHookedCollection<positive-int> */
 $collection = new GenericHookedCollection();
 
+echo "Assigning array with a negative integer...\n";
+// Fails! -50 violates the bound positive-int!
 $collection->items = [10, -50];
-// Throws: TypeError: Property GenericHookedCollection::$items[1] must be of type positive-int
 ```
+
+</TypePHPSnippet>
 
 ---
 
 ## Configuration Control
 
-Property assignment validation is enabled by default. You can toggle property validation in `typephp.php`:
+Property assignment validation is enabled by default. You can toggle property validation in your `typephp.php` configuration file under the `inline_vars` section:
 
-```php
-'inline_vars' => [
-    'properties' => true, // Set to false to disable property assignment checks
-],
+```php:line-numbers
+// typephp.php
+return [
+    'inline_vars' => [
+        'properties' => true, // Set to false to disable property assignment checks
+    ],
+];
 ```

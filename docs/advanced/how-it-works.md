@@ -1,190 +1,229 @@
 # How It Works
 
-TypePHP provides configurable runtime type enforcement without requiring custom C-extensions or modified PHP binaries. It operates entirely in PHP user-land by leveraging PHP's native `StreamWrapper` subsystem, Abstract Syntax Tree (AST) transformations, and in-memory state tracking.
+TypePHP provides transparent, zero-overhead runtime type enforcement without custom C-extensions or modified PHP binaries. It operates entirely in PHP user-land by combining native stream interception, compile-time AST analysis, bytecode caching, and in-memory generic state tracking.
 
 ---
 
 ## Parser Engine Dependencies
 
-TypePHP relies on two industry-standard parsing libraries to process source code and docblock contracts:
+TypePHP coordinates two industry-standard parsing libraries:
 
-* **`nikic/php-parser`:** Parses raw PHP source code into Abstract Syntax Tree (AST) statement nodes, allowing TypePHP to inspect assignments, function signatures, and property hooks to inject guard-rail expressions.
-* **`phpstan/phpdoc-parser`:** Tokenizes and parses PHPDoc annotations (`@param`, `@return`, `@template`, `@var`, `@phpstan-type`) into strongly typed AST `TypeNode` objects.
+* **`nikic/php-parser`:** Parses raw PHP source code into statement and expression AST nodes, enabling TypePHP to inspect assignments, function signatures, property hooks, and return expressions to evaluate or inject type checks.
+* **`phpstan/phpdoc-parser`:** Tokenizes and parses PHPDoc annotations (`@param`, `@return`, `@template`, `@var`, `@phpstan-type`, `@self-out`, `@param-out`) into strongly typed AST `TypeNode` representations.
 
 ---
 
-## The 5-Step Execution Lifecycle
+## The 6-Step Execution Lifecycle
 
+```mermaid
+flowchart TD
+    A["`**include** / **require** 'file.php'`"] --> B["`**1. Stream Interception**
+    *(StreamWrapper on 'file://')*`"]
+    B --> C["`**2. Path & Specificity Filtering**
+    *(PathMatcher & FileFilter)*`"]
+    C --> D["`**3. Compile-Time AST Elimination**
+    *(StaticTypeEvaluator)*`"]
+    D --> E["`**4. Selective Guard Rail Injection**
+    *(ContractVisitor & FunctionContractInjector)*`"]
+    E --> F["`**5. Zero Line-Drift Formatting & Disk Cache**
+    *(TypePHPPrinter & CacheManager)*`"]
+    F --> G["`**6. Runtime Enforcement & State Tracking**
+    *(RuntimeTypeChecker & TemplateManager)*`"]
+
+    style A fill:#3b82f6,color:#fff,stroke-width:0px
+    style B fill:#1e293b,color:#e2e8f0,stroke:#3b82f6
+    style C fill:#1e293b,color:#e2e8f0,stroke:#3b82f6
+    style D fill:#1e293b,color:#e2e8f0,stroke:#3b82f6
+    style E fill:#1e293b,color:#e2e8f0,stroke:#3b82f6
+    style F fill:#1e293b,color:#e2e8f0,stroke:#3b82f6
+    style G fill:#10b981,color:#fff,stroke-width:0px
 ```
-[require "file.php"] 
-         │
-         ▼
- 1. Stream Interception (StreamWrapper)
-         │
-         ▼
- 2. Path & Specificity Filtering (FileFilter)
-         │
-         ▼
- 3. AST Transformation & Injection (ContractVisitor)
-         │
-         ▼
- 4. Zero Line-Drift Formatting & Caching (TypePHPPrinter)
-         │
-         ▼
- 5. Runtime Type Enforcement (RuntimeTypeChecker)
-```
 
 ---
 
-## Project Root Resolution & Web Server Independence
+## 1. Stream Interception (`StreamWrapper`)
 
-To ensure consistent configuration loading across CLI commands, test runners (Pest, PHPUnit), and production web servers (where `getcwd()` points to `public/`), `Config::getProjectRoot()` searches upwards from the library's directory to locate `vendor/autoload.php` or `composer.json`.
+TypePHP overrides PHP's native `file://` protocol handler using `stream_wrapper_register()`.
 
-Once located, the project root path is memoized in static memory. All relative `include`, `exclude`, and `cache_dir` configuration globs resolve reliably against the true application root directory across all PHP SAPIs (`cli`, `fpm`, `frankenphp`, `swoole`).
-
----
-
-## Stream Interception
-
-TypePHP registers a custom stream wrapper for PHP's native `file://` protocol using `stream_wrapper_register()`.
-
-When PHP attempts to include a file, TypePHP's `StreamWrapper` intercepts the `open` call. If the call is a read-only inspection (such as `file_get_contents()` or `token_get_all()`), TypePHP passes the raw file through untouched. If the call is an execution request (`require` or `include`), the file proceeds to path filtering.
-
-Because stream handlers hook directly into PHP's stream subsystem, all underlying stream read, write, and stat operations execute **natively at C-level speed inside Zend Engine**, ensuring zero user-land file I/O bottlenecks.
+* **Execution Requests (`include` / `require`):** Detected via the Zend Engine flag `STREAM_OPEN_FOR_INCLUDE` (128) and read modes (`r`, `rb`, `rt`). The file proceeds to path filtering and AST analysis.
+* **Read-Only File Operations:** Functions like `file_get_contents()`, `token_get_all()`, `readfile()`, and Phar operations pass through untouched to the native C-level file system, preventing unnecessary overhead or string corruption.
+* **Re-entrancy Protection:** Whenever TypePHP needs to read a source file from disk or write transformed code to cache, it temporarily unregisters its stream wrapper, executes the native PHP operation, and re-registers itself, preventing infinite recursion.
 
 ---
 
-## Path Filtering and Pattern Specificity
+## 2. Path Filtering & Specificity (`PathMatcher` & `FileFilter`)
 
-TypePHP alone determines which files to transform and enforce docblock contracts on based on your `typephp.php` configuration:
+TypePHP determines whether a file should be instrumented based on your `include` and `exclude` path globs:
 
 ```php
-'include' => ['src/**', 'vendor/my-org/my-package/**'],
-'exclude' => ['vendor/**', 'storage/**'],
+'include' => [
+    'src/**',
+    'app/**',
+    'vendor/my-org/whitelisted-package/**', // Specific vendor inclusion
+],
+'exclude' => [
+    'vendor/**',
+    'storage/**',
+    'var/**',
+    'cache/**',
+],
 ```
 
-TypePHP calculates pattern specificity based on glob length. If you whitelist a specific vendor package (`'vendor/my-org/my-package/**'`), its pattern length (27) takes precedence over the general `'vendor/**'` exclusion (8).
+### Specificity Hierarchy (Longest Match Rule)
+TypePHP evaluates glob patterns using longest-match specificity:
+* If you exclude `'vendor/**'` (length 8), but explicitly include `'vendor/my-org/whitelisted-package/**'` (length 35), the longer, more specific include rule wins.
+* Excluded files remain 100% untouched native PHP (zero AST parsing, zero disk cache).
 
-### Excluded Files and Whitelisted Boundaries
-
-When a file is excluded (blacklisted):
-
-1. **Zero AST Modification:** The excluded file remains 100% raw, untouched PHP code. No AST parsing or check injection occurs on the excluded file.
-2. **Active Whitelisted Guard Rails:** If an excluded file calls a method inside an included/whitelisted file passing invalid data, **a `TypeError` is still thrown**. The type guard runs inside the whitelisted method, protecting the whitelisted code regardless of who called it.
-3. **Caller Line Attribution:** Even though the blacklisted caller file was never modified, `ErrorFactory` inspects the call stack trace and attributes the `TypeError` file and line number directly to the exact call site inside the blacklisted file!
+### Vendor Boundary Isolation (`CallerBoundaryResolver`)
+Whitelisted vendor packages only enforce type contracts when called from **application code** (`src/**`, `app/**`, `tests/**`). If an internal vendor method calls another vendor method, TypePHP detects the vendor-to-vendor boundary and short-circuits validation, allowing third-party frameworks to operate at native speed without crashing on internal quirks.
 
 ---
 
-## AST Transformation and Injection
+## 3. Compile-Time AST Check Elimination (`StaticTypeEvaluator`)
 
-If a file is included, TypePHP parses the source code into an AST using `nikic/php-parser` and `phpstan/phpdoc-parser`.
+Before injecting any runtime assertions, TypePHP runs a static type evaluation pass during file compilation. 
 
-`ContractVisitor` traverses the AST and injects optimized single-line guard rails:
+### Scope of AST Elimination: `@return`, `@var`, and Property Defaults Only
+Compile-time check elimination applies **strictly to `@return` statements, local `@var` assignments, and class property defaults**. It operates on **scalars, non-generic objects, and deterministic arrays/shapes**. 
 
-* **Compile-Time Parameter Arrays:** Injects `RuntimeTypeChecker::setupScope(__METHOD__, ['id' => $id, 'name' => $name], $this)` using direct opcode parameter arrays rather than calling `get_defined_vars()`.
-* **Selective Wrapper Injection:** Injects `wrapCallable` and `wrapIterable` only on parameters typed as callables, closures, or iterators, eliminating wrapper overhead on standard scalars and objects.
-* **Function Return:** Wraps `return` statements with `RuntimeTypeChecker::checkReturn()`.
-* **Local Assignments (`@var`):** Wraps `$x = $value` with `RuntimeTypeChecker::checkVariable()`.
-* **Class Properties:** Wraps `$this->prop = $value` and PHP 8.4 Property Hooks with `RuntimeTypeChecker::checkProperty()`.
+Function parameters (`@param`) are **deliberately excluded** from caller-side compile-time elimination and are enforced at the callee boundary (see Section 4).
 
----
+```mermaid
+flowchart TD
+    A["`**AST Expression + DocBlock TypeNode**
+    *(@return, @var, or property default)*`"] --> B["StaticTypeEvaluator"]
+    B -->|Verified| C["PROVEN VALID"]
+    B -->|Unverifiable| D["UNKNOWN / DYNAMIC"]
+    
+    C --> E["`**ELIMINATE CHECK**
+    *(Emit clean node)*`"]
+    D --> F["`**DEFER TO RUNTIME**
+    *(Inject TypePHP check)*`"]
 
-## Tooling Annotation Normalization & Tag Priority Hierarchy
-
-Third-party packages often define both broad IDE docblocks and strict tool-specific contracts on the same signature (such as `@param mixed $element` alongside `@phpstan-param T $element` in Doctrine Collections).
-
-`DocblockExtractor` normalizes and evaluates tag definitions using a **3-Tier Priority System**:
-
-1. **Tool-Specific Annotations Take Precedence:** `@phpstan-param` and `@psalm-param` override `@param`; `@phpstan-return` and `@psalm-return` override `@return`; `@phpstan-var` overrides `@var`.
-2. **Inherited Template Extraction:** Collects class, interface, and trait template mappings across all recognized variations (`@extends`, `@template-extends`, `@phpstan-extends`, `@psalm-extends`, `@implements`, `@template-implements`, `@use`, `@template-use`).
-3. **Variance Modifiers:** Extracts class-level `@template-covariant` and `@template-contravariant` tags to configure the runtime variance engine.
-
----
-
-## Zero Line-Drift Formatting and Caching
-
-A common issue with AST code injection is that adding new statements pushes subsequent code down, causing line numbers in error stack traces to drift out of sync.
-
-TypePHP solves this using `TypePHPPrinter` and regex post-processing. Injected guard rails are squashed onto single lines and appended directly to existing code blocks (such as the opening `{` of a function signature). 
-
-**Line numbers in your source files remain 100% identical before and after transformation.**
-
-### Disk Caching
-
-Once transformed, TypePHP saves the resulting code to disk in your configured `cache_dir` (which defaults to `sys_get_temp_dir() . '/typephp-cache/'`). On all subsequent requests:
-* AST parsing runs **0 times**.
-* PHP's **OPCache** compiles the cached file once into bytecode in RAM.
-* Stream file reads execute natively at C-level speed inside Zend Engine.
-
----
-
-## Collection Validation Mechanics
-
-TypePHP handles collection structures through specialized validators in `TypeValidatorRegistry`:
-
-### Array Validation Strategies (`full` vs `hybrid`)
-* **Strict Full Mode (`'full'`):** Iterates every element with zero throwaway string allocations on the happy path.
-* **Beartype Hybrid Mode (`'hybrid'`):** For collections exceeding 64 items, validates container structure (`array_is_list`), boundary elements (first/last), and 3 random internal samples in $O(1)$ constant time.
-
-### Array Shapes (`ArrayShapeValidator`)
-* **Required vs. Optional Keys:** Verifies that required keys are present while allowing optional keys to be omitted.
-* **Sealed vs. Unsealed Shapes:** Sealed shapes use an $O(1)$ key count comparison (`$valueCount === $matchedKeysCount`) to verify that no extra keys exist without allocating `array_diff_key()` arrays. Unsealed shapes (`array{id: int, ...<string, string>}`) validate extra key-value pairs against the unsealed type specification.
-
-### Reflection-Free `stdClass` Shapes (`ObjectShapeValidator`)
-Validates dynamic object shapes directly via native property existence checks (`property_exists()`, `isset()`), bypassing `\ReflectionObject` allocations.
-
----
-
-## Lazy Proxies: Callables, Generators, and Iterators
-
-TypePHP uses lazy wrappers to validate dynamic data structures upon invocation or iteration without forcing eager evaluation:
-
-### Callable Wrapper (`CallableWrapper`)
-When a function accepts a `callable(int): string` parameter, `RuntimeTypeChecker::wrapCallable()` wraps the callback in an interceptor closure:
-* **Invocation Validation:** When the callback is called, its incoming arguments are validated against the declared parameter types.
-* **Return Validation:** When the callback returns, its return value is validated against the declared return type.
-* **Static Closure Constraints:** Enforces `static-closure` rules, rejecting closures bound to `$this`.
-
-### Iterator Proxy (`IterableWrapper` & `IteratorProxy`)
-When an iterable or generator is passed into a function accepting `Traversable<string, positive-int>`:
-* **Lazy Item Validation:** Values and keys are validated on-the-fly during iteration inside `current()` or `yield`.
-* **Rewindability:** `IteratorProxy` unwraps and preserves iterator rewindability, allowing you to iterate over the wrapped Traversable in multiple `foreach` loops cleanly.
-* **Method & Countable Forwarding:** Forwards `Countable::count()` and custom method calls directly to the inner iterator using `__call()`.
-* **Generator `TSend` Input Validation:** `checkSend()` intercepts values passed via `$gen->send()` and validates them against the declared `TSend` template parameter.
-
----
-
-## Inheritance Tracking and In-Memory Reflection Caching
-
-TypePHP resolves method and property contracts across complex Object-Oriented hierarchies (abstract classes, parent classes, interfaces, PHP 8.4 interface properties, and traits) using `HierarchyResolver`.
-
-### Gap-Filling and Parameter Renaming
-* **Gap-Filling:** If a child method defines a docblock for `$name` but leaves `$id` un-annotated, `ContractParser` traverses up the hierarchy to fill in the missing contract for `$id` from parent classes or interfaces.
-* **Parameter Renaming:** Inherited parameters are mapped by **index position** rather than parameter name. If a child class renames `$id` to `$userId`, the contract declared on `$id` at index 0 is mapped and enforced on `$userId`.
-* **Vendor Isolation:** Inherited docblocks from files matching `exclude` rules (such as `/vendor/`) are ignored to prevent third-party docblock bugs from affecting your application.
-
-### O(1) Contract Short-Circuiting
-`ContractParser` computes `hasParamContract` and `hasReturnContract` boolean flags during initial reflection resolution. Methods without DocBlock contracts anywhere in their inheritance hierarchy exit in a single opcode without evaluating aliases or template lookups.
-
----
-
-## Lexical Scope Tracking (`ScopeManager`)
-
-TypePHP tracks local `@var` annotations using `ScopeManager` during AST traversal.
-
-* **Scope Stack Frames:** Entering a function, closure, or control block (`if`, `elseif`, `else`, `foreach`, `while`, `for`, `try/catch`) pushes a new scope frame (`pushScope()`) that inherits outer variable contracts.
-* **Variable Shadowing:** Re-declaring a variable type inside an `if` block (e.g. `/** @var non-empty-string $z */`) applies strictly inside that block.
-* **Scope Restoration:** Exiting the block (`popScope()`) restores outer variables back to their original type contracts. Unexecuted branches (such as `if (false)`) never pollute the outer scope.
-
----
-
-## State Tracking Mechanics
-
-### Object Instance Generics (`WeakMap`)
-When you instantiate a generic object (such as `Collection<User>`), `TemplateManager` binds template parameters (`T = User`) to that specific object instance using PHP's native `WeakMap`.
-
-Because `WeakMap` uses weak references, when the object instance is garbage-collected by PHP, its generic state is automatically deleted from memory with **zero memory leaks**.
-
-### Call Stack Scope Tracking (`ScopeCleaner`)
-For function-level templates (`@template T`), TypePHP pushes a temporary call frame when entering the function and returns a `ScopeCleaner` object. When the function exits or throws an exception, `ScopeCleaner::__destruct()` automatically pops the call frame, keeping generic state clean across recursive calls.
+    style A fill:#3b82f6,color:#fff,stroke-width:0px
+    style C fill:#10b981,color:#fff,stroke-width:0px
+    style E fill:#10b981,color:#fff,stroke-width:0px
+    style D fill:#f59e0b,color:#fff,stroke-width:0px
+    style F fill:#ef4444,color:#fff,stroke-width:0px
 ```
+
+### What Gets Eliminated?
+* **Scalar & Range Literals:** `return 42;` vs `@return positive-int`, `return 50;` vs `@return int<1, 100>`.
+* **String Literals & Deterministic Concatenations:** `return 'user_' . $id;` vs `@return non-empty-string` (prefix guarantees length $\ge 5$).
+* **Empty Arrays:** `return [];` vs `@return list<T>` or `array<K, V>`.
+* **Sequential Lists & Shapes:** `return [1, 2, 3];` vs `@return list<positive-int>`, `['id' => 1]` vs `array{id: int}`.
+* **Constants & Enums:** `return self::STATUS_PAID;` vs `@return self::STATUS_*`, `return Status::Active;` vs `@return Status::*`.
+* **Exact Non-Generic Object Instantiations:** `return new User('Alice');` vs `@return User` (exact FQCN string match, zero reflection, zero autoloading).
+* **Identity Returns:** `return $this;` vs `@return $this` / `@return self`, `return new static();` vs `@return static`.
+* **Immediate Predecessor Local Data-Flow:**
+  ```php
+  // Eliminated at compile-time:
+  $name = 'Alice';
+  return $name; // Preceding statement proved $name is non-empty-string
+  ```
+* **Local `@var` Assignments:** `/** @var positive-int $x */ $x = 10;` (emits clean `$x = 10;` without `checkVariable()`).
+* **Class Property Defaults:** `public int $retries = 3;` vs `@var positive-int` (bypasses constructor synthesis).
+
+### What is Strictly Deferred to Runtime?
+* **Reified Generics (`Collection<Dog>`):** Classes with generic template arguments must execute runtime checks to stamp template bindings onto instances in `\WeakMap`.
+* **Polymorphic / LSP Boundaries:** Methods in classes with real inheritance (`extends` or `implements`) are deferred to runtime unless they are `private` or declared in a class without inheritance.
+* **Dynamic Expressions:** Variables without immediate literal assignments, method calls (`$this->get()`), function calls, and expressions containing dynamic elements.
+
+---
+
+## 4. Callee-Side Parameter Boundaries (`FunctionContractInjector`)
+
+Unlike return expressions and local variable assignments—which can be folded within their declaring file, **parameter contracts (`@param`) are enforced strictly on the callee side (inside the function/method body)**.
+
+### Why Callee-Side Parameter Checking? (The Self-Defending Fortress)
+
+Rather than injecting checks at every call site, TypePHP injects parameter checks at the entry point of the function being called. This architectural decision is required due to PHP’s runtime nature:
+
+1. **The Inversion-of-Control / Testing Boundary:**
+   In web frameworks and test runners (Laravel, Symfony, Pest, PHPUnit), application code is routinely invoked by **untransformed, blacklisted vendor code**:
+
+   ```mermaid
+   flowchart LR
+       A["`**Untransformed Caller**
+       *vendor/pestphp/pest/src/...*`"] -->|invokes| B["`**Transformed Target**
+       *tests/Feature/OrderTest.php*`"]
+       B -->|invokes| C["`**Transformed Target**
+       *app/Services/PaymentService.php*
+       **(Callee-Side Fortress)**`"]
+
+       style A fill:#64748b,color:#fff,stroke-width:0px
+       style B fill:#3b82f6,color:#fff,stroke-width:0px
+       style C fill:#10b981,color:#fff,stroke-width:0px
+   ```
+
+   If checks were placed on the caller, calls originating from test runners, framework routers, and middleware pipelines would have **no validation code injected**. By enforcing checks at the callee, **whitelisted application files defend their own boundaries regardless of who calls them.**
+
+2. **First-Class Callables (`$service->method(...)`):**
+   PHP 8.1+ allows methods to be referenced as first-class callables and executed elsewhere:
+   ```php
+   $fn = $orderService->process(...); // Callable creation
+   $fn($payload);                     // Invocation site
+   ```
+   At the invocation site, the AST only sees `$fn` (a generic `\Closure`). It has no visibility into what method is being called or what DocBlock annotations it declares. Callee-side enforcement guarantees validation fires the instant `$fn` executes.
+
+3. **Method Chaining (Fluent Builders):**
+   In fluent call chains (`$db->table('users')->where('id', $id)->first()`), caller-side validation would require full cross-method return type inference just to identify what method is called next. Callee-side checking allows each method in the chain to independently validate its own incoming arguments.
+
+4. **Dynamic & Variable Invocations:**
+   Callee-side checks protect functions called via dynamic dispatch:
+   ```php
+   $service->$dynamicMethod($arg);
+   call_user_func([$service, 'process'], $arg);
+   $reflectionMethod->invoke($service, $arg);
+   ```
+
+5. **Cross-File Compilation Isolation (No Autoloader Deadlocks):**
+   Caller-side checking would require parsing the callee's DocBlock, resolving its traits, parent classes, and imports *while compiling the caller file*. Callee-side checking ensures every file is transformed **100% in isolation**, completely eliminating circular autoloader deadlocks.
+
+6. **1-to-N Code Bloat Prevention:**
+   A utility method like `Str::slug()` or `Arr::get()` is declared once but called thousands of times. Callee-side checking injects validation **once** at the declaration, keeping transformed files and OPcache bytecode compact.
+
+---
+
+## 5. Zero Line-Drift Formatting & Bytecode Caching
+
+Injecting multi-line assertion blocks typically alters line numbers, causing stack traces and IDE breakpoints to drift out of sync.
+
+### Zero Line-Drift Guarantee
+`TypePHPPrinter` squashes all injected checks into single-line comment blocks:
+```php
+/*__TYPEPHP_INJECTED_START__*/$_typephpArgs = ['id' => $id]; .../*__TYPEPHP_INJECTED_END__*/
+```
+Line numbers remain **100% identical** before and after transformation. Exception traces in **Laravel Ignition**, **Symfony ErrorHandler**, **Whoops**, **Pest**, and **PHPUnit** point directly to the exact line in your original source code.
+
+### Two-Tier Disk & Memory Caching (`CacheManager`)
+* **Disk Cache (`cache => true`):** Transformed files are saved atomically to `cache_dir` (default: `sys_get_temp_dir() . '/typephp-cache/'`) with restricted permissions (`0700`/`0600`). On subsequent requests:
+  * AST parsing runs **0 times**.
+  * PHP's **OPcache** compiles the cached file once into shared memory.
+* **In-Memory Transformation (`cache => false`):** AST transformations execute purely in RAM using `php://memory` streams (ideal for ephemeral serverless workers or testing).
+
+---
+
+## 6. Runtime Validation & State Architecture
+
+### Reified Generics with `WeakMap` (`TemplateManager`)
+When you instantiate a generic object (`/** @var Collection<User> $users */`), TypePHP binds the template type (`T = User`) to that specific object instance in a native `\WeakMap`.
+* **Zero Class Alteration:** Object properties and class definitions are not modified.
+* **Zero Memory Leaks:** When the object instance is garbage-collected by PHP, its generic state is automatically evicted from `WeakMap`.
+
+### Advanced Variance Engine (`checkVariance`)
+TypePHP enforces full generic subtyping rules:
+* **Declaration-Site Covariance (`@template-covariant T`):** Allows returning subtypes (`Collection<Dog>` where `Collection<Animal>` is expected).
+* **Use-Site Covariance (`Collection<covariant Animal>`):** Enables covariance at specific call sites.
+* **F-Bounded Polymorphism (`@template T of Comparable<T>`):** Resolves recursive self-referential bounds with cycle-detection stacks to prevent infinite loops.
+
+### Collection Validation (`full` vs `hybrid`)
+* **Strict Full Mode (`'full'`):** Validates every element in every collection ($O(n)$).
+* **Beartype Hybrid Mode (`'hybrid'`):** For collections exceeding **128 items** (`Config::HYBRID_SAMPLE_THRESHOLD`), validates container structure (`array_is_list`), boundary elements (first and last), and 3 random internal samples in $O(1)$ constant time.
+
+### Audit Reporting & Lock-Free Parallel Sharding (`ViolationCollector`)
+When running in Audit Mode (`on_violation => 'report'`):
+* Violations are recorded silently in memory instead of throwing exceptions.
+* During parallel test execution (**ParaTest**, **Pest Parallel**), each worker writes to an isolated shard file (`.typephp-shards/shard_{id}.json`) without acquiring file locks.
+* At process shutdown, the shards are merged and deduplicated into a unified audit report (`typephp-report.json`).
+* If `fail_on_report => true` is configured, TypePHP terminates with exit code `1`, turning the audit report into an automated CI quality gate.

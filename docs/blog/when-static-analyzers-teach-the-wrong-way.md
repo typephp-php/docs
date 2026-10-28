@@ -29,7 +29,7 @@ To make the linter happy, you find yourself degrading clean types, inventing thr
 
 In other words, the tool designed to make your code safer just bullied you into making your code worse.
 
-Recently, I stubmbled upon in a lively [discussion](https://github.com/beartype/beartype/discussions/601) on GitHub around Beartype (the fast runtime type checker for Python), its creator Cecil Curry penned a brutally honest, deeply funny critique of this exact phenomenon. 
+Recently, I stumbled upon a lively [discussion](https://github.com/beartype/beartype/discussions/601) on GitHub around Beartype (the fast runtime type checker for Python), where its creator Cecil Curry penned a brutally honest, deeply funny critique of this exact phenomenon. 
 
 Let us look at why static analyzers sometimes get trapped in theoretical purity, how this problem quietly bites PHP developers, and how runtime type checking offers a pragmatic way forward.
 
@@ -242,52 +242,141 @@ This is where runtime type checking fundamentally shifts the landscape.
 
 Because TypePHP operates while your code is actually running inside the Zend Engine, it does not have to guess what an object will do. It has access to real memory via `\WeakMap`.
 
-### 1. Inspection Methods Work Naturally
-In TypePHP, you do not have to ban `contains()` or `indexOf()` on covariant classes:
+---
 
-```php
-/** @template-covariant T */
+### 1. Inspection Methods Work Naturally
+
+In TypePHP, you do not have to ban `contains()` or `indexOf()` on covariant classes. You can write the method naturally. 
+
+Click **Run** below to execute the code that PHPStan rejected in Act I. Notice how TypePHP cleanly verifies the valid search, while intercepting an incompatible `Piano` at runtime:
+
+<TypePHPSnippet title="Covariant Inspection Methods (contains)" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+abstract class Animal {}
+class Dog extends Animal {}
+class Piano {}
+
+/**
+ * A read-only covariant collection:
+ *
+ * @template-covariant T of Animal
+ */
 class ReadOnlyCollection
 {
-    /** @param T $item */
-    public function contains(mixed $item): bool { ... }
+    /** @param array<int, T> $elements */
+    public function __construct(private array $elements = []) {}
+
+    /**
+     * Banned by PHPStan because T is in a parameter position!
+     * But TypePHP allows it and verifies the parameter on invocation.
+     *
+     * @param T $item
+     */
+    public function contains(mixed $item): bool
+    {
+        return in_array($item, $this->elements, true);
+    }
+}
+
+// 1. Covariance allows passing ReadOnlyCollection<Dog> where Animal is expected
+$dog = new Dog();
+/** @var ReadOnlyCollection<Dog> */
+$dogs = new ReadOnlyCollection([$dog]);
+
+$found = $dogs->contains($dog);
+echo "✓ Read-only inspection succeeded cleanly (contains=" . ($found ? 'true' : 'false') . ")\n\n";
+
+// 2. Passing an invalid object (Piano is not an Animal) is caught at runtime!
+try {
+    echo "Attempting to search for a Piano in ReadOnlyCollection<Dog>...\n";
+    $dogs->contains(new Piano());
+} catch (\TypeError $e) {
+    echo "✗ TypePHP caught invalid lookup argument:\n   " . $e->getMessage() . "\n";
 }
 ```
-* `$dogs = new ReadOnlyCollection();`
-* `$dogs->contains(new Dog());` runs cleanly and returns a boolean.
-* `$dogs->contains(new Piano());` is stopped at runtime with:  
-  `TypeError: ReadOnlyCollection::contains(): Argument $item must be Dog, Piano given`.
 
-You get complete type safety, clear documentation, and zero linter warnings.
+</TypePHPSnippet>
+
+You get complete type safety, self-documenting code, and zero linter acrobatics.
+
+---
 
 ### 2. Real Mutations Are Blocked at the Exact Moment of Execution
-What if someone actually writes a mutation method on a covariant class (`addItem(T $item)`) and attempts to corrupt memory?
 
-```php
-/** @param Container<Animal> $container */
-function sneakCatIntoDogContainer(Container $container): void
+What if someone actually writes a mutation method on a covariant container (`addItem(T $item)`) and attempts to corrupt memory?
+
+In a static analyzer, this is a dangerous theoretical hole, which is why PHPStan bans `addItem()` at the class definition level.
+
+In TypePHP, the mutation is physically impossible. Click **Run** below to watch what happens when code tries to sneak a `Cat` into a container of `Dog`s:
+
+<TypePHPSnippet title="Memory Protection via WeakMap State" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+abstract class Animal {}
+class Dog extends Animal {}
+class Cat extends Animal {}
+
+/**
+ * @template-covariant T of Animal
+ */
+class CovariantContainer
 {
-    $container->addItem(new Cat()); // Attempting to sneak a Cat into a Dog container!
+    public array $items = [];
+
+    /**
+     * @param T $item
+     */
+    public function addItem(mixed $item): void
+    {
+        $this->items[] = $item;
+    }
 }
 
-/** @var Container<Dog> $dogContainer */
-$dogContainer = new Container();
+/**
+ * The helper function assumes $container can take ANY Animal,
+ * so it attempts to push a Cat!
+ *
+ * @param CovariantContainer<Animal> $container
+ */
+function sneakCatIntoContainer(CovariantContainer $container): void
+{
+    echo "Attempting to sneak a Cat into container...\n";
+    $container->addItem(new Cat());
+}
 
-sneakCatIntoDogContainer($dogContainer);
+// Create a container locked to Dog in WeakMap memory:
+/** @var CovariantContainer<Dog> */
+$dogContainer = new CovariantContainer();
+
+// Try to sneak a Cat in via the Animal parameter type hint:
+try {
+    sneakCatIntoContainer($dogContainer);
+} catch (\TypeError $e) {
+    echo "✗ TypePHP WeakMap memory prevented corruption:\n   " . $e->getMessage() . "\n";
+    echo "✓ The Cat was never added. Memory remains clean and safe!\n";
+}
 ```
 
-In a static analyzer, this is a dangerous hole, which is why PHPStan bans `addItem()` at the class level.
+</TypePHPSnippet>
 
-In TypePHP, the mutation is impossible:
-1. Even though the helper function labeled the parameter `Container<Animal>`, TypePHP's `\WeakMap` remembers that this specific instance is locked to `T = Dog`.
-2. The exact microsecond `$container->addItem(new Cat())` is invoked, TypePHP halts execution:
-   ```text
-   TypeError: Container::addItem(): Argument $item (template T = Dog) 
-   must be of type Dog, Cat given
-   ```
-3. The Cat is never added to the internal array. The memory stays clean.
+Here is why this works:
+1. Even though the helper function labeled its parameter `CovariantContainer<Animal>`, TypePHP's `\WeakMap` remembers that this specific instance in RAM is locked to `T = Dog`.
+2. The exact microsecond `$container->addItem(new Cat())` is invoked, TypePHP halts execution before the item is pushed.
+3. The `Cat` is never added to the internal array. The memory stays clean.
+
+---
 
 ### 3. Pragmatic Return Mode (`strict_return_generic_invariance => false`)
+
 TypePHP includes a configuration setting that aligns generic return boundaries with native PHP's covariant Liskov model:
 
 ```php
@@ -297,7 +386,71 @@ return [
 ];
 ```
 
-In pragmatic mode, your existing framework repositories can return specialized generic collections without triggering invariant errors at the return boundary. And because `\WeakMap` guards the instance in memory, any subsequent attempt to push an invalid type into that collection downstream is caught instantly.
+In pragmatic mode, your existing framework repositories can return specialized generic collections without triggering invariant errors at the return boundary.
+
+The interactive snippet below is initialized with `:config="{ strictReturnGenericInvariance: false }"`. Click **Run** to see how a repository returns a specialized collection, while downstream writes remain 100% guarded:
+
+<TypePHPSnippet 
+  title="Pragmatic Return Mode vs Downstream Guarding" 
+  :config="{ strictReturnGenericInvariance: false }" 
+  default-view="source"
+>
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+abstract class Entity {}
+class ProductEntity extends Entity {}
+class UserEntity extends Entity {}
+
+/**
+ * Standard collection without @template-covariant annotation
+ *
+ * @template T of Entity
+ */
+class EntityCollection
+{
+    public array $items = [];
+
+    /** @param T $item */
+    public function add(mixed $item): void
+    {
+        $this->items[] = $item;
+    }
+}
+
+/**
+ * Returns specialized EntityCollection<ProductEntity>
+ * under generic contract EntityCollection<Entity>!
+ *
+ * @return EntityCollection<Entity>
+ */
+function getCatalog(): EntityCollection
+{
+    /** @var EntityCollection<ProductEntity> $catalog */
+    $catalog = new EntityCollection();
+    $catalog->add(new ProductEntity());
+
+    return $catalog;
+}
+
+// 1. Pragmatic mode allows returning specialized subtype collections:
+$collection = getCatalog();
+echo "✓ Returned EntityCollection<ProductEntity> under EntityCollection<Entity> contract!\n\n";
+
+// 2. But WeakMap memory still locks the instance to ProductEntity!
+// Sneaking an incompatible UserEntity into the returned collection downstream FAILS:
+try {
+    echo "Attempting to push UserEntity into catalog downstream...\n";
+    $collection->add(new UserEntity());
+} catch (\TypeError $e) {
+    echo "✗ WeakMap still protected the returned collection downstream:\n   " . $e->getMessage() . "\n";
+}
+```
+
+</TypePHPSnippet>
 
 ---
 
@@ -310,6 +463,6 @@ In pragmatic mode, your existing framework repositories can return specialized g
 | **Return Covariance** | Invariant by default. Rejects child collections. | Configurable to match native PHP covariant returns. |
 | **Developer Remedy** | Downgrade to `mixed`, split classes, or add ignore tags. | Write clean, self-documenting code and let runtime guards protect memory. |
 
-Static analyzers are fantastic tools, but they are linters, not religious doctrine. When an analyzer demands that you delete your types or build bloated abstractions just to satisfy an abstract formula, remember Cecil Curry's observation: typing purity is the enemy of working QA.
+Static analyzers are fantastic tools, but they are linters, not religious doctrine. When an analyzer demands that you delete your types or build bloated abstractions just to satisfy an abstract formula, remember Cecil Curry's observation: **typing purity is the enemy of working QA.**
 
 Use static analysis to catch syntax bugs early, but let TypePHP protect your actual runtime data: keeping your code clean, strict, and grounded in the real world.
