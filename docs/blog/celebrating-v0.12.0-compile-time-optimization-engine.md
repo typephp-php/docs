@@ -21,7 +21,7 @@ next: false
 
 Today, I am thrilled to announce the release of **TypePHP v0.12.0**.
 
-Alongside this release, I have rolled out a complete redesign of the documentation and enginering blog. Every guide is now equipped with **interactive, executable code snippets running real PHP 8.5 in your browser via WebAssembly**. You no longer have to take my word for how runtime generics or shape validations behave; you can click **Run**, inspect the transformed bytecode, and tweak inputs live on every page.
+Alongside this release, I have rolled out a complete redesign of the documentation and enginering blog. Every guide is now equipped with **interactive, executable code snippets running real PHP 8.5 in your browser via WebAssembly**. You no longer have to take my word for how runtime generics or shape validations behave and you can click **Run**, inspect the transformed bytecode, and tweak inputs live on every page.
 
 Before diving into the benchmarks, I have a humorous confession to share about what TypePHP actually is under the hood.
 
@@ -61,7 +61,7 @@ flowchart LR
 
 What about the *"no build step"* claim?
 
-Technically, **TypePHP does have a hidden build step; it is simply Just-In-Time (JIT) by default.**
+Technically, **TypePHP does have a hidden build step and it is simply Just-In-Time (JIT) by default.**
 
 When PHP loads a file, TypePHP’s `StreamWrapper` intercepts the `include` stream, parses the AST, folds static expressions, and injects guard rails on-the-fly right before the Zend Engine compiles it to OPcache bytecode. 
 
