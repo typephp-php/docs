@@ -8,11 +8,12 @@ const bracketDeco = Decoration.mark({ class: 'cm-phpdoc-generic-bracket' });
 const varianceDeco = Decoration.mark({ class: 'cm-phpdoc-variance' });
 const varDeco = Decoration.mark({ class: 'cm-phpdoc-var' });
 const shapeKeyDeco = Decoration.mark({ class: 'cm-phpdoc-shape-key' });
+const stringDeco = Decoration.mark({ class: 'cm-phpdoc-string' });
+const operatorDeco = Decoration.mark({ class: 'cm-phpdoc-operator' });
+const numberDeco = Decoration.mark({ class: 'cm-phpdoc-number' });
 const classDeco = Decoration.mark({ class: 'cm-php-class' });
 const methodDeco = Decoration.mark({ class: 'cm-php-method' });
 const funcDeco = Decoration.mark({ class: 'cm-php-func' });
-
-// ✨ New specialized decorations for $this, self/static, and properties
 const thisDeco = Decoration.mark({ class: 'cm-php-this' });
 const selfStaticDeco = Decoration.mark({ class: 'cm-php-self-static' });
 const propertyDeco = Decoration.mark({ class: 'cm-php-property' });
@@ -23,7 +24,7 @@ interface LineToken {
   deco: Decoration;
 }
 
-const TYPE_WORDS_REGEX = /\b(int|string|bool|boolean|float|double|positive-int|negative-int|non-positive-int|non-negative-int|non-zero-int|unsigned-int|positive-float|negative-float|non-empty-string|numeric-string|lowercase-string|uppercase-string|non-empty-uppercase-string|class-string|interface-string|trait-string|enum-string|callable-string|literal-string|truthy-string|array-key|array|list|non-empty-array|non-empty-list|object|callable|pure-callable|iterable|resource|null|true|false|mixed|void|never|self|static|\$this|[A-Z][a-zA-Z0-9_]*)\b/g;
+const TYPE_WORDS_REGEX = /\b(stdClass|key-of|value-of|int-mask-of|int-mask|int|string|bool|boolean|float|double|positive-int|negative-int|non-positive-int|non-negative-int|non-zero-int|unsigned-int|positive-float|negative-float|non-empty-string|numeric-string|lowercase-string|uppercase-string|non-empty-lowercase-string|non-empty-uppercase-string|class-string|interface-string|trait-string|enum-string|callable-string|literal-string|truthy-string|array-key|array|list|non-empty-array|non-empty-list|object|static-closure|static-Closure|pure-closure|pure-Closure|pure-callable|callable|closure|iterable|resource|null|true|false|mixed|void|never|self|static|\$this|[A-Z][a-zA-Z0-9_]*)\b/g;
 
 const TAG_REGEX = /@(phpstan-|psalm-)?(param(?:-out)?|return|var|template(?:-covariant|-contravariant)?|self-out|this-out|property(?:-read|-write)?|method|extends|implements|use|type|import-type|throws)\b/;
 
@@ -78,141 +79,43 @@ function isInsideIgnored(from: number, to: number, ranges: Array<{ from: number;
   return ranges.some((r) => from >= r.from && to <= r.to);
 }
 
-function tokenizePhpCode(lineFrom: number, text: string, lineTokens: LineToken[]) {
-  const ignored = getIgnoredCodeRanges(text);
-  let match: RegExpExecArray | null;
+function findOuterVariable(text: string): { index: number; name: string } | null {
+  let parenDepth = 0;
+  let braceDepth = 0;
+  let angleDepth = 0;
 
-  // 1. Method calls: ->method(...) or ?->method(...)
-  const methodCallRegex = /(?:->|\?->)\s*([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)\s*(?=\(|\.\.\.)/g;
-  while ((match = methodCallRegex.exec(text)) !== null) {
-    const name = match[1];
-    const from = lineFrom + match.index + match[0].indexOf(name);
-    const to = from + name.length;
-    if (!isInsideIgnored(from - lineFrom, to - lineFrom, ignored)) {
-      lineTokens.push({ from, to, deco: methodDeco });
-    }
-  }
-
-  // 2. Static method calls: ::method(...)
-  const staticMethodRegex = /::\s*([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)\s*(?=\(|\.\.\.)/g;
-  while ((match = staticMethodRegex.exec(text)) !== null) {
-    const name = match[1];
-    const from = lineFrom + match.index + match[0].indexOf(name);
-    const to = from + name.length;
-    if (!isInsideIgnored(from - lineFrom, to - lineFrom, ignored)) {
-      lineTokens.push({ from, to, deco: methodDeco });
-    }
-  }
-
-  // 3. ✨ Object Property Access: ->property or ?->property (NOT followed by `(` or `...`)
-  const propertyAccessRegex = /(?:->|\?->)\s*([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)\b(?!\s*(\(|\.\.\.))/g;
-  while ((match = propertyAccessRegex.exec(text)) !== null) {
-    const propName = match[1];
-    const from = lineFrom + match.index + match[0].indexOf(propName);
-    const to = from + propName.length;
-    if (!isInsideIgnored(from - lineFrom, to - lineFrom, ignored)) {
-      lineTokens.push({ from, to, deco: propertyDeco });
-    }
-  }
-
-  // 4. ✨ Declared Properties in Class: public string $state, public array $items
-  const propDeclRegex = /(?:public|protected|private|var)\s+(?:(?:static|readonly)\s+)?(?:(?!function\b)[a-zA-Z0-9_\\|\&<>\?,\s]+\s+)?\$([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)\b/g;
-  while ((match = propDeclRegex.exec(text)) !== null) {
-    const propName = match[1];
-    const varWithDollar = '$' + propName;
-    const startOffset = match[0].lastIndexOf(varWithDollar);
-    if (startOffset !== -1) {
-      const from = lineFrom + match.index + startOffset;
-      const to = from + varWithDollar.length;
-      if (!isInsideIgnored(from - lineFrom, to - lineFrom, ignored)) {
-        lineTokens.push({ from, to, deco: propertyDeco });
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '(') parenDepth++;
+    else if (ch === ')') parenDepth = Math.max(0, parenDepth - 1);
+    else if (ch === '{') braceDepth++;
+    else if (ch === '}') braceDepth = Math.max(0, braceDepth - 1);
+    else if (ch === '<') angleDepth++;
+    else if (ch === '>') angleDepth = Math.max(0, angleDepth - 1);
+    else if (ch === '$' && parenDepth === 0 && braceDepth === 0 && angleDepth === 0) {
+      const match = /^\$([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)/.exec(text.slice(i));
+      if (match) {
+        if (match[1] === 'this') {
+          continue;
+        }
+        return { index: i, name: match[0] };
       }
     }
   }
-
-  // 5. ✨ Special pseudo-variable $this
-  const thisRegex = /\b\$this\b/g;
-  while ((match = thisRegex.exec(text)) !== null) {
-    const from = lineFrom + match.index;
-    const to = from + 5;
-    if (!isInsideIgnored(match.index, match.index + 5, ignored)) {
-      lineTokens.push({ from, to, deco: thisDeco });
-    }
-  }
-
-  // 6. ✨ Special class scope references: self, static, parent (not preceded by -> or $)
-  const selfStaticRegex = /\b(self|static|parent)\b/g;
-  while ((match = selfStaticRegex.exec(text)) !== null) {
-    const word = match[1];
-    const startPos = match.index;
-    const from = lineFrom + startPos;
-    const to = from + word.length;
-    if (isInsideIgnored(startPos, startPos + word.length, ignored)) {
-      continue;
-    }
-    const prevChar = startPos > 0 ? text[startPos - 1] : '';
-    const twoCharsBefore = startPos > 1 ? text.slice(startPos - 2, startPos) : '';
-    if (twoCharsBefore === '->' || twoCharsBefore === '?->' || prevChar === '$') {
-      continue;
-    }
-    lineTokens.push({ from, to, deco: selfStaticDeco });
-  }
-
-  // 7. Class names
-  const classRegex = /\b([A-Z][a-zA-Z0-9_]*|stdClass)\b/g;
-  while ((match = classRegex.exec(text)) !== null) {
-    const word = match[1];
-    const startPos = match.index;
-    const from = lineFrom + startPos;
-    const to = from + word.length;
-
-    if (isInsideIgnored(startPos, startPos + word.length, ignored)) {
-      continue;
-    }
-
-    if (word.length > 1 && word === word.toUpperCase() && word.includes('_')) {
-      continue;
-    }
-
-    const prevChar = startPos > 0 ? text[startPos - 1] : '';
-    const twoCharsBefore = startPos > 1 ? text.slice(startPos - 2, startPos) : '';
-    if (twoCharsBefore === '->' || twoCharsBefore === '::' || prevChar === '$') {
-      continue;
-    }
-
-    lineTokens.push({ from, to, deco: classDeco });
-  }
-
-  // 8. Function calls
-  const funcCallRegex = /\b([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)\s*(?=\(|\.\.\.)/g;
-  while ((match = funcCallRegex.exec(text)) !== null) {
-    const fnName = match[1];
-    const startPos = match.index;
-    const from = lineFrom + startPos;
-    const to = from + fnName.length;
-
-    if (isInsideIgnored(startPos, startPos + fnName.length, ignored)) {
-      continue;
-    }
-
-    if (PHP_KEYWORDS.has(fnName)) {
-      continue;
-    }
-
-    const twoCharsBefore = startPos > 1 ? text.slice(startPos - 2, startPos) : '';
-    const threeCharsBefore = startPos > 2 ? text.slice(startPos - 3, startPos) : '';
-    if (twoCharsBefore === '->' || twoCharsBefore === '::' || threeCharsBefore === '?->') {
-      continue;
-    }
-
-    const isAlreadyClass = lineTokens.some((t) => t.from === from && t.to === to && t.deco === classDeco);
-    if (!isAlreadyClass) {
-      lineTokens.push({ from, to, deco: funcDeco });
-    }
-  }
+  return null;
 }
 
 function tokenizeTypeZone(startOffset: number, typeText: string, lineTokens: LineToken[]) {
+  const strRegex = /(['"])(?:\\.|[^\\])*?\1/g;
+  let sm: RegExpExecArray | null;
+  while ((sm = strRegex.exec(typeText)) !== null) {
+    lineTokens.push({
+      from: startOffset + sm.index,
+      to: startOffset + sm.index + sm[0].length,
+      deco: stringDeco,
+    });
+  }
+
   const genericRegex = /<([^>]+)>/g;
   let match: RegExpExecArray | null;
   const genericRanges: Array<{ from: number; to: number }> = [];
@@ -258,6 +161,41 @@ function tokenizeTypeZone(startOffset: number, typeText: string, lineTokens: Lin
     });
   }
 
+  const numRegex = /\b\d+(?:\.\d+)?\b/g;
+  let nm: RegExpExecArray | null;
+  while ((nm = numRegex.exec(typeText)) !== null) {
+    lineTokens.push({
+      from: startOffset + nm.index,
+      to: startOffset + nm.index + nm[0].length,
+      deco: numberDeco,
+    });
+  }
+
+  const varRegex = /\$([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)/g;
+  let vrm: RegExpExecArray | null;
+  while ((vrm = varRegex.exec(typeText)) !== null) {
+    if (vrm[1] !== 'this') {
+      lineTokens.push({
+        from: startOffset + vrm.index,
+        to: startOffset + vrm.index + vrm[0].length,
+        deco: varDeco,
+      });
+    }
+  }
+
+  for (let i = 0; i < typeText.length; i++) {
+    const ch = typeText[i];
+    const pos = startOffset + i;
+    if (ch === '{' || ch === '}') {
+      lineTokens.push({ from: pos, to: pos + 1, deco: bracketDeco });
+    } else if (ch === '|' || ch === '&') {
+      lineTokens.push({ from: pos, to: pos + 1, deco: operatorDeco });
+    } else if (ch === '.' && typeText.slice(i, i + 3) === '...') {
+      lineTokens.push({ from: pos, to: pos + 3, deco: operatorDeco });
+      i += 2;
+    }
+  }
+
   let typeMatch: RegExpExecArray | null;
   const typeScanner = new RegExp(TYPE_WORDS_REGEX.source, 'g');
 
@@ -267,7 +205,184 @@ function tokenizeTypeZone(startOffset: number, typeText: string, lineTokens: Lin
 
     const isInsideGeneric = genericRanges.some((r) => matchFrom >= r.from && matchTo <= r.to);
     if (!isInsideGeneric) {
-      lineTokens.push({ from: matchFrom, to: matchTo, deco: typeDeco }); 
+      const isRefinement = typeMatch[0].includes('-') && !typeMatch[0].endsWith('-of');
+      const deco = isRefinement ? genericTypeDeco : typeDeco;
+      lineTokens.push({ from: matchFrom, to: matchTo, deco }); 
+    }
+  }
+}
+
+function processMethodDocblock(baseOffset: number, afterTagText: string, lineTokens: LineToken[]) {
+  let searchOffset = 0;
+  const staticMatch = /^\s+(static)\b/.exec(afterTagText);
+  if (staticMatch) {
+    const staticPos = afterTagText.indexOf('static');
+    lineTokens.push({
+      from: baseOffset + staticPos,
+      to: baseOffset + staticPos + 6,
+      deco: selfStaticDeco
+    });
+    searchOffset = staticPos + 6;
+  }
+
+  const methodRegex = /\b([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)\s*\(/g;
+  methodRegex.lastIndex = searchOffset;
+  let m: RegExpExecArray | null;
+  let targetMethod: { name: string; index: number } | null = null;
+
+  while ((m = methodRegex.exec(afterTagText)) !== null) {
+    if (m[1] !== 'callable' && m[1] !== 'Closure' && m[1] !== 'array' && m[1] !== 'list') {
+      targetMethod = { name: m[1], index: m.index };
+    }
+  }
+
+  if (!targetMethod) {
+    tokenizeTypeZone(baseOffset, afterTagText, lineTokens);
+    return;
+  }
+
+  const returnTypeZone = afterTagText.slice(searchOffset, targetMethod.index);
+  if (returnTypeZone.trim().length > 0) {
+    tokenizeTypeZone(baseOffset + searchOffset, returnTypeZone, lineTokens);
+  }
+
+  const methodFrom = baseOffset + targetMethod.index;
+  const methodTo = methodFrom + targetMethod.name.length;
+  lineTokens.push({ from: methodFrom, to: methodTo, deco: methodDeco });
+
+  const openParenIndex = afterTagText.indexOf('(', targetMethod.index);
+  if (openParenIndex !== -1) {
+    const closeParenIndex = afterTagText.lastIndexOf(')');
+    const paramsEnd = closeParenIndex !== -1 ? closeParenIndex : afterTagText.length;
+    const paramsText = afterTagText.slice(openParenIndex + 1, paramsEnd);
+    const paramsOffset = baseOffset + openParenIndex + 1;
+
+    tokenizeTypeZone(paramsOffset, paramsText, lineTokens);
+  }
+}
+
+function tokenizePhpCode(lineFrom: number, text: string, lineTokens: LineToken[]) {
+  const ignored = getIgnoredCodeRanges(text);
+  let match: RegExpExecArray | null;
+
+  const methodCallRegex = /(?:->|\?->)\s*([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)\s*(?=\(|\.\.\.)/g;
+  while ((match = methodCallRegex.exec(text)) !== null) {
+    const name = match[1];
+    const from = lineFrom + match.index + match[0].indexOf(name);
+    const to = from + name.length;
+    if (!isInsideIgnored(from - lineFrom, to - lineFrom, ignored)) {
+      lineTokens.push({ from, to, deco: methodDeco });
+    }
+  }
+
+  const staticMethodRegex = /::\s*([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)\s*(?=\(|\.\.\.)/g;
+  while ((match = staticMethodRegex.exec(text)) !== null) {
+    const name = match[1];
+    const from = lineFrom + match.index + match[0].indexOf(name);
+    const to = from + name.length;
+    if (!isInsideIgnored(from - lineFrom, to - lineFrom, ignored)) {
+      lineTokens.push({ from, to, deco: methodDeco });
+    }
+  }
+
+  const propertyAccessRegex = /(?:->|\?->)\s*([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)\b(?!\s*(\(|\.\.\.))/g;
+  while ((match = propertyAccessRegex.exec(text)) !== null) {
+    const propName = match[1];
+    const from = lineFrom + match.index + match[0].indexOf(propName);
+    const to = from + propName.length;
+    if (!isInsideIgnored(from - lineFrom, to - lineFrom, ignored)) {
+      lineTokens.push({ from, to, deco: propertyDeco });
+    }
+  }
+
+  const propDeclRegex = /(?:public|protected|private|var)\s+(?:(?:static|readonly)\s+)?(?:(?!function\b)[a-zA-Z0-9_\\|\&<>\?,\s]+\s+)?\$([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)\b/g;
+  while ((match = propDeclRegex.exec(text)) !== null) {
+    const propName = match[1];
+    const varWithDollar = '$' + propName;
+    const startOffset = match[0].lastIndexOf(varWithDollar);
+    if (startOffset !== -1) {
+      const from = lineFrom + match.index + startOffset;
+      const to = from + varWithDollar.length;
+      if (!isInsideIgnored(from - lineFrom, to - lineFrom, ignored)) {
+        lineTokens.push({ from, to, deco: propertyDeco });
+      }
+    }
+  }
+
+  const thisRegex = /\b\$this\b/g;
+  while ((match = thisRegex.exec(text)) !== null) {
+    const from = lineFrom + match.index;
+    const to = from + 5;
+    if (!isInsideIgnored(match.index, match.index + 5, ignored)) {
+      lineTokens.push({ from, to, deco: thisDeco });
+    }
+  }
+
+  const selfStaticRegex = /\b(self|static|parent)\b/g;
+  while ((match = selfStaticRegex.exec(text)) !== null) {
+    const word = match[1];
+    const startPos = match.index;
+    const from = lineFrom + startPos;
+    const to = from + word.length;
+    if (isInsideIgnored(startPos, startPos + word.length, ignored)) {
+      continue;
+    }
+    const prevChar = startPos > 0 ? text[startPos - 1] : '';
+    const twoCharsBefore = startPos > 1 ? text.slice(startPos - 2, startPos) : '';
+    if (twoCharsBefore === '->' || twoCharsBefore === '?->' || prevChar === '$') {
+      continue;
+    }
+    lineTokens.push({ from, to, deco: selfStaticDeco });
+  }
+
+  const classRegex = /\b([A-Z][a-zA-Z0-9_]*|stdClass)\b/g;
+  while ((match = classRegex.exec(text)) !== null) {
+    const word = match[1];
+    const startPos = match.index;
+    const from = lineFrom + startPos;
+    const to = from + word.length;
+
+    if (isInsideIgnored(startPos, startPos + word.length, ignored)) {
+      continue;
+    }
+
+    if (word.length > 1 && word === word.toUpperCase() && word.includes('_')) {
+      continue;
+    }
+
+    const prevChar = startPos > 0 ? text[startPos - 1] : '';
+    const twoCharsBefore = startPos > 1 ? text.slice(startPos - 2, startPos) : '';
+    if (twoCharsBefore === '->' || twoCharsBefore === '::' || prevChar === '$') {
+      continue;
+    }
+
+    lineTokens.push({ from, to, deco: classDeco });
+  }
+
+  const funcCallRegex = /\b([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)\s*(?=\(|\.\.\.)/g;
+  while ((match = funcCallRegex.exec(text)) !== null) {
+    const fnName = match[1];
+    const startPos = match.index;
+    const from = lineFrom + startPos;
+    const to = from + fnName.length;
+
+    if (isInsideIgnored(startPos, startPos + fnName.length, ignored)) {
+      continue;
+    }
+
+    if (PHP_KEYWORDS.has(fnName)) {
+      continue;
+    }
+
+    const twoCharsBefore = startPos > 1 ? text.slice(startPos - 2, startPos) : '';
+    const threeCharsBefore = startPos > 2 ? text.slice(startPos - 3, startPos) : '';
+    if (twoCharsBefore === '->' || twoCharsBefore === '::' || threeCharsBefore === '?->') {
+      continue;
+    }
+
+    const isAlreadyClass = lineTokens.some((t) => t.from === from && t.to === to && t.deco === classDeco);
+    if (!isAlreadyClass) {
+      lineTokens.push({ from, to, deco: funcDeco });
     }
   }
 }
@@ -287,16 +402,23 @@ function processDocblockLine(lineFrom: number, text: string, lineTokens: LineTok
     const afterTagOffset = tagIndex + tagLen;
     const afterTagText = text.slice(afterTagOffset);
 
-    if (tagName.includes('param') || tagName === 'var' || tagName.includes('property')) {
-      const varMatch = /\$[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*/.exec(afterTagText);
-
-      if (varMatch) {
-        const typeZoneText = afterTagText.slice(0, varMatch.index);
-        tokenizeTypeZone(lineFrom + afterTagOffset, typeZoneText, lineTokens);
-
-        const varFrom = lineFrom + afterTagOffset + varMatch.index;
-        const varTo = varFrom + varMatch[0].length;
+    if (tagName === 'method') {
+      processMethodDocblock(lineFrom + afterTagOffset, afterTagText, lineTokens);
+    } else if (tagName.includes('param') || tagName === 'var' || tagName.includes('property')) {
+      const outerVar = findOuterVariable(afterTagText);
+      if (outerVar) {
+        const varFrom = lineFrom + afterTagOffset + outerVar.index;
+        const varTo = varFrom + outerVar.name.length;
         lineTokens.push({ from: varFrom, to: varTo, deco: varDeco });
+
+        if (outerVar.index >= 3 && afterTagText.slice(outerVar.index - 3, outerVar.index) === '...') {
+          lineTokens.push({ from: varFrom - 3, to: varFrom, deco: operatorDeco });
+          tokenizeTypeZone(lineFrom + afterTagOffset, afterTagText.slice(0, outerVar.index - 3), lineTokens);
+        } else if (outerVar.index === 0 || /^\s*$/.test(afterTagText.slice(0, outerVar.index))) {
+          tokenizeTypeZone(varTo, afterTagText.slice(outerVar.index + outerVar.name.length), lineTokens);
+        } else {
+          tokenizeTypeZone(lineFrom + afterTagOffset, afterTagText.slice(0, outerVar.index), lineTokens);
+        }
       } else {
         tokenizeTypeZone(lineFrom + afterTagOffset, afterTagText, lineTokens);
       }
