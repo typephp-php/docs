@@ -4,6 +4,7 @@ import { h, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vitepress'
 import GitHubStars from './components/GitHubStars.vue'
 import TypePHPSnippet from './components/TypePHPSnippet.vue'
+import { enhanceDocblocksInDocument } from './utils/docblock-highlighter' 
 import './custom.css'
 
 function enableTableSorting() {
@@ -93,6 +94,7 @@ export default {
       }
 
       enableTableSorting()
+      enhanceDocblocksInDocument() // 👈 Run on page mount
 
       if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then((registrations) => {
@@ -109,6 +111,7 @@ export default {
         if (!checkAndRedirect(newPath)) {
           nextTick(() => {
             enableTableSorting()
+            enhanceDocblocksInDocument() 
           })
         }
       }

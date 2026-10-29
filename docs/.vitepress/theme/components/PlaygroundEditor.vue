@@ -52,8 +52,11 @@ const baseTheme = EditorView.theme({
   '.cm-phpdoc-generic-bracket, .cm-phpdoc-generic-bracket *': { color: '#e06c75 !important', fontWeight: '700 !important', fontStyle: 'normal !important' },
   '.cm-phpdoc-generic-type, .cm-phpdoc-generic-type *': { color: '#56b6c2 !important', fontStyle: 'italic !important', fontWeight: '600 !important' },
   '.cm-phpdoc-variance, .cm-phpdoc-variance *': { color: '#d19a66 !important', fontStyle: 'italic !important' },
-  '.cm-phpdoc-var, .cm-phpdoc-var *': { color: '#61afef !important', fontWeight: '600 !important', fontStyle: 'normal !important' },
-  '.cm-phpdoc-shape-key, .cm-phpdoc-shape-key *': { color: '#e5c07b !important' },
+  '.cm-phpdoc-var, .cm-phpdoc-var *': { color: '#e06c75 !important', fontWeight: '600 !important', fontStyle: 'normal !important' },
+  '.cm-phpdoc-shape-key, .cm-phpdoc-shape-key *': { color: '#61afef !important', fontWeight: '600 !important', fontStyle: 'normal !important' },
+  '.cm-phpdoc-operator, .cm-phpdoc-operator *': { color: '#abb2bf !important' },
+  '.cm-phpdoc-string, .cm-phpdoc-string *': { color: '#98c379 !important' },
+  '.cm-phpdoc-number, .cm-phpdoc-number *': { color: '#d19a66 !important' },
   '.cm-php-class, .cm-php-class *': { color: '#e5c07b !important', fontWeight: '600 !important' },
   '.cm-php-method, .cm-php-method *': { color: '#61afef !important' },
   '.cm-php-func, .cm-php-func *': { color: '#61afef !important' },
@@ -233,7 +236,7 @@ defineExpose({
 
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-generic-bracket),
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-generic-bracket) * {
-  color: #e45649 !important;
+  color: #cf222e !important;
   font-weight: 700 !important;
 }
 
@@ -252,13 +255,29 @@ defineExpose({
 
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-var),
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-var) * {
-  color: #4078f2 !important;
+  color: #e45649 !important;
   font-weight: 600 !important;
 }
 
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-shape-key),
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-shape-key) * {
-  color: #c18401 !important;
+  color: #0969da !important;
+  font-weight: 600 !important;
+}
+
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-operator),
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-operator) * {
+  color: #57606a !important;
+}
+
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-string),
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-string) * {
+  color: #22863a !important;
+}
+
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-number),
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-number) * {
+  color: #986801 !important;
 }
 
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-php-class),

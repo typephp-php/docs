@@ -355,7 +355,7 @@ echo "Token: " . $sm->getAuthToken() . "\n";
 declare(strict_types=1);
 
 /**
- * @return Generator<int, positive-int, void, string>
+ * @return Generator<int, positive-int, mixed, string>
  */
 function counterStream(): Generator
 {
