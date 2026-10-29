@@ -11,7 +11,6 @@
           <span class="snippet-title" :title="title || 'TypePHP Interactive'">{{ title || 'TypePHP Interactive' }}</span>
         </div>
 
-        <!-- Active Config Badges -->
         <div v-if="activeConfigBadges.length > 0" class="snippet-config-badges">
           <span v-for="badge in activeConfigBadges" :key="badge" class="config-badge-pill">
             {{ badge }}
@@ -20,25 +19,16 @@
       </div>
 
       <div class="header-right">
-        <!-- View Switcher -->
         <div v-if="!hideToggle" class="view-pill-group">
-          <button
-            :class="['view-pill-btn', { active: currentView === 'source' }]"
-            @click="currentView = 'source'"
-          >
+          <button :class="['view-pill-btn', { active: currentView === 'source' }]" @click="currentView = 'source'">
             Source
           </button>
-          <button
-            :class="['view-pill-btn', { active: currentView === 'transformed' }]"
-            @click="toggleTransformedView"
-          >
+          <button :class="['view-pill-btn', { active: currentView === 'transformed' }]" @click="toggleTransformedView">
             Transformed
           </button>
         </div>
 
-        <!-- Action Tools Cluster -->
         <div class="actions-cluster">
-          <!-- Reusable Full Engine Config Popover -->
           <PlaygroundConfigPopover
             v-model="localConfig"
             :has-custom-config="hasCustomConfig"
@@ -46,7 +36,6 @@
             @reset="resetToSnippetDefaults"
           />
 
-          <!-- Copy Button -->
           <button class="icon-btn" :title="copied ? 'Copied!' : 'Copy Code'" @click="copyCode">
             <svg v-if="!copied" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="9" y="9" width="13" height="13" rx="2" />
@@ -57,12 +46,7 @@
             </svg>
           </button>
 
-          <!-- Run Button -->
-          <button
-            class="run-snippet-btn"
-            :disabled="isRunning"
-            @click="runSnippet"
-          >
+          <button class="run-snippet-btn" :disabled="isRunning" @click="runSnippet">
             <span v-if="isRunning" class="spinner"></span>
             <svg v-else viewBox="0 0 24 24" width="11" height="11" fill="currentColor">
               <path d="M8 5v14l11-7z" />
@@ -76,14 +60,26 @@
     <!-- Code Block Body -->
     <div class="snippet-body">
       <!-- 1. Source View -->
-      <div v-show="currentView === 'source'" ref="slotWrapper" class="slot-content">
-        <slot>
-          <pre class="snippet-pre"><code>{{ code }}</code></pre>
-        </slot>
+      <div v-show="currentView === 'source'" class="code-view-pane">
+        <div v-if="sourceLineCount > 0" class="line-numbers-wrapper" aria-hidden="true">
+          <span v-for="n in sourceLineCount" :key="n" class="line-number">{{ n }}</span>
+        </div>
+
+        <pre v-if="highlightedSourceCode" class="snippet-pre"><code v-html="highlightedSourceCode"></code></pre>
+
+        <div v-show="!highlightedSourceCode" ref="slotWrapper" class="slot-content">
+          <slot>
+            <pre class="snippet-pre"><code>{{ code }}</code></pre>
+          </slot>
+        </div>
+
+        <div v-if="highlightedSourceCode" ref="slotWrapper" style="display: none;">
+          <slot></slot>
+        </div>
       </div>
 
       <!-- 2. Transformed View -->
-      <div v-show="currentView === 'transformed'" class="transformed-block">
+      <div v-show="currentView === 'transformed'" class="code-view-pane">
         <div v-if="transformedLineCount > 0" class="line-numbers-wrapper" aria-hidden="true">
           <span v-for="n in transformedLineCount" :key="n" class="line-number">{{ n }}</span>
         </div>
@@ -97,7 +93,6 @@
       </div>
     </div>
 
-    <!-- Modular Embedded Console Output & Audit Report -->
     <PlaygroundOutput
       v-if="hasRun"
       mode="embedded"
@@ -123,6 +118,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { useData } from 'vitepress';
 import { getTypePHPEngine, type RunResult } from '../utils/typephp-engine';
 import { DEFAULT_PLAYGROUND_CONFIG, type PlaygroundConfig, type AuditReportDocument } from '../presets';
+import { highlightPhp } from '../utils/docblock-highlighter'; // 👈 Single source of truth!
 import PlaygroundConfigPopover from './PlaygroundConfigPopover.vue';
 import PlaygroundOutput from './PlaygroundOutput.vue';
 
@@ -144,6 +140,7 @@ const { site } = useData();
 const slotWrapper = ref<HTMLDivElement | null>(null);
 
 const currentView = ref<'source' | 'transformed'>(props.defaultView);
+const sourceCode = ref<string>('');
 const transformedCode = ref<string>('');
 const isRunning = ref<boolean>(false);
 const isTransforming = ref<boolean>(false);
@@ -193,23 +190,12 @@ const hasCustomConfig = computed(() => {
 
 const activeConfigBadges = computed(() => {
   const badges: string[] = [];
-  if (!localConfig.value.strictReturnGenericInvariance) {
-    badges.push('Pragmatic Returns');
-  }
-  if (!localConfig.value.eliminateStaticallyProvenChecks) {
-    badges.push('No AST Elimination');
-  }
-  if (localConfig.value.magicPropertyReads) {
-    badges.push('Strict __get');
-  }
-  if (localConfig.value.arrayValidation === 'hybrid') {
-    badges.push('Hybrid Array');
-  }
-  if (localConfig.value.onViolation === 'warn') {
-    badges.push('Warn Mode');
-  } else if (localConfig.value.onViolation === 'report') {
-    badges.push('Report Mode');
-  }
+  if (!localConfig.value.strictReturnGenericInvariance) badges.push('Pragmatic Returns');
+  if (!localConfig.value.eliminateStaticallyProvenChecks) badges.push('No AST Elimination');
+  if (localConfig.value.magicPropertyReads) badges.push('Strict __get');
+  if (localConfig.value.arrayValidation === 'hybrid') badges.push('Hybrid Array');
+  if (localConfig.value.onViolation === 'warn') badges.push('Warn Mode');
+  if (localConfig.value.onViolation === 'report') badges.push('Report Mode');
   return badges;
 });
 
@@ -227,76 +213,6 @@ function clearConsole() {
   duration.value = '';
 }
 
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function highlightPhp(code: string): string {
-  const TOKEN_REGEX = new RegExp(
-    [
-      '(/\\*\\*[\\s\\S]*?\\*/|/\\*[\\s\\S]*?\\*/|//.*|#.*)',
-      `('(?:\\\\.|[^'\\\\])*'|"(?:\\\\.|[^"\\\\])*")`,
-      '(<\\?(?:php|=)?|\\?>)',
-      '(\\$[a-zA-Z_\\x7f-\\xff][a-zA-Z0-9_\\x7f-\\xff]*)',
-      '(\\b[a-zA-Z_\\x7f-\\xff][a-zA-Z0-9_\\x7f-\\xff]*(?=\\s*\\())',
-      '(\\b(?:declare|use|class|interface|trait|enum|extends|implements|public|protected|private|static|readonly|function|fn|return|new|if|else|elseif|isset|empty|throw|try|catch|finally|match|switch|case|break|continue|foreach|for|while|as|yield|echo|print)\\b)',
-      '(\\\\?[A-Z][a-zA-Z0-9_]*(?:\\\\[a-zA-Z0-9_]+)*\\b|\\b(?:int|string|bool|boolean|float|double|array|void|never|mixed|object|callable|iterable|true|false|null|self|parent|PHP_EOL|strict_types)\\b)',
-      '(\\b\\d+(?:\\.\\d+)?\\b)',
-    ].join('|'),
-    'g'
-  );
-
-  let lastIndex = 0;
-  let html = '';
-  let match: RegExpExecArray | null;
-
-  while ((match = TOKEN_REGEX.exec(code)) !== null) {
-    if (match.index > lastIndex) {
-      html += escapeHtml(code.slice(lastIndex, match.index));
-    }
-
-    const [
-      full, comment, str, phpTag, variable, fnCall, keyword, typeOrClass, number,
-    ] = match;
-
-    if (comment) {
-      let c = escapeHtml(comment);
-      c = c.replace(/(@[a-zA-Z0-9_\-]+)/g, '<span class="tok-tag">$1</span>');
-      c = c.replace(/\b([A-Z][a-zA-Z0-9_]*|positive-int|negative-int|non-empty-string|string|int|array|mixed)\b/g, '<span class="tok-type">$1</span>');
-      html += `<span class="tok-comment">${c}</span>`;
-    } else if (str) {
-      html += `<span class="tok-string">${escapeHtml(str)}</span>`;
-    } else if (phpTag) {
-      html += `<span class="tok-php">${escapeHtml(phpTag)}</span>`;
-    } else if (variable) {
-      html += `<span class="tok-var">${escapeHtml(variable)}</span>`;
-    } else if (fnCall) {
-      html += `<span class="tok-fn">${escapeHtml(fnCall)}</span>`;
-    } else if (keyword) {
-      html += `<span class="tok-keyword">${escapeHtml(keyword)}</span>`;
-    } else if (typeOrClass) {
-      html += `<span class="tok-type">${escapeHtml(typeOrClass)}</span>`;
-    } else if (number) {
-      html += `<span class="tok-number">${escapeHtml(number)}</span>`;
-    } else {
-      html += escapeHtml(full);
-    }
-
-    lastIndex = TOKEN_REGEX.lastIndex;
-  }
-
-  if (lastIndex < code.length) {
-    html += escapeHtml(code.slice(lastIndex));
-  }
-
-  return html;
-}
-
 function extractCode(): string {
   if (props.code && props.code.trim()) {
     return props.code.trim();
@@ -306,6 +222,23 @@ function extractCode(): string {
   const codeEl = slotWrapper.value.querySelector('pre code') || slotWrapper.value.querySelector('code');
   return (codeEl?.textContent || slotWrapper.value.textContent || '').trim();
 }
+
+onMounted(() => {
+  sourceCode.value = extractCode();
+  if (props.defaultView === 'transformed') {
+    toggleTransformedView();
+  }
+});
+
+const sourceLineCount = computed(() => {
+  if (!sourceCode.value) return 0;
+  return sourceCode.value.split('\n').length;
+});
+
+const highlightedSourceCode = computed(() => {
+  if (!sourceCode.value) return '';
+  return highlightPhp(sourceCode.value);
+});
 
 const transformedLineCount = computed(() => {
   if (!transformedCode.value) return 0;
@@ -318,7 +251,7 @@ const highlightedTransformedCode = computed(() => {
 });
 
 async function runSnippet() {
-  const codeToRun = extractCode();
+  const codeToRun = sourceCode.value || extractCode();
   if (!codeToRun) return;
 
   isRunning.value = true;
@@ -327,7 +260,7 @@ async function runSnippet() {
   stderr.value = '';
   report.value = null;
 
-  const engine = getTypePHPEngine(site.value.base || '/docs/');
+  const engine = getTypePHPEngine(site.value.base || '/');
 
   try {
     const cleanConfig = JSON.parse(JSON.stringify(localConfig.value));
@@ -349,11 +282,11 @@ async function toggleTransformedView() {
   currentView.value = 'transformed';
   if (transformedCode.value || isTransforming.value) return;
 
-  const codeToTransform = extractCode();
+  const codeToTransform = sourceCode.value || extractCode();
   if (!codeToTransform) return;
 
   isTransforming.value = true;
-  const engine = getTypePHPEngine(site.value.base || '/docs/');
+  const engine = getTypePHPEngine(site.value.base || '/');
   try {
     const cleanConfig = JSON.parse(JSON.stringify(localConfig.value));
     const res = await engine.transform(codeToTransform, cleanConfig);
@@ -366,46 +299,13 @@ async function toggleTransformedView() {
 }
 
 function copyCode() {
-  const text = currentView.value === 'source' ? extractCode() : transformedCode.value;
+  const text = currentView.value === 'source' ? (sourceCode.value || extractCode()) : transformedCode.value;
   navigator.clipboard.writeText(text).then(() => {
     copied.value = true;
     setTimeout(() => { copied.value = false; }, 2000);
   });
 }
-
-onMounted(() => {
-  if (props.defaultView === 'transformed') {
-    toggleTransformedView();
-  }
-});
 </script>
-
-<style>
-/* CSS Variables for Dynamic Dark/Light Theme Switching */
-.typephp-snippet-card {
-  --snip-pre-color: #24292f;
-  --snip-keyword: #cf222e;
-  --snip-fn: #8250df;
-  --snip-string: #0a3069;
-  --snip-type: #0550ae;
-  --snip-number: #0550ae;
-  --snip-var: #24292f;
-  --snip-comment: #57606a;
-  --snip-tag: #cf222e;
-}
-
-html.dark .typephp-snippet-card {
-  --snip-pre-color: #e1e4e8;
-  --snip-keyword: #f97583;
-  --snip-fn: #d2a8ff;
-  --snip-string: #ffab70;
-  --snip-type: #79b8ff;
-  --snip-number: #79b8ff;
-  --snip-var: #e1e4e8;
-  --snip-comment: #8b949e;
-  --snip-tag: #f97583;
-}
-</style>
 
 <style scoped>
 .typephp-snippet-card {
@@ -417,7 +317,6 @@ html.dark .typephp-snippet-card {
   position: relative;
 }
 
-/* Header Base (Desktop: 1 Line) */
 .snippet-header {
   display: flex;
   align-items: center;
@@ -563,11 +462,17 @@ html.dark .typephp-snippet-card {
   cursor: not-allowed;
 }
 
-/* Snippet Code Body */
 .snippet-body {
   position: relative;
   background: var(--vp-code-block-bg, var(--vp-c-bg-soft));
   overflow: hidden;
+}
+
+.code-view-pane {
+  position: relative;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
 }
 
 .slot-content :deep(div[class*='language-']),
@@ -578,48 +483,36 @@ html.dark .typephp-snippet-card {
   background: transparent !important;
 }
 
-.slot-content :deep(button.copy) {
-  display: none !important;
-}
-
+.slot-content :deep(button.copy),
 .typephp-snippet-card :deep(span.lang),
 .typephp-snippet-card .lang-badge {
   display: none !important;
-}
-
-/* Transformed Code Block */
-.transformed-block {
-  position: relative;
-  margin: 0 !important;
-  padding: 0 !important;
-  background: transparent !important;
 }
 
 .transform-loading-state {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 16px 20px 16px 48px;
+  padding: 18px 20px 18px 52px;
   font-size: 12px;
   color: var(--vp-c-text-3);
   font-family: var(--vp-font-family-mono);
 }
 
-/* Line Numbers Gutter: Fixed 32px width */
 .line-numbers-wrapper {
   position: absolute;
   top: 0;
   bottom: 0;
   left: 0;
   z-index: 5;
-  width: 32px !important;
+  width: 34px !important;
   text-align: center;
   padding: 18px 0 !important;
   font-family: var(--vp-font-family-mono);
-  font-size: var(--vp-code-font-size, 14px);
+  font-size: var(--vp-code-font-size, 13px);
   line-height: var(--vp-code-line-height, 1.7);
   color: var(--vp-code-line-number-color, var(--vp-c-text-3));
-  border-right: 1px solid var(--vp-code-block-divider-color, rgba(60, 60, 67, 0.08));
+  border-right: 1px solid var(--vp-c-divider);
   background-color: var(--vp-code-block-bg, var(--vp-c-bg-soft)) !important;
   user-select: none;
   box-sizing: border-box;
@@ -629,17 +522,16 @@ html.dark .typephp-snippet-card {
   display: block;
 }
 
-/* Desktop Code Area */
 .snippet-pre {
   margin: 0 !important;
   padding: 18px 20px 18px 52px !important;
   background: transparent !important;
   font-family: var(--vp-font-family-mono);
-  font-size: var(--vp-code-font-size, 14px);
+  font-size: var(--vp-code-font-size, 13px);
   line-height: var(--vp-code-line-height, 1.7);
   overflow-x: auto;
   box-sizing: border-box;
-  color: var(--snip-pre-color) !important;
+  color: var(--vp-c-text-1) !important;
 }
 
 .snippet-pre code {
@@ -647,17 +539,6 @@ html.dark .typephp-snippet-card {
   width: fit-content;
   min-width: 100%;
 }
-
-/* Syntax Token Colors */
-:deep(.tok-keyword) { color: var(--snip-keyword) !important; font-weight: normal; }
-:deep(.tok-php) { color: var(--snip-keyword) !important; font-weight: normal; }
-:deep(.tok-fn) { color: var(--snip-fn) !important; }
-:deep(.tok-string) { color: var(--snip-string) !important; }
-:deep(.tok-number) { color: var(--snip-number) !important; }
-:deep(.tok-type) { color: var(--snip-type) !important; }
-:deep(.tok-var) { color: var(--snip-var) !important; }
-:deep(.tok-comment) { color: var(--snip-comment) !important; font-style: italic; }
-:deep(.tok-tag) { color: var(--snip-tag) !important; font-weight: 600; }
 
 .spinner {
   width: 9px;
@@ -675,7 +556,6 @@ html.dark .typephp-snippet-card {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Mobile & Tablet Responsiveness (<= 768px) */
 @media (max-width: 768px) {
   .snippet-header {
     flex-direction: column !important;
@@ -687,32 +567,12 @@ html.dark .typephp-snippet-card {
 
   .header-left {
     width: 100% !important;
-    display: flex !important;
-    align-items: center !important;
     justify-content: space-between !important;
-    min-width: 0 !important;
-  }
-
-  .title-cluster {
-    flex: 1 1 auto !important;
-    min-width: 0 !important;
-  }
-
-  .snippet-title {
-    font-size: 12px !important;
-    font-weight: 700 !important;
-    color: var(--vp-c-text-1) !important;
   }
 
   .header-right {
     width: 100% !important;
-    display: flex !important;
-    align-items: center !important;
     justify-content: space-between !important;
-  }
-
-  .actions-cluster {
-    gap: 6px !important;
   }
 
   .line-numbers-wrapper {

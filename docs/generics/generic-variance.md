@@ -4,14 +4,30 @@ Generic variance controls how subtype relationships between underlying types aff
 
 The answer depends on whether the container is **reading data (Producer)**, **writing data (Consumer)**, or **both (Read-Write)**:
 
-```text
-                            THE 3 MODES OF GENERIC VARIANCE
+```mermaid
+flowchart TD
+    Root["`**The 3 Modes of Generic Variance**
+    *How container relationships mirror type relationships*`"]
+    
+    Root --> Inv["`**1. Invariance (Default)**
+    • **Exact match only**
+    • Read-Write containers
+    • <code>Box&lt;Animal&gt;</code> requires exact <code>Animal</code>`"]
+    
+    Root --> Cov["`**2. Covariance (Producer)**
+    • **Subtypes allowed**
+    • Read-Only producers
+    • <code>Producer&lt;Dog&gt;</code> satisfies <code>Producer&lt;Animal&gt;</code>`"]
+    
+    Root --> Contra["`**3. Contravariance (Consumer)**
+    • **Supertypes allowed**
+    • Write-Only consumers
+    • <code>Consumer&lt;Animal&gt;</code> satisfies <code>Consumer&lt;Dog&gt;</code>`"]
 
-   1. Invariance (Default)       2. Covariance (Producer)       3. Contravariance (Consumer)
-  ┌─────────────────────────┐   ┌───────────────────────────┐   ┌───────────────────────────┐
-  │   Exact Match ONLY      │   │   Subtypes Allowed (Dog)  │   │  Supertypes Allowed       │
-  │   Read-Write Container  │   │   Read-Only Container     │   │  Write-Only Consumer      │
-  └─────────────────────────┘   └───────────────────────────┘   └───────────────────────────┘
+    style Root fill:#3b82f6,color:#fff,stroke-width:0px
+    style Inv fill:#1e293b,color:#e2e8f0,stroke:#64748b,stroke-width:1.5px
+    style Cov fill:#1e293b,color:#e2e8f0,stroke:#10b981,stroke-width:1.5px
+    style Contra fill:#1e293b,color:#e2e8f0,stroke:#f59e0b,stroke-width:1.5px
 ```
 
 ---
@@ -22,7 +38,7 @@ By default, generics in TypePHP (and static analyzers) are **invariant**. Invari
 
 ### Why Invariance is Mandatory for Read-Write Containers
 
-If PHP allowed a `Box<Dog>` to be passed into a function expecting a `Box<Animal>`, the function might try to push a `Cat` into what the caller thought was a box of Dogs! Invariance completely prevents this memory corruption.
+If PHP allowed a `Box<Dog>` to be passed into a function expecting a `Box<Animal>`, the function might try to push a `Cat` into what the caller thought was a box of Dogs. Invariance completely prevents this memory corruption.
 
 <TypePHPSnippet title="Invariance (Default)" default-view="source">
 
@@ -55,7 +71,11 @@ checkBox(new Box(new Animal()));
 
 // 2. Invalid Call: Dog is a subtype of Animal, but Box is INVARIANT!
 echo "\nPassing Box<Dog> into Box<Animal> expectation...\n";
-checkBox(new Box(new Dog()));
+try {
+    checkBox(new Box(new Dog()));
+} catch (\TypeError $e) {
+    echo "✗ Caught invariant mismatch error:\n   " . $e->getMessage() . "\n";
+}
 ```
 
 </TypePHPSnippet>
@@ -66,7 +86,7 @@ checkBox(new Box(new Dog()));
 
 Covariance allows **subtypes** (e.g. accepting `Dog` where `Animal` is expected). Think of covariance as a **Producer** or **Read-Only** relationship.
 
-If a function only *reads* from a container producing `Animal`s, passing a container producing `Dog`s is 100% safe because every `Dog` read out of the container is guaranteed to be a valid `Animal`!
+If a function only *reads* from a container producing `Animal`s, passing a container producing `Dog`s is 100% safe because every `Dog` read out of the container is guaranteed to be a valid `Animal`.
 
 <TypePHPSnippet title="Covariance (@template-covariant)" default-view="source">
 
@@ -107,7 +127,11 @@ handleProducer(new Producer(new Cat()));
 
 // 3. Invalid: Car is not an Animal!
 echo "\nAttempting to pass Producer<Car>...\n";
-handleProducer(new Producer(new Car()));
+try {
+    handleProducer(new Producer(new Car()));
+} catch (\TypeError $e) {
+    echo "✗ Caught subtype violation:\n   " . $e->getMessage() . "\n";
+}
 ```
 
 </TypePHPSnippet>
@@ -118,7 +142,7 @@ handleProducer(new Producer(new Car()));
 
 Contravariance allows **supertypes** (e.g. accepting `Animal` where `Dog` is expected). Think of contravariance as a **Consumer** or **Write-Only** relationship.
 
-If a function needs a handler that consumes a `Dog`, giving it a handler that can consume *any* general `Animal` is 100% safe because an `Animal` handler is perfectly capable of processing any `Dog` you give it!
+If a function needs a handler that consumes a `Dog`, giving it a handler that can consume *any* general `Animal` is 100% safe because an `Animal` handler is perfectly capable of processing any `Dog` you give it.
 
 <TypePHPSnippet title="Contravariance (@template-contravariant)" default-view="source">
 
@@ -156,11 +180,16 @@ processDogConsumer(new Consumer($animalHandler));
 
 // 2. Invalid: Puppy handler cannot handle any general Dog!
 echo "\nAttempting to pass Consumer<Puppy> into Consumer<Dog> expectation...\n";
-$puppyHandler = fn (Puppy $p) => null;
-processDogConsumer(new Consumer($puppyHandler));
+try {
+    $puppyHandler = fn (Puppy $p) => null;
+    processDogConsumer(new Consumer($puppyHandler));
+} catch (\TypeError $e) {
+    echo "✗ Caught contravariant supertype violation:\n   " . $e->getMessage() . "\n";
+}
 ```
 
 </TypePHPSnippet>
+
 ---
 
 ## Variance on Variable Assignments
@@ -170,10 +199,6 @@ Generic variance is not limited to function parameters and return types. In Type
 - **Invariant Containers (Default):** A variable typed as `Collection<Animal>` strictly rejects being assigned a `Collection<Dog>`.
 - **Covariant Producers (`@template-covariant`):** A variable typed as `Producer<Animal>` happily accepts a `Producer<Dog>`.
 - **Contravariant Consumers (`@template-contravariant`):** A variable typed as `Consumer<Dog>` happily accepts a `Consumer<Animal>`.
-
-### Interactive Demo: Variance Rules on Assignments
-
-The interactive snippet below demonstrates how invariant, covariant, and contravariant classes behave when reassigned between variables:
 
 <TypePHPSnippet title="Variance Enforcement on Variable Assignments" default-view="source">
 
@@ -252,29 +277,16 @@ $animalCollection = new Collection(new Dog());
 $dogCollection = new Collection(new Dog());
 
 echo "Attempting to assign Collection<Dog> to variable expecting Collection<Animal>...\n";
-
-// FAILS! Collection is invariant by default.
-// Assigning a Collection<Dog> into a Collection<Animal> variable is strictly forbidden!
-$animalCollection = $dogCollection;
+try {
+    // FAILS! Collection is invariant by default.
+    // Assigning a Collection<Dog> into a Collection<Animal> variable is strictly forbidden!
+    $animalCollection = $dogCollection;
+} catch (\TypeError $e) {
+    echo "✗ Invariant assignment rejected:\n   " . $e->getMessage() . "\n";
+}
 ```
 
 </TypePHPSnippet>
-
-### Diagnostic Output on Invariant Reassignment Failure
-
-When line 76 runs, TypePHP intercepts the assignment and immediately halts execution:
-
-```text
-✓ Covariant assignment succeeded
-✓ Contravariant assignment succeeded
-
-Attempting to assign Collection<Dog> to variable expecting Collection<Animal>...
-Fatal error: Uncaught TypePHP\Exception\TypeError: Variable $animalCollection expects Collection<invariant Animal>, but Collection<Dog> was given in playground.php on line 76
-Stack trace:
-#0 playground.php(76): TypePHP\Internal\RuntimeTypeChecker::checkVariable(Collection, 'Collection<Anim...', 'animalCollectio...', 'playground.php', NULL, NULL)
-#1 {main}
-  thrown in playground.php on line 76
-```
 
 ### Why TypePHP Guards Invariant Assignments
 
@@ -309,6 +321,22 @@ function processContracts(Repository $repo, Consumer $consumer): Producer
 ### Variance Precedence Rules (Usage-Site Overrides)
 
 What happens if an inline type hint specifies `Consumer<covariant Animal>`, but the class definition declared `@template-contravariant T`?
+
+```mermaid
+flowchart TD
+    Check{"Does call site specify inline variance?<br><i>e.g. &lt;covariant Animal&gt;</i>"}
+    Check -->|Yes| Inline["`**Use-Site Variance Wins**
+    *Applies inline rule (&lt;covariant&gt; or &lt;contravariant&gt;)*`"]
+    Check -->|No| Declared["`**Class Declaration Fallback**
+    *Applies @template-covariant or @template-contravariant*`"]
+    Declared --> Default["`**Invariance Default**
+    *Strict exact match if unannotated*`"]
+
+    style Check fill:#3b82f6,color:#fff,stroke-width:0px
+    style Inline fill:#10b981,color:#fff,stroke-width:0px
+    style Declared fill:#f59e0b,color:#fff,stroke-width:0px
+    style Default fill:#64748b,color:#fff,stroke-width:0px
+```
 
 **Usage-site modifiers always take precedence:**
 1. If a parameter explicitly specifies `<covariant Animal>`, that overrides the class definition for that specific call.
@@ -353,7 +381,11 @@ processCovariantConsumer(new Consumer(new Dog()));
 
 // 2. Invalid Call: Car is not an Animal!
 echo "\nAttempting to pass Consumer<Car>...\n";
-processCovariantConsumer(new Consumer(new Car()));
+try {
+    processCovariantConsumer(new Consumer(new Car()));
+} catch (\TypeError $e) {
+    echo "✗ Usage-site check rejected non-subtype:\n   " . $e->getMessage() . "\n";
+}
 ```
 
 </TypePHPSnippet>
@@ -399,8 +431,6 @@ return [
     'strict_return_generic_invariance' => false,
 ];
 ```
-
-### Try It Live: Pragmatic Mode vs. Strict Mode
 
 The snippet below is initialized in **Pragmatic Mode** (`strictReturnGenericInvariance: false`):
 
@@ -457,7 +487,11 @@ echo "✓ Successfully returned Collection<Dog> under Collection<Animal> contrac
 echo "--- 2. Downstream Write Protection ---\n";
 echo "Attempting to sneak a Cat into the returned collection...\n";
 // Even in pragmatic mode, WeakMap memory preserves T = Dog on the instance!
-$animals->add(new Cat());
+try {
+    $animals->add(new Cat());
+} catch (\TypeError $e) {
+    echo "✗ WeakMap caught downstream memory corruption:\n   " . $e->getMessage() . "\n";
+}
 ```
 
 </TypePHPSnippet>
@@ -476,18 +510,18 @@ $animals->add(new Cat());
    - Click the **Configuration (⚙️)** gear button in the snippet header above.
    - Toggle **Return Invariance** to **ON** (Strict Mode).
    - Click **Run** again.
-   - Notice the error moves to line 39:
+   - Notice the error moves to the return boundary:
      ```text
      TypeError: getAnimals(): Return value expects Collection<invariant Animal>, but Collection<Dog> was returned
      ```
-   - TypePHP now strictly halts at the return boundary, giving you exact **PHPStan invariance parity**!
+   - TypePHP now strictly halts at the return boundary, giving you exact **PHPStan Level MAX invariance parity**.
 
 ---
 
 ## Freedom from Variance Bans (Read & Write Methods)
 
-In compiled languages and static analyzers, generic classes are subjected to rigid, theoretical bans:
-- **Static Analyzers Ban Input Parameters on Covariant Classes:** If a class is `@template-covariant T`, static analyzers throw a fatal error if `T` appears in *any* method parameter (claiming it's a "contravariant position").
+In compiled languages and static analyzers, generic classes are subjected to rigid theoretical bans:
+- **Static Analyzers Ban Input Parameters on Covariant Classes:** If a class is `@template-covariant T`, static analyzers throw a fatal error if `T` appears in *any* method parameter (claiming it is a "contravariant position").
 - **Static Analyzers Ban Return Types on Contravariant Classes:** If a class is `@template-contravariant T`, they ban `T` in *any* return type.
 
 ### The Reality of Hybrid Classes
@@ -561,7 +595,11 @@ $dogContainer = new CovariantContainer();
 
 // TypePHP's WeakMap keeps $dogContainer pinned strictly to T = Dog!
 // The mutation is halted dead in its tracks:
-sneakCatIntoAnimalContainer($dogContainer);
+try {
+    sneakCatIntoAnimalContainer($dogContainer);
+} catch (\TypeError $e) {
+    echo "✗ WeakMap halted mutation on covariant container:\n   " . $e->getMessage() . "\n";
+}
 ```
 
 </TypePHPSnippet>
