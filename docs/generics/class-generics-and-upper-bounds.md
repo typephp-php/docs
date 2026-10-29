@@ -279,6 +279,91 @@ $service->process($strings);
 
 ---
 
+## Recursive Nested & Compound Generics
+
+Generic containers are not limited to wrapping scalar types or simple entities. TypePHP **recursively supports arbitrarily nested generic types** (e.g. containers of containers, maps of boxes, or lists of generic instances).
+
+### Multi-Level Nested Containers (`Container<Box<T>>`)
+
+TypePHP maintains full reification across every level of nesting. Each individual object in the chain is assigned its exact generic badge in `\WeakMap` memory:
+
+<TypePHPSnippet title="Recursive Nested Generics" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+use TypePHP\TypePHP;
+
+/**
+ * @template T
+ */
+class Box
+{
+    /** @param T $content */
+    public function __construct(public mixed $content) {}
+}
+
+/**
+ * @template T
+ */
+class Container
+{
+    /** @param T $item */
+    public function __construct(public mixed $item) {}
+}
+
+// Prebinding 2-level nested generics: Container holding a Box of integers
+/** @var Container<Box<int>> */
+$container = new Container(new Box(42));
+
+echo "Outer Container Type: " . TypePHP::getGenericType($container) . "\n";
+echo "Inner Box Type:       " . TypePHP::getGenericType($container->item) . "\n";
+echo "Inner Box Content:    " . $container->item->content . "\n\n";
+
+// Direct nested instantiations work seamlessly:
+// TypePHP parses the full AST tree and prebinds every constructor level simultaneously!
+/** @var Container<Container<Box<string>>> */
+$deep = new Container(new Container(new Box('deep_payload')));
+
+echo "3-Level Nested Deep Value: " . $deep->item->item->content . "\n\n";
+
+// Mismatch at any nested level triggers an immediate TypeError:
+echo "Attempting to create Container<Box<int>> with Box<string>...\n";
+/** @var Container<Box<int>> */
+$invalid = new Container(new Box('not_an_int'));
+```
+
+</TypePHPSnippet>
+
+### Multi-Branch Compound Generics (`Pair<Left, Right>`)
+
+You can nest distinct generic instances across multi-template objects without cross-contamination. Each template branch is evaluated and bound independently:
+
+```php:line-numbers
+/**
+ * @template TLeft
+ * @template TRight
+ */
+class Pair
+{
+    /**
+     * @param TLeft $left
+     * @param TRight $right
+     */
+    public function __construct(public mixed $left, public mixed $right) {}
+}
+
+/** @var Pair<Box<int>, Box<string>> */
+$pair = new Pair(new Box(10), new Box('hello'));
+
+echo TypePHP::getGenericType($pair->left);  // "int"
+echo TypePHP::getGenericType($pair->right); // "string"
+```
+
+---
+
 ## Generic Template Upper Bounds (`@template T of Bound`)
 
 Use `@template T of Bound` to restrict template arguments to a specific class hierarchy, interface, or scalar type.
@@ -339,9 +424,151 @@ $carShelter = new Shelter();
 
 ---
 
+## Complex Upper Bounds: Unions, Intersections & DNF
+
+Upper bounds are not restricted to a single class or interface name. TypePHP's type engine supports full **Union**, **Intersection**, and **Disjunctive Normal Form (DNF)** upper bounds directly on `@template` declarations.
+
+### 1. Union Upper Bounds (`@template T of A|B`)
+
+Restricts the template argument to types that satisfy at least one member of the union:
+
+```php:line-numbers
+/**
+ * @template T of Dog|Cat
+ */
+class PetHotel
+{
+    /** @param T $pet */
+    public function checkIn(mixed $pet): void {}
+}
+
+/** @var PetHotel<Dog> */ // Valid: Dog is in Dog|Cat
+$hotel1 = new PetHotel();
+
+/** @var PetHotel<Cat> */ // Valid: Cat is in Dog|Cat
+$hotel2 = new PetHotel();
+
+/** @var PetHotel<Car> */ // Throws TypeError: Car is neither Dog nor Cat!
+$badHotel = new PetHotel();
+```
+
+### 2. Intersection Upper Bounds (`@template T of Countable&ArrayAccess`)
+
+Requires the template argument to satisfy **all** intersected contracts simultaneously:
+
+<TypePHPSnippet title="Intersection Upper Bounds" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+/**
+ * @template T of \Countable&\ArrayAccess
+ */
+class CollectionViewer
+{
+    /** @param T $collection */
+    public function __construct(public object $collection) {}
+
+    public function describe(): void
+    {
+        echo "Collection count: " . count($this->collection) . "\n";
+    }
+}
+
+// ArrayObject implements both Countable and ArrayAccess
+/** @var CollectionViewer<\ArrayObject> */
+$viewer = new CollectionViewer(new ArrayObject(['id' => 1]));
+$viewer->describe();
+
+// stdClass implements neither Countable nor ArrayAccess!
+echo "Attempting to bind stdClass to Countable&ArrayAccess...\n";
+/** @var CollectionViewer<\stdClass> */
+$badViewer = new CollectionViewer(new stdClass());
+```
+
+</TypePHPSnippet>
+
+### 3. Disjunctive Normal Form (DNF) Upper Bounds (`(A&B)|(C&D)`)
+
+For advanced architectural contracts, TypePHP validates DNF expressions where the template must satisfy any one **complete intersection cluster**.
+
+A critical guarantee of TypePHP's DNF engine is preventing **cross-over false positives**: if an object satisfies one interface from Cluster 1 (`Countable`) and one interface from Cluster 2 (`Stringable`), it is strictly rejected because it failed to satisfy either complete branch.
+
+<TypePHPSnippet title="Disjunctive Normal Form (DNF) Upper Bounds" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Cluster 1: Implements Countable & ArrayAccess
+ */
+class BufferCollection implements Countable, ArrayAccess
+{
+    private array $data = ['first' => 1];
+
+    public function count(): int { return count($this->data); }
+    public function offsetExists(mixed $offset): bool { return isset($this->data[$offset]); }
+    public function offsetGet(mixed $offset): mixed { return $this->data[$offset] ?? null; }
+    public function offsetSet(mixed $offset, mixed $value): void { $this->data[$offset] = $value; }
+    public function offsetUnset(mixed $offset): void { unset($this->data[$offset]); }
+}
+
+/**
+ * Cluster 2: Implements Iterator & Stringable
+ */
+class StringStream extends ArrayIterator implements Stringable
+{
+    public function __toString(): string { return 'string_stream'; }
+}
+
+/**
+ * Invalid Crossover: Implements Countable (from Cluster 1) & Stringable (from Cluster 2),
+ * but misses ArrayAccess (fails Cluster 1) and misses Iterator (fails Cluster 2)!
+ */
+class CrossoverObject implements Countable, Stringable
+{
+    public function count(): int { return 1; }
+    public function __toString(): string { return 'crossover'; }
+}
+
+/**
+ * @template T of (\Countable&\ArrayAccess)|(\Iterator&\Stringable)
+ */
+class StreamPipeline
+{
+    /** @param T $stream */
+    public function __construct(public object $stream) {}
+}
+
+// 1. Valid: BufferCollection satisfies Cluster 1 (Countable & ArrayAccess)
+/** @var StreamPipeline<BufferCollection> */
+$p1 = new StreamPipeline(new BufferCollection());
+echo "✓ Pipeline 1 initialized with Cluster 1\n";
+
+// 2. Valid: StringStream satisfies Cluster 2 (Iterator & Stringable)
+/** @var StreamPipeline<StringStream> */
+$p2 = new StreamPipeline(new StringStream(['a', 'b']));
+echo "✓ Pipeline 2 initialized with Cluster 2\n\n";
+
+// 3. Invalid: CrossoverObject fails both clusters completely!
+echo "Attempting to bind CrossoverObject (Countable & Stringable)...\n";
+/** @var StreamPipeline<CrossoverObject> */
+$badPipeline = new StreamPipeline(new CrossoverObject());
+```
+
+</TypePHPSnippet>
+
+If an object satisfies `Countable & ArrayAccess` OR satisfies `Iterator & Stringable`, it passes. An object that only satisfies `Countable & Stringable` (cross-over without completing either branch) is strictly rejected.
+
+---
+
 ## Scalar & Array Shape Upper Bounds on Classes
 
-Generic parameters (`T`) are not limited to object classes. You can bind class templates to refined scalars (`positive-int`, `non-empty-string`) or complex array shapes (`array{id: positive-int}`):
+Generic parameters (`T`) are not limited to object classes. You can bind class templates to refined scalars (`positive-int`, `non-empty-string`), int ranges, or complex array shapes (`array{id: positive-int}`):
 
 <TypePHPSnippet title="Scalar & Shape Upper Bounds" default-view="source">
 

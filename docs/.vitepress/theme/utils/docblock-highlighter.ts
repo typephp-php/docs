@@ -7,7 +7,7 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#39;');
 }
 
-const TYPE_WORDS_REGEX = /\b(key-of|value-of|int-mask-of|int-mask|int|string|bool|boolean|float|double|positive-int|negative-int|non-positive-int|non-negative-int|non-zero-int|unsigned-int|positive-float|negative-float|non-empty-string|numeric-string|lowercase-string|uppercase-string|non-empty-lowercase-string|non-empty-uppercase-string|class-string|interface-string|trait-string|enum-string|callable-string|literal-string|truthy-string|array-key|array|list|non-empty-array|non-empty-list|object|callable|pure-callable|iterable|resource|null|true|false|mixed|void|never|self|static|\$this|[A-Z][a-zA-Z0-9_]*)\b/g;
+const TYPE_WORDS_REGEX = /\b(stdClass|key-of|value-of|int-mask-of|int-mask|int|string|bool|boolean|float|double|positive-int|negative-int|non-positive-int|non-negative-int|non-zero-int|unsigned-int|positive-float|negative-float|non-empty-string|numeric-string|lowercase-string|uppercase-string|non-empty-lowercase-string|non-empty-uppercase-string|class-string|interface-string|trait-string|enum-string|callable-string|literal-string|truthy-string|array-key|array|list|non-empty-array|non-empty-list|object|static-closure|static-Closure|pure-closure|pure-Closure|pure-callable|callable|closure|iterable|resource|null|true|false|mixed|void|never|self|static|\$this|[A-Z][a-zA-Z0-9_]*)\b/g;
 
 const TAG_REGEX = /(@(?:phpstan-|psalm-)?(?:param(?:-out)?|return|var|template(?:-covariant|-contravariant)?|self-out|this-out|property(?:-read|-write)?|method|extends|implements|use|type|import-type|throws)\b)/;
 
@@ -28,6 +28,32 @@ function addToken(tokens: Token[], from: number, to: number, cls: string): boole
 
   tokens.push({ from, to, cls });
   return true;
+}
+
+function findOuterVariable(text: string): { index: number; name: string } | null {
+  let parenDepth = 0;
+  let braceDepth = 0;
+  let angleDepth = 0;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '(') parenDepth++;
+    else if (ch === ')') parenDepth = Math.max(0, parenDepth - 1);
+    else if (ch === '{') braceDepth++;
+    else if (ch === '}') braceDepth = Math.max(0, braceDepth - 1);
+    else if (ch === '<') angleDepth++;
+    else if (ch === '>') angleDepth = Math.max(0, angleDepth - 1);
+    else if (ch === '$' && parenDepth === 0 && braceDepth === 0 && angleDepth === 0) {
+      const match = /^\$([a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)/.exec(text.slice(i));
+      if (match) {
+        if (match[1] === 'this') {
+          continue;
+        }
+        return { index: i, name: match[0] };
+      }
+    }
+  }
+  return null;
 }
 
 function tokenizeTypeZone(offset: number, text: string, tokens: Token[]): void {
@@ -81,6 +107,14 @@ function tokenizeTypeZone(offset: number, text: string, tokens: Token[]): void {
     addToken(tokens, offset + nm.index, offset + nm.index + nm[0].length, 'tok-number');
   }
 
+  const varRegex = /\$([a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)/g;
+  let vm: RegExpExecArray | null;
+  while ((vm = varRegex.exec(text)) !== null) {
+    if (vm[1] !== 'this') {
+      addToken(tokens, offset + vm.index, offset + vm.index + vm[0].length, 'tok-phpdoc-var');
+    }
+  }
+
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     const pos = offset + i;
@@ -106,6 +140,56 @@ function tokenizeTypeZone(offset: number, text: string, tokens: Token[]): void {
   }
 }
 
+function processMethodDocblock(
+  line: string,
+  afterTagOffset: number,
+  afterTagText: string,
+  tokens: Token[]
+): void {
+  let searchOffset = 0;
+  const staticMatch = /^\s+(static)\b/.exec(afterTagText);
+  if (staticMatch) {
+    const staticPos = afterTagText.indexOf('static');
+    addToken(tokens, afterTagOffset + staticPos, afterTagOffset + staticPos + 6, 'tok-keyword');
+    searchOffset = staticPos + 6;
+  }
+
+  const methodRegex = /\b([a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)\s*\(/g;
+  methodRegex.lastIndex = searchOffset;
+  let m: RegExpExecArray | null;
+  let targetMethod: { name: string; index: number } | null = null;
+
+  while ((m = methodRegex.exec(afterTagText)) !== null) {
+    if (m[1] !== 'callable' && m[1] !== 'Closure' && m[1] !== 'array' && m[1] !== 'list') {
+      targetMethod = { name: m[1], index: m.index };
+    }
+  }
+
+  if (!targetMethod) {
+    tokenizeTypeZone(afterTagOffset, afterTagText, tokens);
+    return;
+  }
+
+  const returnTypeZone = afterTagText.slice(searchOffset, targetMethod.index);
+  if (returnTypeZone.trim().length > 0) {
+    tokenizeTypeZone(afterTagOffset + searchOffset, returnTypeZone, tokens);
+  }
+
+  const methodFrom = afterTagOffset + targetMethod.index;
+  const methodTo = methodFrom + targetMethod.name.length;
+  addToken(tokens, methodFrom, methodTo, 'tok-fn');
+
+  const openParenIndex = afterTagText.indexOf('(', targetMethod.index);
+  if (openParenIndex !== -1) {
+    const closeParenIndex = afterTagText.lastIndexOf(')');
+    const paramsEnd = closeParenIndex !== -1 ? closeParenIndex : afterTagText.length;
+    const paramsText = afterTagText.slice(openParenIndex + 1, paramsEnd);
+    const paramsOffset = afterTagOffset + openParenIndex + 1;
+
+    tokenizeTypeZone(paramsOffset, paramsText, tokens);
+  }
+}
+
 function highlightDocblock(comment: string): string {
   const lines = comment.split('\n');
   const state = { braceDepth: 0, angleDepth: 0 };
@@ -126,18 +210,39 @@ function highlightDocblock(comment: string): string {
 
     if (tagMatch) {
       addToken(tokens, tagMatch.index, tagMatch.index + tagMatch[0].length, 'tok-phpdoc-tag');
-      typeZoneFrom = tagMatch.index + tagMatch[0].length;
+      const afterTagOffset = tagMatch.index + tagMatch[0].length;
+      const afterTagText = line.slice(afterTagOffset);
+      const tagName = tagMatch[0].replace(/^@(phpstan-|psalm-)?/, '');
 
-      const afterTagText = line.slice(typeZoneFrom);
-      const varMatch = /(\$[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)/.exec(afterTagText);
-      if (varMatch && !afterTagText.includes(':')) {
-        const varFrom = typeZoneFrom + varMatch.index;
-        const varTo = varFrom + varMatch[0].length;
-        addToken(tokens, varFrom, varTo, 'tok-phpdoc-var');
-        typeZoneTo = varFrom;
+      if (tagName === 'method') {
+        processMethodDocblock(line, afterTagOffset, afterTagText, tokens);
+      } else if (tagName.includes('param') || tagName === 'var' || tagName.includes('property')) {
+        const outerVar = findOuterVariable(afterTagText);
+        if (outerVar) {
+          const varFrom = afterTagOffset + outerVar.index;
+          const varTo = varFrom + outerVar.name.length;
+          addToken(tokens, varFrom, varTo, 'tok-phpdoc-var');
+
+          if (outerVar.index >= 3 && afterTagText.slice(outerVar.index - 3, outerVar.index) === '...') {
+            addToken(tokens, varFrom - 3, varFrom, 'tok-phpdoc-operator');
+            typeZoneFrom = afterTagOffset;
+            typeZoneTo = varFrom - 3;
+          } else if (outerVar.index === 0 || /^\s*$/.test(afterTagText.slice(0, outerVar.index))) {
+            typeZoneFrom = varTo;
+            typeZoneTo = line.length;
+          } else {
+            typeZoneFrom = afterTagOffset;
+            typeZoneTo = varFrom;
+          }
+        } else {
+          typeZoneFrom = afterTagOffset;
+          typeZoneTo = line.length;
+        }
+      } else {
+        typeZoneFrom = afterTagOffset;
+        typeZoneTo = line.length;
       }
     } else if (isContinuationLine || state.braceDepth > 0 || state.angleDepth > 0) {
-      // Support continuation lines (e.g. "| array{type: 'hover', ...}")
       const prefixMatch = /^(\s*\*?\s*(?:[|&]\s*)?)/.exec(line);
       typeZoneFrom = prefixMatch ? prefixMatch[0].length : 0;
       typeZoneTo = line.length;
@@ -154,7 +259,6 @@ function highlightDocblock(comment: string): string {
       tokenizeTypeZone(typeZoneFrom, typeText, tokens);
     }
 
-    // Update depths for multi-line support
     for (const ch of line) {
       if (ch === '{') state.braceDepth++;
       else if (ch === '}') state.braceDepth = Math.max(0, state.braceDepth - 1);
@@ -166,10 +270,8 @@ function highlightDocblock(comment: string): string {
       return `<span class="tok-comment">${escapeHtml(line)}</span>`;
     }
 
-    // Sort tokens strictly in linear order
     tokens.sort((a, b) => a.from - b.from || a.to - b.to);
 
-    // Build HTML safely without duplicate characters
     let html = '';
     let lastPos = 0;
 
@@ -196,9 +298,9 @@ export function highlightPhp(code: string): string {
       `('(?:\\\\.|[^'\\\\])*'|"(?:\\\\.|[^"\\\\])*")`,
       '(<\\?(?:php|=)?|\\?>)',
       '(\\$[a-zA-Z_\\x7f-\\xff][a-zA-Z0-9_\\x7f-\\xff]*)',
-      '(\\b[a-zA-Z_\\x7f-\\xff][a-zA-Z0-9_\\x7f-\\xff]*(?=\\s*\\())',
       '(\\b(?:declare|use|class|interface|trait|enum|extends|implements|public|protected|private|static|readonly|function|fn|return|new|if|else|elseif|isset|empty|throw|try|catch|finally|match|switch|case|break|continue|foreach|for|while|as|yield|echo|print)\\b)',
-      '(\\\\?[A-Z][a-zA-Z0-9_]*(?:\\\\[a-zA-Z0-9_]+)*\\b|\\b(?:key-of|value-of|int-mask-of|int-mask|int|string|bool|boolean|float|double|array|void|never|mixed|object|callable|iterable|true|false|null|self|parent|PHP_EOL|strict_types)\\b)',
+      '(\\bstdClass\\b|(?<![a-zA-Z0-9_])\\\\[a-zA-Z_\\x7f-\\xff][a-zA-Z0-9_\\x7f-\\xff]*(?:\\\\[a-zA-Z0-9_\\x7f-\\xff]+)*\\b|\\b[A-Z][a-zA-Z0-9_]*(?:\\\\[a-zA-Z0-9_]+)*\\b|\\b(?:key-of|value-of|int-mask-of|int-mask|int|string|bool|boolean|float|double|array|void|never|mixed|object|callable|iterable|true|false|null|self|parent|PHP_EOL|strict_types)\\b)',
+      '(\\b[a-zA-Z_\\x7f-\\xff][a-zA-Z0-9_\\x7f-\\xff]*(?=\\s*\\())',
       '(\\b\\d+(?:\\.\\d+)?\\b)',
     ].join('|'),
     'g'
@@ -213,7 +315,7 @@ export function highlightPhp(code: string): string {
       html += escapeHtml(code.slice(lastIndex, match.index));
     }
 
-    const [full, comment, str, phpTag, variable, fnCall, keyword, typeOrClass, number] = match;
+    const [full, comment, str, phpTag, variable, keyword, typeOrClass, fnCall, number] = match;
 
     if (comment) {
       if (comment.startsWith('/**')) {
@@ -227,12 +329,12 @@ export function highlightPhp(code: string): string {
       html += `<span class="tok-php">${escapeHtml(phpTag)}</span>`;
     } else if (variable) {
       html += `<span class="tok-var">${escapeHtml(variable)}</span>`;
-    } else if (fnCall) {
-      html += `<span class="tok-fn">${escapeHtml(fnCall)}</span>`;
     } else if (keyword) {
       html += `<span class="tok-keyword">${escapeHtml(keyword)}</span>`;
     } else if (typeOrClass) {
       html += `<span class="tok-type">${escapeHtml(typeOrClass)}</span>`;
+    } else if (fnCall) {
+      html += `<span class="tok-fn">${escapeHtml(fnCall)}</span>`;
     } else if (number) {
       html += `<span class="tok-number">${escapeHtml(number)}</span>`;
     } else {
