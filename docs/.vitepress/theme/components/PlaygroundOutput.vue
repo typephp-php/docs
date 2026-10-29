@@ -75,8 +75,6 @@
             0
           </span>
         </button>
-
-        <span v-if="duration && activeTab === 'console'" class="duration-badge">{{ duration }}ms</span>
       </div>
 
       <!-- Header Right Action Tools -->
@@ -297,7 +295,7 @@ const props = withDefaults(defineProps<{
   report?: AuditReportDocument | null;
   isReportModeActive?: boolean;
   reportViewMode?: 'cards' | 'json';
-  mode?: 'drawer' | 'embedded'; // <-- Added mode
+  mode?: 'drawer' | 'embedded'; 
 }>(), {
   position: 'bottom',
   report: null,
@@ -311,7 +309,7 @@ const emit = defineEmits<{
   (e: 'clear-report'): void;
   (e: 'toggle-position'): void;
   (e: 'update:reportViewMode', mode: 'cards' | 'json'): void;
-  (e: 'close'): void; // <-- Added close emit
+  (e: 'close'): void; 
 }>();
 
 const activeTab = ref<'console' | 'report'>('console');
