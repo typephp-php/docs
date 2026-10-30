@@ -49,8 +49,17 @@ html.dark .vp-doc div[class*='language-php'] span[style*='color:#E06C75'] {
   font-style: normal !important;
 }
 
-html.dark .tok-phpdoc-operator {
+html.dark .tok-phpdoc-operator,
+html.dark .cm-phpdoc-operator {
   color: #abb2bf !important;
+}
+
+html.dark .cm-phpdoc-string {
+  color: #98c379 !important;
+}
+
+html.dark .cm-phpdoc-number {
+  color: #d19a66 !important;
 }
 
 html.dark .tok-phpdoc-comment,
@@ -68,7 +77,15 @@ html.dark .tok-string { color: #98c379 !important; }
 html.dark .tok-number { color: #d19a66 !important; }
 html.dark .tok-type,
 html.dark .cm-php-class { color: #e5c07b !important; font-weight: 600 !important; }
-html.dark .cm-php-this { color: #c678dd !important; font-style: italic !important; font-weight: 600 !important; }
+
+html.dark .tok-php-this,
+html.dark .tok-phpdoc-this,
+html.dark .cm-php-this { 
+  color: #c678dd !important; 
+  font-style: italic !important; 
+  font-weight: 600 !important; 
+}
+
 html.dark .cm-php-self-static { color: #e5c07b !important; font-style: italic !important; font-weight: 600 !important; }
 html.dark .cm-php-property { color: #56b6c2 !important; font-weight: 500 !important; }
 
@@ -122,8 +139,17 @@ html:not(.dark) .vp-doc div[class*='language-php'] .token.variable {
   font-style: normal !important;
 }
 
-html:not(.dark) .tok-phpdoc-operator {
+html:not(.dark) .tok-phpdoc-operator,
+html:not(.dark) .cm-phpdoc-operator {
   color: #57606a !important;
+}
+
+html:not(.dark) .cm-phpdoc-string {
+  color: #22863a !important;
+}
+
+html:not(.dark) .cm-phpdoc-number {
+  color: #986801 !important;
 }
 
 html:not(.dark) .tok-phpdoc-comment,
@@ -141,6 +167,28 @@ html:not(.dark) .tok-string { color: #22863a !important; }
 html:not(.dark) .tok-number { color: #986801 !important; }
 html:not(.dark) .tok-type,
 html:not(.dark) .cm-php-class { color: #c18401 !important; font-weight: 600 !important; }
-html:not(.dark) .cm-php-this { color: #a626a4 !important; font-style: italic !important; font-weight: 600 !important; }
+
+html:not(.dark) .tok-php-this,
+html:not(.dark) .tok-phpdoc-this,
+html:not(.dark) .cm-php-this { 
+  color: #a626a4 !important; 
+  font-style: italic !important; 
+  font-weight: 600 !important; 
+}
+
 html:not(.dark) .cm-php-self-static { color: #c18401 !important; font-style: italic !important; font-weight: 600 !important; }
 html:not(.dark) .cm-php-property { color: #0184bc !important; font-weight: 500 !important; }
+
+html.dark .tok-phpdoc-primitive,
+html.dark .cm-phpdoc-primitive {
+  color: #56b6c2 !important;
+  font-weight: 600 !important;
+  font-style: normal !important;
+}
+
+html:not(.dark) .tok-phpdoc-primitive,
+html:not(.dark) .cm-phpdoc-primitive {
+  color: #0184bc !important;
+  font-weight: 600 !important;
+  font-style: normal !important;
+}

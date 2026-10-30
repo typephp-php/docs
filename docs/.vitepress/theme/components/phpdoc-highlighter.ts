@@ -3,6 +3,7 @@ import { RangeSetBuilder } from '@codemirror/state';
 
 const tagDeco = Decoration.mark({ class: 'cm-phpdoc-tag' });
 const typeDeco = Decoration.mark({ class: 'cm-phpdoc-type' });
+const primitiveDeco = Decoration.mark({ class: 'cm-phpdoc-primitive' });
 const genericTypeDeco = Decoration.mark({ class: 'cm-phpdoc-generic-type' });
 const bracketDeco = Decoration.mark({ class: 'cm-phpdoc-generic-bracket' });
 const varianceDeco = Decoration.mark({ class: 'cm-phpdoc-variance' });
@@ -24,7 +25,18 @@ interface LineToken {
   deco: Decoration;
 }
 
-const TYPE_WORDS_REGEX = /\b(stdClass|key-of|value-of|int-mask-of|int-mask|int|string|bool|boolean|float|double|positive-int|negative-int|non-positive-int|non-negative-int|non-zero-int|unsigned-int|positive-float|negative-float|non-empty-string|numeric-string|lowercase-string|uppercase-string|non-empty-lowercase-string|non-empty-uppercase-string|class-string|interface-string|trait-string|enum-string|callable-string|literal-string|truthy-string|array-key|array|list|non-empty-array|non-empty-list|object|static-closure|static-Closure|pure-closure|pure-Closure|pure-callable|callable|closure|iterable|resource|null|true|false|mixed|void|never|self|static|\$this|[A-Z][a-zA-Z0-9_]*)\b/g;
+const PRIMITIVES_SET = new Set([
+  'int', 'integer', 'string', 'bool', 'boolean', 'float', 'double',
+  'mixed', 'void', 'never', 'resource', 'callable', 'pure-callable',
+  'closure', 'Closure', 'pure-closure', 'pure-Closure', 'static-closure', 'static-Closure',
+  'null', 'true', 'false', 'iterable'
+]);
+
+const CONTAINERS_SET = new Set([
+  'array', 'list', 'non-empty-array', 'non-empty-list', 'object'
+]);
+
+const TYPE_WORDS_REGEX = /\b(stdClass|key-of|value-of|int-mask-of|int-mask|int|string|bool|boolean|float|double|positive-int|negative-int|non-positive-int|non-negative-int|non-zero-int|unsigned-int|positive-float|negative-float|non-empty-string|numeric-string|lowercase-string|uppercase-string|non-empty-lowercase-string|non-empty-uppercase-string|class-string|interface-string|trait-string|enum-string|callable-string|literal-string|truthy-string|array-key|array|list|non-empty-array|non-empty-list|object|static-closure|static-Closure|pure-closure|pure-Closure|pure-callable|callable|closure|iterable|resource|null|true|false|mixed|void|never|self|static|[A-Z][a-zA-Z0-9_]*)\b/g;
 
 const TAG_REGEX = /@(phpstan-|psalm-)?(param(?:-out)?|return|var|template(?:-covariant|-contravariant)?|self-out|this-out|property(?:-read|-write)?|method|extends|implements|use|type|import-type|throws)\b/;
 
@@ -116,47 +128,12 @@ function tokenizeTypeZone(startOffset: number, typeText: string, lineTokens: Lin
     });
   }
 
-  const genericRegex = /<([^>]+)>/g;
-  let match: RegExpExecArray | null;
-  const genericRanges: Array<{ from: number; to: number }> = [];
-
-  while ((match = genericRegex.exec(typeText)) !== null) {
-    const openPos = startOffset + match.index;
-    const closePos = openPos + match[0].length - 1;
-    const inner = match[1];
-
-    genericRanges.push({ from: openPos, to: closePos + 1 });
-    lineTokens.push({ from: openPos, to: openPos + 1, deco: bracketDeco });
-    lineTokens.push({ from: closePos, to: closePos + 1, deco: bracketDeco });
-
-    const varModifierRegex = /\b(covariant|contravariant|of)\b/g;
-    let vm: RegExpExecArray | null;
-    while ((vm = varModifierRegex.exec(inner)) !== null) {
-      lineTokens.push({
-        from: openPos + 1 + vm.index,
-        to: openPos + 1 + vm.index + vm[0].length,
-        deco: varianceDeco,
-      });
-    }
-
-    const innerWordRegex = /\b[a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff\-]*\b/g;
-    let im: RegExpExecArray | null;
-    while ((im = innerWordRegex.exec(inner)) !== null) {
-      if (im[0] !== 'covariant' && im[0] !== 'contravariant' && im[0] !== 'of') {
-        lineTokens.push({
-          from: openPos + 1 + im.index,
-          to: openPos + 1 + im.index + im[0].length,
-          deco: genericTypeDeco,
-        });
-      }
-    }
-  }
-
   const shapeKeyRegex = /\b([a-zA-Z0-9_\-]+)\s*\??\s*:/g;
-  while ((match = shapeKeyRegex.exec(typeText)) !== null) {
+  let skm: RegExpExecArray | null;
+  while ((skm = shapeKeyRegex.exec(typeText)) !== null) {
     lineTokens.push({
-      from: startOffset + match.index,
-      to: startOffset + match.index + match[1].length,
+      from: startOffset + skm.index,
+      to: startOffset + skm.index + skm[1].length,
       deco: shapeKeyDeco,
     });
   }
@@ -174,7 +151,13 @@ function tokenizeTypeZone(startOffset: number, typeText: string, lineTokens: Lin
   const varRegex = /\$([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*)/g;
   let vrm: RegExpExecArray | null;
   while ((vrm = varRegex.exec(typeText)) !== null) {
-    if (vrm[1] !== 'this') {
+    if (vrm[0] === '$this') {
+      lineTokens.push({
+        from: startOffset + vrm.index,
+        to: startOffset + vrm.index + 5,
+        deco: thisDeco,
+      });
+    } else {
       lineTokens.push({
         from: startOffset + vrm.index,
         to: startOffset + vrm.index + vrm[0].length,
@@ -186,29 +169,59 @@ function tokenizeTypeZone(startOffset: number, typeText: string, lineTokens: Lin
   for (let i = 0; i < typeText.length; i++) {
     const ch = typeText[i];
     const pos = startOffset + i;
+    const prev = i > 0 ? typeText[i - 1] : '';
+
     if (ch === '{' || ch === '}') {
       lineTokens.push({ from: pos, to: pos + 1, deco: bracketDeco });
+    } else if (ch === '<') {
+      lineTokens.push({ from: pos, to: pos + 1, deco: bracketDeco });
+    } else if (ch === '>') {
+      if (prev !== '-' && prev !== '=') {
+        lineTokens.push({ from: pos, to: pos + 1, deco: bracketDeco });
+      }
     } else if (ch === '|' || ch === '&') {
       lineTokens.push({ from: pos, to: pos + 1, deco: operatorDeco });
     } else if (ch === '.' && typeText.slice(i, i + 3) === '...') {
       lineTokens.push({ from: pos, to: pos + 3, deco: operatorDeco });
       i += 2;
+    } else if (ch === ',' || ch === ':') {
+      lineTokens.push({ from: pos, to: pos + 1, deco: operatorDeco });
     }
   }
 
-  let typeMatch: RegExpExecArray | null;
+  const varModifierRegex = /\b(covariant|contravariant|of)\b/g;
+  let vmm: RegExpExecArray | null;
+  while ((vmm = varModifierRegex.exec(typeText)) !== null) {
+    lineTokens.push({
+      from: startOffset + vmm.index,
+      to: startOffset + vmm.index + vmm[0].length,
+      deco: varianceDeco,
+    });
+  }
+
   const typeScanner = new RegExp(TYPE_WORDS_REGEX.source, 'g');
+  let tm: RegExpExecArray | null;
+  while ((tm = typeScanner.exec(typeText)) !== null) {
+    const word = tm[0];
+    const matchFrom = startOffset + tm.index;
+    const matchTo = matchFrom + word.length;
 
-  while ((typeMatch = typeScanner.exec(typeText)) !== null) {
-    const matchFrom = startOffset + typeMatch.index;
-    const matchTo = matchFrom + typeMatch[0].length;
-
-    const isInsideGeneric = genericRanges.some((r) => matchFrom >= r.from && matchTo <= r.to);
-    if (!isInsideGeneric) {
-      const isRefinement = typeMatch[0].includes('-') && !typeMatch[0].endsWith('-of');
-      const deco = isRefinement ? genericTypeDeco : typeDeco;
-      lineTokens.push({ from: matchFrom, to: matchTo, deco }); 
+    if (word === 'covariant' || word === 'contravariant' || word === 'of') {
+      continue;
     }
+
+    let deco = typeDeco;
+    if (CONTAINERS_SET.has(word)) {
+      deco = typeDeco;
+    } else if (PRIMITIVES_SET.has(word)) {
+      deco = primitiveDeco;
+    } else if (word.includes('-') && !word.endsWith('-of')) {
+      deco = genericTypeDeco;
+    } else if (/^(?:[A-Z]|T[A-Z][a-zA-Z0-9_]*)$/.test(word)) {
+      deco = genericTypeDeco;
+    }
+
+    lineTokens.push({ from: matchFrom, to: matchTo, deco }); 
   }
 }
 
@@ -309,7 +322,7 @@ function tokenizePhpCode(lineFrom: number, text: string, lineTokens: LineToken[]
     }
   }
 
-  const thisRegex = /\b\$this\b/g;
+  const thisRegex = /(?<![a-zA-Z0-9_])\$this\b/g;
   while ((match = thisRegex.exec(text)) !== null) {
     const from = lineFrom + match.index;
     const to = from + 5;

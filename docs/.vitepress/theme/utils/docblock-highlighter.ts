@@ -7,7 +7,18 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#39;');
 }
 
-const TYPE_WORDS_REGEX = /\b(stdClass|key-of|value-of|int-mask-of|int-mask|int|string|bool|boolean|float|double|positive-int|negative-int|non-positive-int|non-negative-int|non-zero-int|unsigned-int|positive-float|negative-float|non-empty-string|numeric-string|lowercase-string|uppercase-string|non-empty-lowercase-string|non-empty-uppercase-string|class-string|interface-string|trait-string|enum-string|callable-string|literal-string|truthy-string|array-key|array|list|non-empty-array|non-empty-list|object|static-closure|static-Closure|pure-closure|pure-Closure|pure-callable|callable|closure|iterable|resource|null|true|false|mixed|void|never|self|static|\$this|[A-Z][a-zA-Z0-9_]*)\b/g;
+const PRIMITIVES_SET = new Set([
+  'int', 'integer', 'string', 'bool', 'boolean', 'float', 'double',
+  'mixed', 'void', 'never', 'resource', 'callable', 'pure-callable',
+  'closure', 'Closure', 'pure-closure', 'pure-Closure', 'static-closure', 'static-Closure',
+  'null', 'true', 'false', 'iterable'
+]);
+
+const CONTAINERS_SET = new Set([
+  'array', 'list', 'non-empty-array', 'non-empty-list', 'object'
+]);
+
+const TYPE_WORDS_REGEX = /\b(stdClass|key-of|value-of|int-mask-of|int-mask|int|string|bool|boolean|float|double|positive-int|negative-int|non-positive-int|non-negative-int|non-zero-int|unsigned-int|positive-float|negative-float|non-empty-string|numeric-string|lowercase-string|uppercase-string|non-empty-lowercase-string|non-empty-uppercase-string|class-string|interface-string|trait-string|enum-string|callable-string|literal-string|truthy-string|array-key|array|list|non-empty-array|non-empty-list|object|static-closure|static-Closure|pure-closure|pure-Closure|pure-callable|callable|closure|iterable|resource|null|true|false|mixed|void|never|self|static|[A-Z][a-zA-Z0-9_]*)\b/g;
 
 const TAG_REGEX = /(@(?:phpstan-|psalm-)?(?:param(?:-out)?|return|var|template(?:-covariant|-contravariant)?|self-out|this-out|property(?:-read|-write)?|method|extends|implements|use|type|import-type|throws)\b)/;
 
@@ -63,33 +74,6 @@ function tokenizeTypeZone(offset: number, text: string, tokens: Token[]): void {
     addToken(tokens, offset + sm.index, offset + sm.index + sm[0].length, 'tok-string');
   }
 
-  const genericRegex = /<([^>]+)>/g;
-  let gm: RegExpExecArray | null;
-  while ((gm = genericRegex.exec(text)) !== null) {
-    const openFrom = offset + gm.index;
-    const closeTo = openFrom + gm[0].length;
-
-    addToken(tokens, openFrom, openFrom + 1, 'tok-phpdoc-bracket');
-    addToken(tokens, closeTo - 1, closeTo, 'tok-phpdoc-bracket');
-
-    const inner = gm[1];
-    const innerOffset = openFrom + 1;
-
-    const varModRegex = /\b(covariant|contravariant|of)\b/g;
-    let vm: RegExpExecArray | null;
-    while ((vm = varModRegex.exec(inner)) !== null) {
-      addToken(tokens, innerOffset + vm.index, innerOffset + vm.index + vm[0].length, 'tok-phpdoc-variance');
-    }
-
-    const innerWordRegex = /\b[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff\-]*\b/g;
-    let im: RegExpExecArray | null;
-    while ((im = innerWordRegex.exec(inner)) !== null) {
-      if (im[0] !== 'covariant' && im[0] !== 'contravariant' && im[0] !== 'of') {
-        addToken(tokens, innerOffset + im.index, innerOffset + im.index + im[0].length, 'tok-phpdoc-generic-type');
-      }
-    }
-  }
-
   const shapeKeyRegex = /\b([a-zA-Z0-9_\-]+)(\s*\??\s*:)/g;
   let skm: RegExpExecArray | null;
   while ((skm = shapeKeyRegex.exec(text)) !== null) {
@@ -110,7 +94,9 @@ function tokenizeTypeZone(offset: number, text: string, tokens: Token[]): void {
   const varRegex = /\$([a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)/g;
   let vm: RegExpExecArray | null;
   while ((vm = varRegex.exec(text)) !== null) {
-    if (vm[1] !== 'this') {
+    if (vm[0] === '$this') {
+      addToken(tokens, offset + vm.index, offset + vm.index + 5, 'tok-php-this');
+    } else {
       addToken(tokens, offset + vm.index, offset + vm.index + vm[0].length, 'tok-phpdoc-var');
     }
   }
@@ -118,25 +104,54 @@ function tokenizeTypeZone(offset: number, text: string, tokens: Token[]): void {
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     const pos = offset + i;
+    const prev = i > 0 ? text[i - 1] : '';
+
     if (ch === '{' || ch === '}') {
       addToken(tokens, pos, pos + 1, 'tok-phpdoc-bracket');
+    } else if (ch === '<') {
+      addToken(tokens, pos, pos + 1, 'tok-phpdoc-bracket');
+    } else if (ch === '>') {
+      if (prev !== '-' && prev !== '=') {
+        addToken(tokens, pos, pos + 1, 'tok-phpdoc-bracket');
+      }
     } else if (ch === '|' || ch === '&') {
       addToken(tokens, pos, pos + 1, 'tok-phpdoc-operator');
     } else if (ch === '.' && text.slice(i, i + 3) === '...') {
       addToken(tokens, pos, pos + 3, 'tok-phpdoc-operator');
       i += 2;
+    } else if (ch === ',' || ch === ':') {
+      addToken(tokens, pos, pos + 1, 'tok-phpdoc-operator');
     }
+  }
+
+  const varModRegex = /\b(covariant|contravariant|of)\b/g;
+  let vmm: RegExpExecArray | null;
+  while ((vmm = varModRegex.exec(text)) !== null) {
+    addToken(tokens, offset + vmm.index, offset + vmm.index + vmm[0].length, 'tok-phpdoc-variance');
   }
 
   const typeRegex = new RegExp(TYPE_WORDS_REGEX.source, 'g');
   let tm: RegExpExecArray | null;
   while ((tm = typeRegex.exec(text)) !== null) {
+    const word = tm[0];
     const from = offset + tm.index;
-    const to = from + tm[0].length;
-    const isRefinement = tm[0].includes('-') && !tm[0].endsWith('-of');
-    const tokenClass = isRefinement ? 'tok-phpdoc-generic-type' : 'tok-phpdoc-type';
+    const to = from + word.length;
 
-    addToken(tokens, from, to, tokenClass);
+    if (word === 'covariant' || word === 'contravariant' || word === 'of') {
+      continue;
+    }
+
+    if (CONTAINERS_SET.has(word)) {
+      addToken(tokens, from, to, 'tok-phpdoc-type');
+    } else if (PRIMITIVES_SET.has(word)) {
+      addToken(tokens, from, to, 'tok-phpdoc-primitive');
+    } else if (word.includes('-') && !word.endsWith('-of')) {
+      addToken(tokens, from, to, 'tok-phpdoc-generic-type');
+    } else if (/^(?:[A-Z]|T[A-Z][a-zA-Z0-9_]*)$/.test(word)) {
+      addToken(tokens, from, to, 'tok-phpdoc-generic-type');
+    } else {
+      addToken(tokens, from, to, 'tok-phpdoc-type');
+    }
   }
 }
 
@@ -249,7 +264,11 @@ function highlightDocblock(comment: string): string {
 
       const varMatch = /(\$[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*)$/.exec(line);
       if (varMatch) {
-        addToken(tokens, varMatch.index, varMatch.index + varMatch[0].length, 'tok-phpdoc-var');
+        if (varMatch[0] === '$this') {
+          addToken(tokens, varMatch.index, varMatch.index + 5, 'tok-php-this');
+        } else {
+          addToken(tokens, varMatch.index, varMatch.index + varMatch[0].length, 'tok-phpdoc-var');
+        }
         typeZoneTo = varMatch.index;
       }
     }
@@ -328,7 +347,11 @@ export function highlightPhp(code: string): string {
     } else if (phpTag) {
       html += `<span class="tok-php">${escapeHtml(phpTag)}</span>`;
     } else if (variable) {
-      html += `<span class="tok-var">${escapeHtml(variable)}</span>`;
+      if (variable === '$this') {
+        html += `<span class="tok-php-this">${escapeHtml(variable)}</span>`;
+      } else {
+        html += `<span class="tok-var">${escapeHtml(variable)}</span>`;
+      }
     } else if (keyword) {
       html += `<span class="tok-keyword">${escapeHtml(keyword)}</span>`;
     } else if (typeOrClass) {

@@ -63,6 +63,7 @@ const baseTheme = EditorView.theme({
   '.cm-php-this, .cm-php-this *': { color: '#c678dd !important', fontStyle: 'italic !important', fontWeight: '600 !important' },
   '.cm-php-self-static, .cm-php-self-static *': { color: '#e5c07b !important', fontStyle: 'italic !important', fontWeight: '600 !important' },
   '.cm-php-property, .cm-php-property *': { color: '#56b6c2 !important', fontWeight: '500 !important' },
+  '.cm-phpdoc-primitive, .cm-phpdoc-primitive *': { color: '#56b6c2 !important', fontWeight: '600 !important', fontStyle: 'normal !important' },
 });
 
 onMounted(() => {
@@ -311,6 +312,12 @@ defineExpose({
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-php-property) * {
   color: #0184bc !important;
   font-weight: 500 !important;
+}
+
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-primitive),
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-primitive) * {
+  color: #0184bc !important;
+  font-weight: 600 !important;
 }
 
 @media (max-width: 768px) {

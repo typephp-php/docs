@@ -95,7 +95,7 @@ Hybrid mode provides constant-time $O(1)$ validation for collections exceeding 1
 
 ### Benchmark: Full $O(n)$ vs. Hybrid $O(1)$ Sampling
 
-The snippet below generates a list of 15,000 positive integers and measures validation time using `microtime(true)`:
+The snippet below generates a list of 1 million positive integers and measures validation time using `microtime(true)`:
 
 <TypePHPSnippet 
   title="Array Validation Benchmark (Full vs. Hybrid)" 
@@ -113,8 +113,8 @@ declare(strict_types=1);
  */
 function validateLargeDataset(array $dataset): void {}
 
-// Generate 15,000 positive integers
-$data = range(1, 15000);
+// Generate 1 million positive integers
+$data = range(1, 1000000);
 
 echo "Starting validation of " . count($data) . " items...\n";
 
