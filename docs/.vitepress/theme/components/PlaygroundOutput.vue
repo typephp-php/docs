@@ -982,6 +982,12 @@ defineExpose({
   border-left-color: #d97706;
 }
 
+:root:not(.dark) .stderr-stream.is-error {
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.08);
+  border-left-color: #dc2626;
+}
+
 .empty-state {
   display: flex;
   align-items: center;

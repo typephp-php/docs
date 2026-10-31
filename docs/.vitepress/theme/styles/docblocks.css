@@ -42,10 +42,11 @@ html.dark .cm-phpdoc-variance {
 html.dark .tok-phpdoc-var,
 html.dark .cm-phpdoc-var,
 html.dark .tok-var,
+html.dark .cm-php-property,
 html.dark .vp-doc div[class*='language-php'] .token.variable,
-html.dark .vp-doc div[class*='language-php'] span[style*='color:#E06C75'] {
-  color: #e06c75 !important;
-  font-weight: 600 !important;
+html.dark .vp-doc div[class*='language-php'] .token.property {
+  color: #cbd3dd !important;
+  font-weight: 500 !important;
   font-style: normal !important;
 }
 
@@ -133,9 +134,11 @@ html:not(.dark) .cm-phpdoc-variance {
 html:not(.dark) .tok-phpdoc-var,
 html:not(.dark) .cm-phpdoc-var,
 html:not(.dark) .tok-var,
-html:not(.dark) .vp-doc div[class*='language-php'] .token.variable {
-  color: #e45649 !important;
-  font-weight: 600 !important;
+html:not(.dark) .cm-php-property,
+html:not(.dark) .vp-doc div[class*='language-php'] .token.variable,
+html:not(.dark) .vp-doc div[class*='language-php'] .token.property {
+  color: #1d2023 !important;
+  font-weight: 500 !important;
   font-style: normal !important;
 }
 

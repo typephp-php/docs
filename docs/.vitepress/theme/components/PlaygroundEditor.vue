@@ -12,7 +12,7 @@ import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { EditorView, basicSetup } from 'codemirror';
 import { EditorState, Compartment, Prec } from '@codemirror/state';
 import { php } from '@codemirror/lang-php';
-import { oneDark } from '@codemirror/theme-one-dark';
+import { oneDark } from './theme-one-dark';
 import { oneLight } from './theme-one-light';
 import { keymap } from '@codemirror/view';
 import { useData } from 'vitepress';
@@ -41,8 +41,8 @@ const { isDark } = useData();
 
 const baseTheme = EditorView.theme({
   '&': { height: '100%', fontSize: 'var(--playground-font-size, 13.5px)' },
-  '.cm-scroller': { 
-    overflow: 'auto', 
+  '.cm-scroller': {
+    overflow: 'auto',
     fontFamily: 'var(--vp-font-family-mono)',
     scrollbarWidth: 'thin',
     scrollbarColor: 'var(--vp-c-divider) transparent'
@@ -52,7 +52,7 @@ const baseTheme = EditorView.theme({
   '.cm-phpdoc-generic-bracket, .cm-phpdoc-generic-bracket *': { color: '#e06c75 !important', fontWeight: '700 !important', fontStyle: 'normal !important' },
   '.cm-phpdoc-generic-type, .cm-phpdoc-generic-type *': { color: '#56b6c2 !important', fontStyle: 'italic !important', fontWeight: '600 !important' },
   '.cm-phpdoc-variance, .cm-phpdoc-variance *': { color: '#d19a66 !important', fontStyle: 'italic !important' },
-  '.cm-phpdoc-var, .cm-phpdoc-var *': { color: '#e06c75 !important', fontWeight: '600 !important', fontStyle: 'normal !important' },
+  '.cm-phpdoc-var, .cm-phpdoc-var *': { color: '#cbd3dd !important', fontWeight: '500 !important', fontStyle: 'normal !important' },
   '.cm-phpdoc-shape-key, .cm-phpdoc-shape-key *': { color: '#61afef !important', fontWeight: '600 !important', fontStyle: 'normal !important' },
   '.cm-phpdoc-operator, .cm-phpdoc-operator *': { color: '#abb2bf !important' },
   '.cm-phpdoc-string, .cm-phpdoc-string *': { color: '#98c379 !important' },
@@ -62,7 +62,7 @@ const baseTheme = EditorView.theme({
   '.cm-php-func, .cm-php-func *': { color: '#61afef !important' },
   '.cm-php-this, .cm-php-this *': { color: '#c678dd !important', fontStyle: 'italic !important', fontWeight: '600 !important' },
   '.cm-php-self-static, .cm-php-self-static *': { color: '#e5c07b !important', fontStyle: 'italic !important', fontWeight: '600 !important' },
-  '.cm-php-property, .cm-php-property *': { color: '#56b6c2 !important', fontWeight: '500 !important' },
+  '.cm-php-property, .cm-php-property *': { color: '#cbd3dd !important', fontWeight: '500 !important' },
   '.cm-phpdoc-primitive, .cm-phpdoc-primitive *': { color: '#56b6c2 !important', fontWeight: '600 !important', fontStyle: 'normal !important' },
 });
 
@@ -256,8 +256,8 @@ defineExpose({
 
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-var),
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-var) * {
-  color: #e45649 !important;
-  font-weight: 600 !important;
+  color: #141619 !important;
+  font-weight: 500 !important;
 }
 
 :root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-shape-key),
@@ -314,10 +314,10 @@ defineExpose({
   font-weight: 500 !important;
 }
 
-:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-primitive),
-:root:not(.dark) .playground-editor-wrapper :deep(.cm-phpdoc-primitive) * {
-  color: #0184bc !important;
-  font-weight: 600 !important;
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-php-property),
+:root:not(.dark) .playground-editor-wrapper :deep(.cm-php-property) * {
+  color: #020202 !important;
+  font-weight: 500 !important;
 }
 
 @media (max-width: 768px) {
