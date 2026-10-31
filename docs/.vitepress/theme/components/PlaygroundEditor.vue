@@ -12,11 +12,11 @@ import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { EditorView, basicSetup } from 'codemirror';
 import { EditorState, Compartment, Prec } from '@codemirror/state';
 import { php } from '@codemirror/lang-php';
-import { oneDark } from './theme-one-dark';
-import { oneLight } from './theme-one-light';
+import { oneDark } from './scripts/theme-one-dark';
+import { oneLight } from './scripts/theme-one-light';
 import { keymap } from '@codemirror/view';
 import { useData } from 'vitepress';
-import { phpdocHighlighter } from './phpdoc-highlighter';
+import { phpdocHighlighter } from './scripts/phpdoc-highlighter';
 import { indentRange } from '@codemirror/language';
 
 const props = withDefaults(defineProps<{
