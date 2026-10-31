@@ -142,6 +142,16 @@
           &times;
         </button>
 
+        <!-- Quick Re-Run Button (Embedded Mode Only) -->
+        <button v-if="mode === 'embedded'" class="console-run-btn" :disabled="isRunning"
+          title="Re-run code" @click="$emit('run')">
+          <span v-if="isRunning" class="spinner-small"></span>
+          <svg v-else viewBox="0 0 24 24" width="10" height="10" fill="currentColor">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+          <span>{{ isRunning ? '...' : 'Run' }}</span>
+        </button>
+
         <!-- Collapse Toggle (Drawer only) -->
         <button v-if="mode === 'drawer'" class="icon-action-btn collapse-toggle-btn"
           :title="isCollapsed ? 'Expand' : 'Collapse'" @click="toggleCollapse">
@@ -295,7 +305,7 @@ const props = withDefaults(defineProps<{
   report?: AuditReportDocument | null;
   isReportModeActive?: boolean;
   reportViewMode?: 'cards' | 'json';
-  mode?: 'drawer' | 'embedded'; 
+  mode?: 'drawer' | 'embedded';
 }>(), {
   position: 'bottom',
   report: null,
@@ -309,7 +319,8 @@ const emit = defineEmits<{
   (e: 'clear-report'): void;
   (e: 'toggle-position'): void;
   (e: 'update:reportViewMode', mode: 'cards' | 'json'): void;
-  (e: 'close'): void; 
+  (e: 'close'): void;
+  (e: 'run'): void;
 }>();
 
 const activeTab = ref<'console' | 'report'>('console');
@@ -1335,5 +1346,40 @@ defineExpose({
     padding: 8px 10px;
     font-size: 11px;
   }
+}
+
+.console-run-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  border-radius: 4px;
+  border: none;
+  background: var(--vp-c-brand-1);
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.console-run-btn:hover:not(:disabled) {
+  background: var(--vp-c-brand-2);
+}
+
+.console-run-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinner-small {
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 </style>

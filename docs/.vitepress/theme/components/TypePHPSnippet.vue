@@ -155,6 +155,7 @@
       :report="report"
       :is-report-mode-active="localConfig.onViolation === 'report'"
       :report-view-mode="snippetReportViewMode"
+      @run="runSnippet"
       @clear="clearConsole"
       @clear-report="report = null"
       @update:report-view-mode="snippetReportViewMode = $event"
