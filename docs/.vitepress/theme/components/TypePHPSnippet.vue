@@ -9,8 +9,7 @@
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
             <polyline points="14 2 14 8 20 8" />
           </svg>
-          <span class="snippet-title" :title="title || 'TypePHP Interactive'">{{ title || 'TypePHP Interactive'
-            }}</span>
+          <span class="snippet-title" :title="title || 'TypePHP Interactive'">{{ title || 'TypePHP Interactive' }}</span>
         </div>
 
         <div v-if="activeConfigBadges.length > 0" class="snippet-config-badges">
@@ -118,9 +117,18 @@
           <span v-for="n in transformedLineCount" :key="n" class="line-number">{{ n }}</span>
         </div>
 
+        <!-- Real-Time Contextual Loading State (Distinguishes Wasm boot vs AST compiling) -->
         <div v-if="isTransforming && !transformedCode" class="transform-loading-state">
           <span class="spinner dark"></span>
-          <span>Generating AST transformation...</span>
+          <div class="transform-loading-text">
+            <span v-if="isWasmSettingUp" class="transform-status-text">
+              {{ statusMessage || 'Initializing PHP 8.5 WebAssembly...' }}
+              <span class="cold-start-tag">(one-time browser setup)</span>
+            </span>
+            <span v-else class="transform-status-text">
+              Compiling AST & eliminating proven checks...
+            </span>
+          </div>
         </div>
 
         <pre v-else
@@ -130,7 +138,7 @@
 
     <!-- Output Drawer -->
     <PlaygroundOutput v-if="hasRun" mode="embedded" :stdout="stdout" :stderr="stderr" :exit-code="exitCode"
-      :duration="duration" :status-message="''" :is-running="isRunning" :report="report"
+      :duration="duration" :status-message="statusMessage" :is-running="isRunning" :report="report"
       :is-report-mode-active="localConfig.onViolation === 'report'" :report-view-mode="snippetReportViewMode"
       @run="runSnippet" @clear="clearConsole" @clear-report="report = null"
       @update:report-view-mode="snippetReportViewMode = $event" @close="hasRun = false" />
@@ -184,6 +192,9 @@ const isTransforming = ref<boolean>(false);
 const hasRun = ref<boolean>(false);
 const copied = ref<boolean>(false);
 
+const statusMessage = ref<string>('');
+const isEngineReady = ref<boolean>(false);
+
 const stdout = ref<string>('');
 const stderr = ref<string>('');
 const exitCode = ref<number | null>(null);
@@ -194,6 +205,12 @@ const snippetReportViewMode = ref<'cards' | 'json'>('cards');
 const localConfig = ref<PlaygroundConfig>({
   ...DEFAULT_PLAYGROUND_CONFIG,
   ...props.config,
+});
+
+const isWasmSettingUp = computed(() => {
+  return !isEngineReady.value ||
+    statusMessage.value.toLowerCase().includes('webassembly') ||
+    statusMessage.value.toLowerCase().includes('mounting');
 });
 
 const isModified = computed(() => {
@@ -275,6 +292,15 @@ onMounted(() => {
   initialCode.value = codeText;
   editableCode.value = codeText;
   sourceCode.value = codeText;
+
+  const engine = getTypePHPEngine(site.value.base || '/');
+  isEngineReady.value = engine.isEngineReady();
+  statusMessage.value = engine.getStatus();
+
+  engine.onStatus((status) => {
+    statusMessage.value = status;
+    isEngineReady.value = engine.isEngineReady();
+  });
 
   if (props.defaultView === 'transformed') {
     toggleTransformedView();
@@ -646,11 +672,35 @@ function copyCode() {
 .transform-loading-state {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   padding: 18px 20px 18px 52px;
   font-size: 12px;
-  color: var(--vp-c-text-3);
+  color: var(--vp-c-text-2);
   font-family: var(--vp-font-family-mono);
+}
+
+.transform-loading-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.transform-status-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cold-start-tag {
+  font-size: 10px;
+  font-family: var(--vp-font-family-base);
+  font-weight: 600;
+  color: var(--vp-c-text-3);
+  background: var(--vp-c-bg-mute);
+  border: 1px solid var(--vp-c-divider);
+  padding: 1px 6px;
+  border-radius: 4px;
 }
 
 .line-numbers-wrapper {

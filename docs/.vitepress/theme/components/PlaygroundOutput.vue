@@ -172,7 +172,23 @@
         :class="{ 'is-executing': isRunning && (stdout || stderr) }">
         <!-- Only show the big block indicator if console is completely empty on first run -->
         <div v-if="isRunning && !stdout && !stderr" class="running-indicator">
-          <span class="spinner"></span> Executing in PHP 8.5 WebAssembly...
+          <span class="spinner"></span>
+
+          <!-- 1. Cold start: Downloading / Mounting Wasm bundle -->
+          <span v-if="statusMessage && statusMessage.toLowerCase().includes('webassembly')">
+            {{ statusMessage }}
+            <span class="cold-start-tag">(one-time browser setup)</span>
+          </span>
+
+          <span v-else-if="statusMessage && statusMessage.toLowerCase().includes('mounting')">
+            Mounting virtual filesystem...
+            <span class="cold-start-tag">(one-time browser setup)</span>
+          </span>
+
+          <!-- 2. Warm run: Actually executing PHP -->
+          <span v-else>
+            Executing code in PHP 8.5...
+          </span>
         </div>
 
         <pre v-if="stdout" class="stdout-stream">{{ stdout }}</pre>
@@ -1400,8 +1416,13 @@ defineExpose({
 }
 
 @keyframes progress-slide {
-  0% { background-position: 100% 0; }
-  100% { background-position: -100% 0; }
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -100% 0;
+  }
 }
 
 .console-view {
@@ -1412,5 +1433,16 @@ defineExpose({
 .console-view.is-executing {
   opacity: 0.6;
   pointer-events: none;
+}
+
+.cold-start-tag {
+  font-size: 10.5px;
+  color: var(--vp-c-text-3);
+  font-family: var(--vp-font-family-base);
+  margin-left: 6px;
+  background: var(--vp-c-bg-mute);
+  border: 1px solid var(--vp-c-divider);
+  padding: 1px 6px;
+  border-radius: 4px;
 }
 </style>
