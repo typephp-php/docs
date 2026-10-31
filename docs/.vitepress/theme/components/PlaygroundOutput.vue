@@ -41,6 +41,8 @@
       <div class="resize-grip"></div>
     </div>
 
+    <div v-if="isRunning" class="executing-progress-bar"></div>
+
     <!-- Header with Multi-Tabs -->
     <div class="drawer-header" @click="mode === 'drawer' ? toggleCollapse() : null">
       <div class="header-left" @click.stop>
@@ -142,6 +144,16 @@
           &times;
         </button>
 
+        <!-- Quick Re-Run Button (Embedded Mode Only) -->
+        <button v-if="mode === 'embedded'" class="console-run-btn" :disabled="isRunning" title="Re-run code"
+          @click="$emit('run')">
+          <span v-if="isRunning" class="spinner-small"></span>
+          <svg v-else viewBox="0 0 24 24" width="10" height="10" fill="currentColor">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+          <span>{{ isRunning ? '...' : 'Run' }}</span>
+        </button>
+
         <!-- Collapse Toggle (Drawer only) -->
         <button v-if="mode === 'drawer'" class="icon-action-btn collapse-toggle-btn"
           :title="isCollapsed ? 'Expand' : 'Collapse'" @click="toggleCollapse">
@@ -156,14 +168,16 @@
     <!-- Body -->
     <div v-show="mode === 'embedded' || !isCollapsed" class="drawer-body">
       <!-- 1. Console Stream Tab View -->
-      <div v-if="activeTab === 'console'" class="console-view">
-        <div v-if="isRunning" class="running-indicator">
+      <div v-if="activeTab === 'console'" class="console-view"
+        :class="{ 'is-executing': isRunning && (stdout || stderr) }">
+        <!-- Only show the big block indicator if console is completely empty on first run -->
+        <div v-if="isRunning && !stdout && !stderr" class="running-indicator">
           <span class="spinner"></span> Executing in PHP 8.5 WebAssembly...
         </div>
 
         <pre v-if="stdout" class="stdout-stream">{{ stdout }}</pre>
 
-        <!-- Segmented STDERR Output (Warnings in Amber, Fatal Errors in Red) -->
+        <!-- Segmented STDERR Output -->
         <template v-for="(block, idx) in parsedStderrBlocks" :key="idx">
           <pre
             :class="['stderr-stream', block.type === 'warning' ? 'is-warning' : 'is-error']">{{ block.content }}</pre>
@@ -295,7 +309,7 @@ const props = withDefaults(defineProps<{
   report?: AuditReportDocument | null;
   isReportModeActive?: boolean;
   reportViewMode?: 'cards' | 'json';
-  mode?: 'drawer' | 'embedded'; 
+  mode?: 'drawer' | 'embedded';
 }>(), {
   position: 'bottom',
   report: null,
@@ -309,7 +323,8 @@ const emit = defineEmits<{
   (e: 'clear-report'): void;
   (e: 'toggle-position'): void;
   (e: 'update:reportViewMode', mode: 'cards' | 'json'): void;
-  (e: 'close'): void; 
+  (e: 'close'): void;
+  (e: 'run'): void;
 }>();
 
 const activeTab = ref<'console' | 'report'>('console');
@@ -1335,5 +1350,67 @@ defineExpose({
     padding: 8px 10px;
     font-size: 11px;
   }
+}
+
+.console-run-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  border-radius: 4px;
+  border: none;
+  background: var(--vp-c-brand-1);
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.console-run-btn:hover:not(:disabled) {
+  background: var(--vp-c-brand-2);
+}
+
+.console-run-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinner-small {
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.executing-progress-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--vp-c-brand-1), #38bdf8, var(--vp-c-brand-1));
+  background-size: 200% 100%;
+  animation: progress-slide 1s linear infinite;
+  z-index: 40;
+}
+
+@keyframes progress-slide {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+.console-view {
+  padding: 12px 14px;
+  transition: opacity 0.15s ease;
+}
+
+.console-view.is-executing {
+  opacity: 0.6;
+  pointer-events: none;
 }
 </style>

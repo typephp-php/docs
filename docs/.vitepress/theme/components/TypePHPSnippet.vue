@@ -4,11 +4,13 @@
     <div class="snippet-header">
       <div class="header-left">
         <div class="title-cluster">
-          <svg class="php-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+          <svg class="php-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+            stroke-width="2">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
             <polyline points="14 2 14 8 20 8" />
           </svg>
-          <span class="snippet-title" :title="title || 'TypePHP Interactive'">{{ title || 'TypePHP Interactive' }}</span>
+          <span class="snippet-title" :title="title || 'TypePHP Interactive'">{{ title || 'TypePHP Interactive'
+            }}</span>
         </div>
 
         <div v-if="activeConfigBadges.length > 0" class="snippet-config-badges">
@@ -35,25 +37,20 @@
 
         <div class="actions-cluster">
           <!-- Reset Modified Code Button -->
-          <button
-            v-if="isModified"
-            class="icon-btn reset-btn"
-            title="Reset code to original tutorial snippet"
-            @click="resetCode"
-          >
-            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button v-if="isModified" class="icon-btn reset-btn" title="Reset code to original tutorial snippet"
+            @click="resetCode">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
               <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
               <path d="M3 3v5h5" />
             </svg>
           </button>
 
           <!-- Open in Full-Screen Playground -->
-          <button
-            class="icon-btn playground-link-btn"
-            title="Open in full Playground (new tab)"
-            @click="openInPlayground"
-          >
-            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button class="icon-btn playground-link-btn" title="Open in full Playground (new tab)"
+            @click="openInPlayground">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
               <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
               <polyline points="15 3 21 3 21 9" />
               <line x1="10" y1="14" x2="21" y2="3" />
@@ -61,16 +58,13 @@
           </button>
 
           <!-- Config Popover -->
-          <PlaygroundConfigPopover
-            v-model="localConfig"
-            :has-custom-config="hasCustomConfig"
-            :compact="true"
-            @reset="resetToSnippetDefaults"
-          />
+          <PlaygroundConfigPopover v-model="localConfig" :has-custom-config="hasCustomConfig" :compact="true"
+            @reset="resetToSnippetDefaults" />
 
           <!-- Copy Button -->
           <button class="icon-btn" :title="copied ? 'Copied!' : 'Copy Code'" @click="copyCode">
-            <svg v-if="!copied" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+            <svg v-if="!copied" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor"
+              stroke-width="2">
               <rect x="9" y="9" width="13" height="13" rx="2" />
               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
             </svg>
@@ -113,18 +107,9 @@
       </div>
 
       <!-- 2. Lazy On-Demand Edit View -->
-      <div
-        v-if="hasMountedEditor"
-        v-show="currentView === 'edit'"
-        class="snippet-editor-pane"
-        :style="{ height: editorHeight }"
-      >
-        <PlaygroundEditor
-          v-model="editableCode"
-          :font-size="13"
-          @run="runSnippet"
-          @update:model-value="onCodeEdited"
-        />
+      <div v-if="hasMountedEditor" v-show="currentView === 'edit'" class="snippet-editor-pane"
+        :style="{ height: editorHeight }">
+        <PlaygroundEditor v-model="editableCode" :font-size="13" @run="runSnippet" @update:model-value="onCodeEdited" />
       </div>
 
       <!-- 3. Transformed View -->
@@ -138,28 +123,17 @@
           <span>Generating AST transformation...</span>
         </div>
 
-        <pre v-else class="snippet-pre"><code v-html="highlightedTransformedCode || 'Generating AST transformation...'"></code></pre>
+        <pre v-else
+          class="snippet-pre"><code v-html="highlightedTransformedCode || 'Generating AST transformation...'"></code></pre>
       </div>
     </div>
 
     <!-- Output Drawer -->
-    <PlaygroundOutput
-      v-if="hasRun"
-      mode="embedded"
-      :stdout="stdout"
-      :stderr="stderr"
-      :exit-code="exitCode"
-      :duration="duration"
-      :status-message="''"
-      :is-running="isRunning"
-      :report="report"
-      :is-report-mode-active="localConfig.onViolation === 'report'"
-      :report-view-mode="snippetReportViewMode"
-      @clear="clearConsole"
-      @clear-report="report = null"
-      @update:report-view-mode="snippetReportViewMode = $event"
-      @close="hasRun = false"
-    />
+    <PlaygroundOutput v-if="hasRun" mode="embedded" :stdout="stdout" :stderr="stderr" :exit-code="exitCode"
+      :duration="duration" :status-message="''" :is-running="isRunning" :report="report"
+      :is-report-mode-active="localConfig.onViolation === 'report'" :report-view-mode="snippetReportViewMode"
+      @run="runSnippet" @clear="clearConsole" @clear-report="report = null"
+      @update:report-view-mode="snippetReportViewMode = $event" @close="hasRun = false" />
   </div>
 </template>
 
@@ -394,27 +368,32 @@ function openInPlayground() {
   window.open(url, '_blank');
 }
 
+let lastRunTimestamp = 0;
+
 async function runSnippet() {
+  const now = performance.now();
+  if (now - lastRunTimestamp < 250 || isRunning.value) return; 
+  lastRunTimestamp = now;
+
   const codeToRun = editableCode.value || sourceCode.value || extractCode();
   if (!codeToRun) return;
 
   isRunning.value = true;
   hasRun.value = true;
-  stdout.value = '';
-  stderr.value = '';
-  report.value = null;
 
   const engine = getTypePHPEngine(site.value.base || '/');
 
   try {
     const cleanConfig = JSON.parse(JSON.stringify(localConfig.value));
     const res: RunResult = await engine.run(codeToRun, cleanConfig);
+
     stdout.value = res.stdout;
     stderr.value = res.stderr;
     exitCode.value = res.exitCode;
     duration.value = res.duration;
     report.value = res.report || null;
   } catch (err: any) {
+    stdout.value = '';
     stderr.value = `Execution Error: ${err?.message || err}`;
     exitCode.value = 255;
   } finally {
@@ -729,7 +708,11 @@ function copyCode() {
   border-top-color: var(--vp-c-brand-1);
 }
 
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 /* Tablet & Mobile Responsiveness */
 @media (max-width: 768px) {
