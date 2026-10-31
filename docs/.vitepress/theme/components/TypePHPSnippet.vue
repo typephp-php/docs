@@ -19,16 +19,48 @@
       </div>
 
       <div class="header-right">
+        <!-- 3-Way View Switcher: Source | Edit | Transformed/AST -->
         <div v-if="!hideToggle" class="view-pill-group">
           <button :class="['view-pill-btn', { active: currentView === 'source' }]" @click="currentView = 'source'">
             Source
           </button>
+          <button :class="['view-pill-btn', { active: currentView === 'edit' }]" @click="toggleEditView">
+            Edit
+          </button>
           <button :class="['view-pill-btn', { active: currentView === 'transformed' }]" @click="toggleTransformedView">
-            Transformed
+            <span class="view-label-desktop">Transformed</span>
+            <span class="view-label-mobile">AST</span>
           </button>
         </div>
 
         <div class="actions-cluster">
+          <!-- Reset Modified Code Button -->
+          <button
+            v-if="isModified"
+            class="icon-btn reset-btn"
+            title="Reset code to original tutorial snippet"
+            @click="resetCode"
+          >
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+              <path d="M3 3v5h5" />
+            </svg>
+          </button>
+
+          <!-- Open in Full-Screen Playground -->
+          <button
+            class="icon-btn playground-link-btn"
+            title="Open in full Playground (new tab)"
+            @click="openInPlayground"
+          >
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+          </button>
+
+          <!-- Config Popover -->
           <PlaygroundConfigPopover
             v-model="localConfig"
             :has-custom-config="hasCustomConfig"
@@ -36,22 +68,24 @@
             @reset="resetToSnippetDefaults"
           />
 
+          <!-- Copy Button -->
           <button class="icon-btn" :title="copied ? 'Copied!' : 'Copy Code'" @click="copyCode">
-            <svg v-if="!copied" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+            <svg v-if="!copied" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="9" y="9" width="13" height="13" rx="2" />
               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
             </svg>
-            <svg v-else viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#10b981" stroke-width="2.5">
+            <svg v-else viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="#10b981" stroke-width="2.5">
               <polyline points="20 6 9 17 4 12" />
             </svg>
           </button>
 
+          <!-- Run Button -->
           <button class="run-snippet-btn" :disabled="isRunning" @click="runSnippet">
             <span v-if="isRunning" class="spinner"></span>
             <svg v-else viewBox="0 0 24 24" width="11" height="11" fill="currentColor">
               <path d="M8 5v14l11-7z" />
             </svg>
-            <span>{{ isRunning ? '...' : 'Run' }}</span>
+            <span class="run-text">Run</span>
           </button>
         </div>
       </div>
@@ -78,7 +112,22 @@
         </div>
       </div>
 
-      <!-- 2. Transformed View -->
+      <!-- 2. Lazy On-Demand Edit View -->
+      <div
+        v-if="hasMountedEditor"
+        v-show="currentView === 'edit'"
+        class="snippet-editor-pane"
+        :style="{ height: editorHeight }"
+      >
+        <PlaygroundEditor
+          v-model="editableCode"
+          :font-size="13"
+          @run="runSnippet"
+          @update:model-value="onCodeEdited"
+        />
+      </div>
+
+      <!-- 3. Transformed View -->
       <div v-show="currentView === 'transformed'" class="code-view-pane">
         <div v-if="transformedLineCount > 0" class="line-numbers-wrapper" aria-hidden="true">
           <span v-for="n in transformedLineCount" :key="n" class="line-number">{{ n }}</span>
@@ -93,6 +142,7 @@
       </div>
     </div>
 
+    <!-- Output Drawer -->
     <PlaygroundOutput
       v-if="hasRun"
       mode="embedded"
@@ -115,18 +165,26 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue';
-import { useData } from 'vitepress';
+import { useData, withBase } from 'vitepress';
+import LZString from 'lz-string';
 import { getTypePHPEngine, type RunResult } from '../utils/typephp-engine';
-import { DEFAULT_PLAYGROUND_CONFIG, type PlaygroundConfig, type AuditReportDocument } from '../presets';
-import { highlightPhp } from '../utils/docblock-highlighter'; // 👈 Single source of truth!
+import {
+  DEFAULT_PLAYGROUND_CONFIG,
+  DEFAULT_INLINE_VARS_CONFIG,
+  type PlaygroundConfig,
+  type InlineVarsConfig,
+  type AuditReportDocument
+} from '../presets';
+import { highlightPhp } from '../utils/docblock-highlighter';
 import PlaygroundConfigPopover from './PlaygroundConfigPopover.vue';
 import PlaygroundOutput from './PlaygroundOutput.vue';
+import PlaygroundEditor from './PlaygroundEditor.vue';
 
 const props = withDefaults(defineProps<{
   code?: string;
   title?: string;
   config?: Partial<PlaygroundConfig>;
-  defaultView?: 'source' | 'transformed';
+  defaultView?: 'source' | 'edit' | 'transformed';
   hideToggle?: boolean;
 }>(), {
   code: '',
@@ -139,9 +197,14 @@ const props = withDefaults(defineProps<{
 const { site } = useData();
 const slotWrapper = ref<HTMLDivElement | null>(null);
 
-const currentView = ref<'source' | 'transformed'>(props.defaultView);
+const currentView = ref<'source' | 'edit' | 'transformed'>(props.defaultView);
+const hasMountedEditor = ref<boolean>(props.defaultView === 'edit');
+
+const initialCode = ref<string>('');
+const editableCode = ref<string>('');
 const sourceCode = ref<string>('');
 const transformedCode = ref<string>('');
+
 const isRunning = ref<boolean>(false);
 const isTransforming = ref<boolean>(false);
 const hasRun = ref<boolean>(false);
@@ -157,6 +220,16 @@ const snippetReportViewMode = ref<'cards' | 'json'>('cards');
 const localConfig = ref<PlaygroundConfig>({
   ...DEFAULT_PLAYGROUND_CONFIG,
   ...props.config,
+});
+
+const isModified = computed(() => {
+  return editableCode.value.trim() !== initialCode.value.trim();
+});
+
+const editorHeight = computed(() => {
+  const lineCount = (editableCode.value || sourceCode.value || '').split('\n').length;
+  const targetPx = lineCount * 22 + 40;
+  return `${Math.max(180, Math.min(500, targetPx))}px`;
 });
 
 watch(() => props.config, (newConf) => {
@@ -224,7 +297,11 @@ function extractCode(): string {
 }
 
 onMounted(() => {
-  sourceCode.value = extractCode();
+  const codeText = extractCode();
+  initialCode.value = codeText;
+  editableCode.value = codeText;
+  sourceCode.value = codeText;
+
   if (props.defaultView === 'transformed') {
     toggleTransformedView();
   }
@@ -250,8 +327,75 @@ const highlightedTransformedCode = computed(() => {
   return highlightPhp(transformedCode.value);
 });
 
+function toggleEditView() {
+  hasMountedEditor.value = true;
+  currentView.value = 'edit';
+}
+
+function onCodeEdited(newCode: string) {
+  editableCode.value = newCode;
+  sourceCode.value = newCode;
+  transformedCode.value = '';
+}
+
+function resetCode() {
+  editableCode.value = initialCode.value;
+  sourceCode.value = initialCode.value;
+  transformedCode.value = '';
+  if (hasRun.value) {
+    runSnippet();
+  }
+}
+
+function getConfigDelta(cfg: PlaygroundConfig): Partial<PlaygroundConfig> | undefined {
+  const delta: any = {};
+  let hasDiff = false;
+
+  for (const key of Object.keys(DEFAULT_PLAYGROUND_CONFIG) as Array<keyof PlaygroundConfig>) {
+    if (key === 'inlineVars') {
+      const defIv = DEFAULT_INLINE_VARS_CONFIG;
+      const curIv = cfg.inlineVars || defIv;
+      const ivDiff: any = {};
+      let hasIvDiff = false;
+
+      for (const ivKey of Object.keys(defIv) as Array<keyof InlineVarsConfig>) {
+        if (curIv[ivKey] !== defIv[ivKey]) {
+          ivDiff[ivKey] = curIv[ivKey];
+          hasIvDiff = true;
+        }
+      }
+
+      if (hasIvDiff) {
+        delta.inlineVars = ivDiff;
+        hasDiff = true;
+      }
+    } else if (cfg[key] !== DEFAULT_PLAYGROUND_CONFIG[key]) {
+      delta[key] = cfg[key];
+      hasDiff = true;
+    }
+  }
+
+  return hasDiff ? delta : undefined;
+}
+
+function openInPlayground() {
+  const codeToOpen = editableCode.value || sourceCode.value || extractCode();
+  const payload: any = { c: codeToOpen };
+
+  if (props.title && props.title !== 'TypePHP Interactive') {
+    payload.t = props.title;
+  }
+
+  const delta = getConfigDelta(localConfig.value);
+  if (delta) payload.g = delta;
+
+  const compressed = LZString.compressToEncodedURIComponent(JSON.stringify(payload));
+  const url = withBase(`/playground#c=${compressed}`);
+  window.open(url, '_blank');
+}
+
 async function runSnippet() {
-  const codeToRun = sourceCode.value || extractCode();
+  const codeToRun = editableCode.value || sourceCode.value || extractCode();
   if (!codeToRun) return;
 
   isRunning.value = true;
@@ -282,7 +426,7 @@ async function toggleTransformedView() {
   currentView.value = 'transformed';
   if (transformedCode.value || isTransforming.value) return;
 
-  const codeToTransform = sourceCode.value || extractCode();
+  const codeToTransform = editableCode.value || sourceCode.value || extractCode();
   if (!codeToTransform) return;
 
   isTransforming.value = true;
@@ -299,7 +443,7 @@ async function toggleTransformedView() {
 }
 
 function copyCode() {
-  const text = currentView.value === 'source' ? (sourceCode.value || extractCode()) : transformedCode.value;
+  const text = currentView.value === 'transformed' ? transformedCode.value : (editableCode.value || sourceCode.value);
   navigator.clipboard.writeText(text).then(() => {
     copied.value = true;
     setTimeout(() => { copied.value = false; }, 2000);
@@ -392,6 +536,7 @@ function copyCode() {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 .view-pill-group {
@@ -400,6 +545,7 @@ function copyCode() {
   border-radius: 4px;
   overflow: hidden;
   background: var(--vp-c-bg);
+  flex-shrink: 0;
 }
 
 .view-pill-btn {
@@ -411,11 +557,20 @@ function copyCode() {
   color: var(--vp-c-text-2);
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
 .view-pill-btn.active {
   background: var(--vp-c-brand-1);
   color: #fff;
+}
+
+.view-label-desktop {
+  display: inline;
+}
+
+.view-label-mobile {
+  display: none;
 }
 
 .icon-btn {
@@ -430,11 +585,23 @@ function copyCode() {
   color: var(--vp-c-text-2);
   cursor: pointer;
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .icon-btn:hover {
   border-color: var(--vp-c-brand-1);
   color: var(--vp-c-brand-1);
+}
+
+.icon-btn.reset-btn {
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.3);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.icon-btn.reset-btn:hover {
+  border-color: #f59e0b;
+  color: #d97706;
 }
 
 .run-snippet-btn {
@@ -451,6 +618,8 @@ function copyCode() {
   color: #fff;
   cursor: pointer;
   transition: all 0.15s ease;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .run-snippet-btn:hover:not(:disabled) {
@@ -465,6 +634,12 @@ function copyCode() {
 .snippet-body {
   position: relative;
   background: var(--vp-code-block-bg, var(--vp-c-bg-soft));
+  overflow: hidden;
+}
+
+.snippet-editor-pane {
+  width: 100%;
+  position: relative;
   overflow: hidden;
 }
 
@@ -556,12 +731,13 @@ function copyCode() {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Tablet & Mobile Responsiveness */
 @media (max-width: 768px) {
   .snippet-header {
     flex-direction: column !important;
     align-items: stretch !important;
-    padding: 8px 10px !important;
-    gap: 8px !important;
+    padding: 7px 10px !important;
+    gap: 6px !important;
     height: auto !important;
   }
 
@@ -573,6 +749,7 @@ function copyCode() {
   .header-right {
     width: 100% !important;
     justify-content: space-between !important;
+    gap: 6px !important;
   }
 
   .line-numbers-wrapper {
@@ -581,6 +758,70 @@ function copyCode() {
 
   .snippet-pre {
     padding: 14px 14px 14px 44px !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .view-label-desktop {
+    display: none !important;
+  }
+
+  .view-label-mobile {
+    display: inline !important;
+  }
+
+  .snippet-header {
+    padding: 6px 8px !important;
+  }
+
+  .view-pill-btn {
+    padding: 2px 5px !important;
+    font-size: 9.5px !important;
+  }
+
+  .actions-cluster {
+    gap: 4px !important;
+  }
+
+  .icon-btn {
+    width: 22px !important;
+    height: 22px !important;
+  }
+
+  .icon-btn svg {
+    width: 11px !important;
+    height: 11px !important;
+  }
+
+  .run-snippet-btn {
+    height: 22px !important;
+    padding: 0 7px !important;
+    font-size: 10.5px !important;
+  }
+
+  .actions-cluster :deep(.config-trigger-btn.compact) {
+    width: 22px !important;
+    height: 22px !important;
+  }
+
+  .actions-cluster :deep(.config-trigger-btn.compact svg) {
+    width: 11px !important;
+    height: 11px !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .snippet-title {
+    max-width: 160px !important;
+    font-size: 11px !important;
+  }
+
+  .line-numbers-wrapper {
+    width: 28px !important;
+  }
+
+  .snippet-pre {
+    padding: 12px 10px 12px 36px !important;
   }
 }
 </style>

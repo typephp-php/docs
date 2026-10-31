@@ -73,7 +73,7 @@ class Collection
 }
 
 // Prebind T = User to this specific object instance in memory
-/** @var Collection<User> $users */
+/** @var Collection<User> */
 $users = new Collection();
 
 // 1. Valid addition
