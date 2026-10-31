@@ -5,9 +5,9 @@ export default withMermaid(
   defineConfig({
     title: "TypePHP",
     description: "Transparent Runtime Type Enforcement for PHP.",
-    base: '/', 
+    base: '/',
     cleanUrls: true,
-    
+
     rewrites: {
       'getting-started/:page*': 'docs/getting-started/:page*',
       'core-concepts/:page*': 'docs/core-concepts/:page*',
@@ -64,7 +64,7 @@ export default withMermaid(
         .replace(/\.md$/, '');
 
       const docsFolders = [
-        'getting-started', 'core-concepts', 'supported-types', 
+        'getting-started', 'core-concepts', 'supported-types',
         'generics', 'testing', 'advanced', 'production', 'troubleshooting'
       ];
       const firstSegment = routePath.split('/')[0];
@@ -173,6 +173,7 @@ export default withMermaid(
             { text: 'Class Generics & Upper Bounds', link: '/docs/generics/class-generics-and-upper-bounds' },
             { text: 'Function & Static Method Generics', link: '/docs/generics/function-and-static-method-generics' },
             { text: 'Generic Variance', link: '/docs/generics/generic-variance' },
+            { text: 'Mutable Generics & Typestates (@self-out)', link: '/docs/generics/mutable-generics-and-typestates' },
             { text: 'Inheritance, Interfaces & Traits', link: '/docs/generics/inheritance-interfaces-and-traits' },
             { text: 'Advanced Generic Patterns', link: '/docs/generics/advanced-generic-patterns' },
             { text: 'Cloning Generic Objects', link: '/docs/generics/cloning-generic-objects' },
