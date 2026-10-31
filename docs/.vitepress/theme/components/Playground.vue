@@ -509,7 +509,7 @@ function onSelectPreset(presetId: string) {
 
 function runCode() {
   const now = performance.now();
-  if (now - lastRunTimestamp < 250 || isRunning.value || !isReady.value) return; // 👈 Debounce
+  if (now - lastRunTimestamp < 250 || isRunning.value || !isReady.value) return; 
   lastRunTimestamp = now;
 
   const activeWorker = worker;
