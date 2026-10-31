@@ -509,16 +509,14 @@ function onSelectPreset(presetId: string) {
 
 function runCode() {
   const now = performance.now();
-  if (now - lastRunTimestamp < 150) return;
+  if (now - lastRunTimestamp < 250 || isRunning.value || !isReady.value) return; // 👈 Debounce
   lastRunTimestamp = now;
 
   const activeWorker = worker;
-  if (!activeWorker || !isReady.value || isRunning.value) return;
+  if (!activeWorker) return;
 
   isRunning.value = true;
-  clearConsole();
-  report.value = null;
-
+  
   outputDrawerRef.value?.expand();
 
   activeWorker.postMessage({
