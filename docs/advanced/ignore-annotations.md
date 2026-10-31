@@ -2,11 +2,26 @@
 
 TypePHP provides docblock suppression tags to skip type enforcement on legacy code, un-refactored methods, performance-critical loops, or test callers without requiring you to remove PHPDoc annotations.
 
+::: tip Interactive Learning in Every Snippet:
+Every code snippet on this page runs real **PHP 8.5 WebAssembly** in your browser.
+* Tap **Run** to execute the code live.
+* Tap **Edit** in any snippet toolbar to test adding, moving, or removing ignore tags directly inside this article.
+* Tap **↺ (Reset)** anytime to restore the original tutorial snippet.
+* Tap **Transformed (AST)** to see how TypePHP bypasses assertion wrapping for ignored methods.
+:::
+
 ---
 
 ## Function & Method Level Suppression (`@typephp-ignore`)
 
 Add `@typephp-ignore` (or `@typephp-disable`) to a function or class method docblock to skip contract enforcement for that specific function while keeping all other methods in the same class 100% type-checked:
+
+::: tip Try the In-Place Challenge:
+1. Click **Edit** in the toolbar below.
+2. Add `* @typephp-ignore` to the DocBlock of `findUser()` on line 12.
+3. Click **Run** and watch the negative ID error on line 45 disappear as TypePHP skips validation for that method!
+4. Click **↺ (Reset)** to restore the original code.
+:::
 
 <TypePHPSnippet title="Method-Level Suppression (@typephp-ignore)" default-view="source">
 
@@ -70,6 +85,10 @@ try {
 In addition to tagging the target method itself, you can tag an **enclosing caller** (such as a test method, controller action, or pipeline handler) with `@typephp-ignore`.
 
 When a type contract violation occurs anywhere downstream, TypePHP scans up the call stack. If any enclosing caller in the execution chain is marked with `@typephp-ignore` or `@typephp-disable`, the error is suppressed:
+
+::: tip Try the In-Place Challenge:
+Click **Edit** below and remove `@typephp-ignore` from line 25. Click **Run** and watch both pipelines trigger downstream failures!
+:::
 
 <TypePHPSnippet title="Caller-Level Downstream Suppression" default-view="source">
 
@@ -195,6 +214,11 @@ Notice that this snippet is configured with a shallow inspection window of **`ig
 2. It recurses down **8 frames** deep before calling `executeStrictTarget(-99)`.
 3. Because the ignore tag sits 9 frames above the failure, an `ignore_trace_depth` of 5 **cannot reach it**, so TypePHP catches and throws the error!
 
+::: tip Two Ways to Solve the Challenge:
+* **Option A (In-Place Edit):** Click **Edit** below. On line 38, change `recurseFrames(8)` to `recurseFrames(3)`. Click **Run** — the failure now occurs within the 5-frame search window and passes cleanly!
+* **Option B (Engine Config):** Click the **[⚙️ Config]** button in the snippet toolbar, find **Ignore Trace Depth**, and increase it from 5 to 10. Click **Run** again!
+:::
+
 <TypePHPSnippet 
   title="Recursive Call-Stack Depth & Search Window" 
   :config="{ ignoreTraceDepth: 5 }" 
@@ -247,12 +271,7 @@ try {
     testCallerWithIgnore();
     echo "✓ Suppressed successfully!\n";
 } catch (\TypeError $e) {
-    echo "✗ Failed to find ignore tag within 5 stack frames:\n   " . $e->getMessage() . "\n\n";
-    echo "👉 TRY THIS INTERACTIVE CHALLENGE:\n";
-    echo "1. Click the [⚙️ Config] button in the toolbar above.\n";
-    echo "2. Find 'Ignore Trace Depth' and increase it from 5 to 10 (or above).\n";
-    echo "3. Click [Run] again!\n";
-    echo "4. Watch the error disappear as TypePHP successfully reaches the @typephp-ignore tag!\n";
+    echo "✗ Failed to find ignore tag within 5 stack frames:\n   " . $e->getMessage() . "\n";
 }
 ```
 
@@ -263,6 +282,10 @@ try {
 ## Property & Property Hook Suppression (`@typephp-ignore`)
 
 Add `@typephp-ignore` to a class property or PHP 8.4 property hook docblock to skip property assignment and hook validation:
+
+::: tip Try the In-Place Challenge:
+Click **Edit** below. Add `* @typephp-ignore` right above `public int $id = 10;` on line 12. Click **Run** to see the `$profile->id = -99` assignment pass with zero errors!
+:::
 
 <TypePHPSnippet title="Property & Property Hook Suppression" default-view="source">
 
@@ -381,6 +404,12 @@ TypePHP::setConfig(['respect_ignore_tags' => false]);
 
 The interactive snippet below is initialized with `:config="{ respectIgnoreTags: false }"`. Notice that the `@typephp-ignore` tag is **overridden**, causing the legacy call to be strictly validated and caught:
 
+::: tip Try the In-Place Challenge:
+1. Click **Run** to see the strict audit catch the hidden legacy bug.
+2. Open the **[⚙️ Config]** popover in the toolbar above and toggle **Respect Ignore Tags** to **ON**.
+3. Click **Run** again to see the method honor the ignore tag and pass!
+:::
+
 <TypePHPSnippet 
   title="Forcing Full Audit (respect_ignore_tags: false)" 
   :config="{ respectIgnoreTags: false }" 
@@ -415,7 +444,6 @@ try {
     $service->legacySync(-42);
 } catch (\TypeError $e) {
     echo "✗ Strict audit caught suppressed legacy bug:\n   " . $e->getMessage() . "\n";
-    echo "  (Tip: Click ⚙️ Config above, toggle 'Respect Ignore Tags' ON, and run again to see it pass!)\n";
 }
 ```
 
@@ -438,3 +466,4 @@ try {
 | **`@typephp-ignore`**, **`@typephp-disable`** | Property / Hook | Skips property assignment and hook validation. |
 | **`'ignore_trace_depth'`** | `typephp.php` | Configures the maximum call stack frame depth (default: `25`) inspected to find an enclosing ignore tag. |
 | **`'respect_ignore_tags'`** | `typephp.php` | Global master toggle for ignore tags. Set to `false` in CI/CD to force full type enforcement. |
+```

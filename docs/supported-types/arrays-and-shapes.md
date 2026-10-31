@@ -2,11 +2,23 @@
 
 TypePHP provides runtime enforcement for sequential lists, key-value generic maps, typed arrays, positional tuples, sealed and unsealed array shapes, schema composition, homogeneous/heterogeneous unions, variadic array wrapping, key/value extractions, offset access, and object shapes.
 
+::: tip Interactive Learning in Every Snippet:
+Every code snippet on this page runs real **PHP 8.5 WebAssembly** in your browser.
+* Tap **Run** to execute the code live.
+* Tap **Edit** to modify array keys, add fields, or tweak types directly inside the article.
+* Tap **↺ (Reset)** anytime to revert back to the original tutorial state.
+* Tap **Transformed (AST)** to view the zero line-drift compiled bytecode.
+:::
+
 ---
 
 ## Sequential Lists (`list<T>` & `non-empty-list<T>`)
 
 A `list<T>` represents a sequential, 0-indexed integer key array without gaps (`0, 1, 2, ...`). TypePHP validates lists at runtime using PHP's native `array_is_list()` function in C:
+
+::: tip Try the In-Place Challenge:
+Click **Edit** in the toolbar below. Change `processMetrics(['tag1' => 'php'], [10, 20]);` on line 21 to pass a sequential list `['php', 'typephp']`, then click **Run** to watch the error resolve!
+:::
 
 <TypePHPSnippet title="Sequential Lists & Refinements" default-view="source">
 
@@ -95,7 +107,7 @@ Hybrid mode provides constant-time $O(1)$ validation for collections exceeding 1
 
 ### Benchmark: Full $O(n)$ vs. Hybrid $O(1)$ Sampling
 
-The snippet below generates a list of 1 million positive integers and measures validation time using `microtime(true)`:
+The snippet below generates a list of 15,000 positive integers and measures validation time using `microtime(true)`:
 
 <TypePHPSnippet 
   title="Array Validation Benchmark (Full vs. Hybrid)" 
@@ -113,8 +125,8 @@ declare(strict_types=1);
  */
 function validateLargeDataset(array $dataset): void {}
 
-// Generate 1 million positive integers
-$data = range(1, 1000000);
+// Generate 15,000 positive integers
+$data = range(1, 15000);
 
 echo "Starting validation of " . count($data) . " items...\n";
 
@@ -129,11 +141,12 @@ echo sprintf("✓ Completed 5 passes in %.2f ms\n", $elapsed);
 
 </TypePHPSnippet>
 
-### Try the Performance Challenge:
+::: tip Try the Performance Challenge:
 1. Click **Run** on the snippet above while in default **Full Mode** and check the elapsed time.
 2. Open the snippet's **Configuration (⚙️)** menu.
 3. Switch **Array Validation** from **Full** to **Hybrid**.
 4. Click **Run** again! Notice how the execution time drops into constant $O(1)$ nanoseconds.
+:::
 
 ---
 
@@ -324,7 +337,7 @@ class InvariantCollection
 Because generic classes are invariant by default, `InvariantCollection<Dog>` will be strictly rejected if passed to `InvariantCollection<Animal>`, protecting mutable shared object references from contamination.
 
 ::: tip Learn More About Class Invariance
-Explore how TypePHP reifies generic classes and enforces invariance on mutable objects in the [Class Generics & Upper Bounds](/generics/class-generics-and-upper-bounds) guide.
+Explore how TypePHP reifies generic classes and enforces invariance on mutable objects in the [Class Generics & Upper Bounds](/docs/generics/class-generics-and-upper-bounds) guide.
 :::
 
 ---
@@ -375,6 +388,7 @@ When the loop concludes, TypePHP's injected boundary assertion inspects the cont
 ```text
 Fatal error: Uncaught TypePHP\Exception\TypeError: Variable $dogs[1] must be of type Dog, Cat given in playground.php on line 27
 ```
+
 ---
 
 ## Homogeneous vs. Heterogeneous Collections
@@ -435,6 +449,12 @@ Array shapes define exact key-value contracts for associative arrays:
 - **Sealed Shapes (Default):** Extra unexpected keys are strictly forbidden.
 - **Unsealed Shapes (`...<K, V>`):** Extra dynamic key-value pairs matching `<K, V>` are permitted.
 
+::: tip Try the In-Place Challenge:
+1. Click **Edit** below.
+2. In `processSealed([...])` on line 23, remove `'draft' => true` to watch it pass.
+3. Next, add a new field `'role' => 999` to `processUnsealed([...])` and click **Run** — watch TypePHP catch the integer because unsealed values must be strings (`...<string, string>`)!
+:::
+
 <TypePHPSnippet title="Sealed vs. Unsealed Shapes" default-view="source">
 
 ```php:line-numbers
@@ -480,6 +500,10 @@ processSealed([
 ## Schema Composition via Intersections (`ShapeA & ShapeB`)
 
 TypePHP supports schema composition by intersecting multiple sealed or unsealed array shapes. Declared fields are merged into a single composite schema while preserving strict sealed boundaries against unexpected keys:
+
+::: tip Try the In-Place Challenge:
+Click **Edit** below, remove `'tags' => [...]` from the payload on line 24, and click **Run**. TypePHP will pinpoint that the `Taggable` schema contract was violated while the `Identifiable` contract passed!
+:::
 
 <TypePHPSnippet title="Array Shape Composition (ShapeA & ShapeB)" default-view="source">
 
@@ -528,7 +552,7 @@ $service->publish([
 ::: tip Composing Schemas with Type Aliases
 Notice how `@phpstan-type` enables defining modular, reusable shape contracts that compose cleanly via intersections (`Identifiable & Taggable`). 
 
-To learn how to define, export, and import modular schemas across different classes, check out the [Type Aliases (`@phpstan-type`) Guide](/supported-types/type-aliases).
+To learn how to define, export, and import modular schemas across different classes, check out the [Type Aliases (`@phpstan-type`) Guide](/docs/supported-types/type-aliases).
 :::
 
 ### Overlapping Key Refinement
@@ -560,12 +584,15 @@ recordScore(['score' => -10, 'label' => 'failed']);
 
 </TypePHPSnippet>
 
-
 ---
 
 ## Discriminator-Aware Tagged Unions
 
 When validating discriminated unions (tagged unions where branches share a discriminator field like `type` or `status`), TypePHP isolates the matching branch and diagnoses the **exact failing field** within it rather than falsely blaming the discriminator key:
+
+::: tip Try the In-Place Challenge:
+Click **Edit** below. On line 20, change `'element' => ''` to `'element' => 'btn-primary'`. Click **Run** and watch the hover event pass cleanly!
+:::
 
 <TypePHPSnippet title="Discriminator-Aware Tagged Unions" default-view="source">
 
@@ -867,6 +894,10 @@ authenticateJsonSession(new CustomSession());
 
 TypePHP recursively evaluates deeply nested object and array shapes down to any depth, constructing accurate diagnostic breadcrumbs:
 
+::: tip Try the In-Place Challenge:
+Click **Edit** below and change `'name' => ''` on line 32 to a valid name `'Bob'`. Click **Run** to watch the 4-level deep shape pass with zero breadcrumb errors!
+:::
+
 <TypePHPSnippet title="Deep Object Shape Diagnostics" default-view="source">
 
 ```php:line-numbers
@@ -928,4 +959,5 @@ function verifyContainer(object $obj): void { ... }
 
 verifyContainer(new UserContainer());
 // Throws: TypeError: verifyContainer(): Argument $obj property 'id' is uninitialized
+```
 ```

@@ -38,7 +38,7 @@ const CONTAINERS_SET = new Set([
 
 const TYPE_WORDS_REGEX = /\b(stdClass|key-of|value-of|int-mask-of|int-mask|int|string|bool|boolean|float|double|positive-int|negative-int|non-positive-int|non-negative-int|non-zero-int|unsigned-int|positive-float|negative-float|non-empty-string|numeric-string|lowercase-string|uppercase-string|non-empty-lowercase-string|non-empty-uppercase-string|class-string|interface-string|trait-string|enum-string|callable-string|literal-string|truthy-string|array-key|array|list|non-empty-array|non-empty-list|object|static-closure|static-Closure|pure-closure|pure-Closure|pure-callable|callable|closure|iterable|resource|null|true|false|mixed|void|never|self|static|[A-Z][a-zA-Z0-9_]*)\b/g;
 
-const TAG_REGEX = /@(phpstan-|psalm-)?(param(?:-out)?|return|var|template(?:-covariant|-contravariant)?|self-out|this-out|property(?:-read|-write)?|method|extends|implements|use|type|import-type|throws)\b/;
+const TAG_REGEX = /@(typephp-[a-zA-Z0-9_-]+|(?:phpstan-|psalm-)?(?:param(?:-out)?|return|var|template(?:-covariant|-contravariant)?|self-out|this-out|property(?:-read|-write)?|method|extends|implements|use|type|import-type|throws))\b/;
 
 const PHP_KEYWORDS = new Set([
   'if', 'elseif', 'else', 'while', 'for', 'foreach', 'as', 'switch', 'case', 'break',
@@ -408,7 +408,7 @@ function processDocblockLine(lineFrom: number, text: string, lineTokens: LineTok
     const tagLen = tagMatch[0].length;
     const tagFrom = lineFrom + tagIndex;
     const tagTo = tagFrom + tagLen;
-    const tagName = tagMatch[2];
+    const tagName = tagMatch[1].replace(/^(typephp-|phpstan-|psalm-)/, '');
 
     lineTokens.push({ from: tagFrom, to: tagTo, deco: tagDeco });
 

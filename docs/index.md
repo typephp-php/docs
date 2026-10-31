@@ -17,8 +17,8 @@ hero:
       link: https://github.com/typephp-php/typephp
 
 features:
-  - title: "Interactive Browser Playground"
-    details: "Test TypePHP live in your browser powered by real PHP 8.5 WebAssembly. Inspect zero line-drift AST transformations in real time with zero installation."
+  - title: "Live-Executable In-Browser Sandboxes"
+    details: "Every code snippet runs real PHP 8.5 WebAssembly. Execute code, tweak inputs with in-place editing, and inspect zero line-drift AST bytecode in real time with zero installation."
   - title: "1-Pass Audit & Violation Reporting"
     details: "Audit existing codebases in a single test run without crashing. Export structured JSON reports, run multi-worker parallel shards, and gate CI builds effortlessly."
   - title: "True Reified Generics"
@@ -28,7 +28,11 @@ features:
 ---
 
 ::: tip Test Drive TypePHP Live in Your Browser (No Setup Required)
-Want to see runtime reified generics and shape validation in action right now? Launch the **[Interactive WebAssembly Playground →](/playground)** running real PHP 8.5 in your browser. Experiment with presets, test your own edge cases, and inspect the transformed source code in real time!
+Every code snippet across the homepage and documentation is an interactive sandbox powered by real **PHP 8.5 WebAssembly**. 
+* Tap **Run** to watch contracts enforced at native speed.
+* Tap **Edit** in any snippet toolbar to test your own edge cases directly on this page.
+* Tap **Transformed** to inspect the compiled source code.
+* Or launch the **[Interactive WebAssembly Playground →](/playground)** for the full-screen IDE experience with presets and sharing!
 :::
 
 ---
@@ -44,6 +48,10 @@ TypePHP operates entirely in userland using native stream wrappers and AST trans
 Define generic templates and TypePHP binds their state per object instance in memory using native `\WeakMap`.
 
 Click **Run** below to watch TypePHP enforce generic boundaries live:
+
+::: tip Try the In-Place Challenge:
+Click **Edit** in the toolbar below, change `new Product('SKU-100')` on line 35 to `new User('Bob')`, and click **Run** to watch the error resolve cleanly! Click **↺ (Reset)** anytime to restore the default code.
+:::
 
 <TypePHPSnippet title="Runtime Reified Generics (WeakMap)" default-view="source">
 
@@ -73,7 +81,7 @@ class Collection
 }
 
 // Prebind T = User to this specific object instance in memory
-/** @var Collection<User> */
+/** @var Collection<User> $users */
 $users = new Collection();
 
 // 1. Valid addition
@@ -93,6 +101,10 @@ $users->add(new Product('SKU-100'));
 ### 2. Array Shapes & Key/Value Extractions
 
 Enforce strict associative array structures and constant extractions:
+
+::: tip Try the In-Place Challenge:
+Click **Edit** below and change `'driver' => 'sqlite'` on line 33 to `'driver' => 'pgsql'` to see the connection pass with a valid driver!
+:::
 
 <TypePHPSnippet title="Array Shapes & Constant Key Extractions" default-view="source">
 

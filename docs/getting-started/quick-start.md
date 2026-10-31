@@ -81,7 +81,7 @@ class UserService
 - **Dynamic Code:** Incoming API parameters, database query results, and variables containing runtime data are strictly intercepted and verified.
 
 ::: tip Deep Dive into Check Elimination
-To learn more about how `StaticTypeEvaluator`, `ArrayLiteralEvaluator`, and `ScalarEvaluator` optimize bytecode, check out the dedicated [Compile-Time Check Elimination Guide](/advanced/compile-time-elimination).
+To learn more about how `StaticTypeEvaluator`, `ArrayLiteralEvaluator`, and `ScalarEvaluator` optimize bytecode, check out the dedicated [Compile-Time Check Elimination Guide](/docs/advanced/compile-time-elimination).
 :::
 
 ---
@@ -133,13 +133,22 @@ function processPayment(object $user, object $invoice, object $date): void
 
 ## Interactive Examples: Try Them Live
 
-All code blocks below are interactive! Click **Run** to execute them live in your browser powered by real PHP 8.5 WebAssembly, or toggle **Transformed** to view the compiled AST code.
+All code blocks below are interactive sandboxes running real **PHP 8.5 WebAssembly** in your browser:
+* **▶ Run**: Executes code live and displays console output or contract violation stack traces.
+* **Edit**: Swaps the snippet into an in-place code editor so you can tweak inputs, parameters, and types directly inside this article.
+* **↺ (Reset)**: Appears automatically when you edit code, allowing you to restore the original tutorial snippet with one click.
+* **Transformed / AST**: Displays the zero line-drift compiled bytecode to inspect exactly how TypePHP injects runtime guards and eliminates proven checks.
+* **↗ (Playground)**: Opens the current code with any modifications directly in the full-screen playground in a new tab.
 
 ---
 
 ## Parameter Contracts (`@param`)
 
-Write standard PHPDoc annotations on function or method parameters. In the snippet below, passing `-5` triggers an immediate runtime `TypeError`:
+Write standard PHPDoc annotations on function or method parameters. In the snippet below, passing `-5` triggers an immediate runtime `TypeError`.
+
+::: tip Try the In-Place Challenge:
+Click **Edit** in the toolbar below, change `-5` to `42`, and click **Run** to watch the error resolve cleanly!
+:::
 
 <TypePHPSnippet title="Function Parameter Contract Validation" default-view="source">
 
@@ -428,7 +437,7 @@ $alias = -30;
 </TypePHPSnippet>
 
 ::: tip Complete By-Reference Guide
-To learn more about out-parameters (`@param-out`), by-reference `foreach` guards, and `CallableWrapper` signature-aware dispatching, read the dedicated [By-Reference Contracts & Mutations Guide](/core-concepts/by-reference-contracts).
+To learn more about out-parameters (`@param-out`), by-reference `foreach` guards, and `CallableWrapper` signature-aware dispatching, read the dedicated [By-Reference Contracts & Mutations Guide](/docs/core-concepts/by-reference-contracts).
 :::
 
 ---
