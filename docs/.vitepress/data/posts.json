@@ -1,5 +1,14 @@
 [
   {
+    "title": "Making Illegal States Impossible: In-Place Typestates in Pure PHP",
+    "url": "/blog/making-legal-states-impossible-in-place-typestates-in-pure-php",
+    "date": "November 4, 2026",
+    "readTime": "7 min read",
+    "badge": "Deep Dive",
+    "badgeClass": "badge-guide",
+    "excerpt": "Why C#, Java, and Rust cannot mutate generic types in-place, how Typestate-Oriented Programming models runtime state machines, and why TypePHP's \\WeakMap engine makes illegal states impossible in pure PHP."
+  },
+  {
     "title": "TypePHP v0.12.0: The Zero-Overhead Compile-Time Optimization Engine",
     "url": "/blog/celebrating-v0.12.0-compile-time-optimization-engine",
     "date": "October 28, 2026",
