@@ -1,7 +1,7 @@
 ---
 title: "Making Illegal States Impossible: In-Place Typestates in Pure PHP"
 description: "Why C#, Java, and Rust cannot mutate generic types in-place, the deep computer science behind Typestate-Oriented Programming, and how TypePHP reifies mutable generics at runtime in pure PHP."
-date: 2026-11-04
+date: 2026-11-03
 author: Reymart Calicdan
 layout: doc
 sidebar: false
@@ -122,7 +122,7 @@ If PHP adopted Rust's model, every state transition would force an awkward reass
 
 ### C. The Limits of Static Analysis (Psalm & PHPStan)
 
-Psalm originally pioneered this space with `@psalm-this-out`, which was later introduced to PHPStan 1.9 by Richard van Velzen under the `@phpstan-self-out` banner. Both let a method declare that it changes `$this`’s generic type:
+Psalm originally pioneered this space with `@psalm-this-out`, which was later introduced to PHPStan 1.9 by [Richard van Velzen](https://github.com/rvanvelzen) under the `@phpstan-self-out` banner. Both let a method declare that it changes `$this`’s generic type:
 
 ```php
 /** @self-out self<Authenticated> */
@@ -161,7 +161,7 @@ The same code was analyzed by **PHPStan at Level MAX** and then executed under *
 
 ### What PHPStan Reports: 5 False Positives
 
-![PHPStan reporting errors on the typestate example](/blog/the-curious-case-of-mutable-generics/phpstan-typestate-errors.png)
+![PHPStan reporting errors on the typestate example](/blog/making-legal-states-impossible-in-place-typestates-in-pure-php/phpstan-typestate-errors.png)
 
 PHPStan surfaces a sea of red:
 
@@ -175,7 +175,7 @@ None of these are bugs in PHPStan. They are the natural consequence of a tool th
 
 ### What Happens When the Code Actually Runs
 
-![TypePHP executing the same code cleanly](/blog/the-curious-case-of-mutable-generics/typephp-typestate-success.png)
+![TypePHP executing the same code cleanly](/blog/making-legal-states-impossible-in-place-typestates-in-pure-php/typephp-typestate-success.png)
 
 Now run the exact same code below inside TypePHP's live WebAssembly engine:
 

@@ -77,6 +77,11 @@ export default withMermaid(
       const pageTitle = rawTitle.includes('TypePHP') ? rawTitle : `${rawTitle} | TypePHP`;
       const pageDescription = pageData.description || 'Transparent Runtime Type Enforcement for PHP. Bringing reified generics, typed arrays, and 1-pass audit reporting to life with zero C-extensions.';
 
+      const frontmatterImage = pageData.frontmatter.image;
+      const imageUrl = frontmatterImage
+        ? (frontmatterImage.startsWith('http') ? frontmatterImage : `${siteUrl}${frontmatterImage.replace(/^\//, '')}`)
+        : `${siteUrl}og-default.png`;
+
       return [
         ['link', { rel: 'canonical', href: canonicalUrl }],
         ['meta', { property: 'og:site_name', content: 'TypePHP' }],
@@ -84,12 +89,17 @@ export default withMermaid(
         ['meta', { property: 'og:title', content: pageTitle }],
         ['meta', { property: 'og:description', content: pageDescription }],
         ['meta', { property: 'og:url', content: canonicalUrl }],
-        ['meta', { property: 'og:image', content: `${siteUrl}favicon.svg` }],
-        ['meta', { name: 'twitter:card', content: 'summary' }],
+
+        ['meta', { property: 'og:image', content: imageUrl }],
+        ['meta', { property: 'og:image:width', content: '1200' }],
+        ['meta', { property: 'og:image:height', content: '630' }],
+        ['meta', { property: 'og:image:type', content: 'image/png' }],
+
+        ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
         ['meta', { name: 'twitter:site', content: '@typephp' }],
         ['meta', { name: 'twitter:title', content: pageTitle }],
         ['meta', { name: 'twitter:description', content: pageDescription }],
-        ['meta', { name: 'twitter:image', content: `${siteUrl}favicon.svg` }],
+        ['meta', { name: 'twitter:image', content: imageUrl }],
       ];
     },
 
