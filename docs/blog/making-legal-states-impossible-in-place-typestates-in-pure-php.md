@@ -47,7 +47,7 @@ These bugs exist because of a fundamental architectural blind spot we have polit
 
 A closed `File` object will still cheerfully offer you a `read()` method. A `QueryBuilder` with zero fitlers will happily execute `delete()`. An idle database conection will smile and pretend it can `commit()`. The type system just sits there, sips its coffee, shrugs, and says: *"Sure, looks valid to me!"*
 
-For nearly forty years, computer scientists have chased a holy grail designed to end this madness: **Typestate-Oriented Programming**, the radical, mind-bending proposition that an object's type should actually reflect its current state.
+For nearly forty years, computer scientists have pursued a holy grail designed to end this madness: **Typestate-Oriented Programming**, the radical, mind-bending proposition that an object's type should actually reflect its current state.
 
 Mainstream languages looked at this idea, nodded thoughtfully in academic conferences, and then did everything in their power to avoid implementing it properly. C# freezes the type in carbonite. Rust destroys the value and runs away with it. Static analyzers wave their hands and pray CI catches it.
 
@@ -153,23 +153,24 @@ Static analysis is great at catching typos before you commit. It is, by design, 
 
 We built a small typeatate machine that exercises three patterns that appear constantly in real production code:
 
-1. Mutating `$this->state` inside transition methods.
+1. Using generic defaults (`@template TState of State = Unauthenticated`) so we never even have to write `@var` comments on instantiation!
 2. Passing the object through an alias (`$shared = $alice`), the classic shared-reference case that most PHP code relies on.
 3. Sending it through an untyped framework boundary (`untypedLayer(object $s)`).
 
 The same code was analyzed by **PHPStan at Level MAX** and then executed under **TypePHP's live runtime engine**.
 
-### What PHPStan Reports: 5 False Positives
+### What PHPStan Reports: 3 Errors (2 False Positives)
 
-![PHPStan reporting errors on the typestate example](/blog/making-legal-states-impossible-in-place-typestates-in-pure-php/phpstan-typestate-errors.png)
+![PHPStan reporting 3 errors on the typestate example](/blog/making-legal-states-impossible-in-place-typestates-in-pure-php/phpstan-typestate-errors.png)
 
-PHPStan surfaces a sea of red:
+PHPStan halted with **3 errors**:
 
-* **Inside `login()` and `logout()`:** PHPStan refuses to accept the assignments to `$this->state`, treating the generic property as an immutable museum artifact. Even in massive codebases like Nextcloud core (`Response.php`), developers are forced to write `/** @psalm-suppress InvalidPropertyAssignmentValue */` just to shut the linter up!
-* **The Aliasing Blindspot:** After `$shared = $alice` and `$alice->login()`, PHPStan still insists `$shared` is unauthenticated. Flow analysis tracks variable *names*, not physical memory pointers, so the shared mutation is invisible to it.
-* **The Opaque Boundary:** Once `$bob` passes through `untypedLayer(object $s)`, the static model loses the transition and blindly rejects the later vault access.
+* **Line 55 (The Aliasing Blindspot):** PHPStan reported that `$shared` was unauthenticated, because static flow analysis tracks variable *names*, not physical heap pointers. It had no idea `$alice->login()` updated the shared instance in RAM.
+* **Line 71 (The Opaque Boundary):** Because `$bob` passed through `untypedLayer(object $s)`, PHPStan lost track of the transition and falsely claimed `$bob` could not access the vault.
+* **Line 78 (The Legitimate Catch):** PHPStan correctly caught `$s1` after it logged out.
 
-None of these are bugs in PHPStan. They are the natural consequence of a tool that inspects text without ever executing it.
+Notice that out of 3 errors reported by PHPStan, **two were false positives on safe, legitimate code**, purely because static analysis cannot follow heap pointers. 
+
 
 ---
 
@@ -180,9 +181,9 @@ None of these are bugs in PHPStan. They are the natural consequence of a tool th
 Now run the exact same code below inside TypePHP's live WebAssembly engine:
 
 ::: tip Try it yourself
-1. Click **Run** below. All three accesses succeed cleanly with `Access granted!`, followed by line 92 halting with an uncaught `TypeError` because `$s1` logged out!
-2. Click **Edit**, comment out line 90 (`$s1->logout();`), and run again. All four accesses now succeed with Exit 0!
-3. [Open the exact same code in the PHPStan Playground](https://phpstan.org/r/54a4bc39-e250-4f4d-b649-d48f3af7727f) to see the 5 static false positives side by side.
+1. Click **Run** below. All three accesses succeed cleanly with `Access granted!`, followed by line 78 halting with an uncaught `TypeError` because `$s1` logged out!
+2. Click **Edit**, comment out line 76 (`$s1->logout();`), and run again. All four accesses now succeed with Exit 0!
+3. [Open the exact same code in the PHPStan Playground](https://phpstan.org/try) to see the 3 static errors side by side.
 :::
 
 <TypePHPSnippet title="Typestate Example: Static Analysis vs Runtime" default-view="source">
@@ -199,35 +200,19 @@ class Unauthenticated implements State {}
 class Authenticated implements State {}
 
 /**
- * @template TState of State
+ * @template TState of State = Unauthenticated
  */
 class Session
 {
     /**
-     * @var TState
-     */
-    public object $state;
-
-    public function __construct()
-    {
-        $this->state = new Unauthenticated();
-    }
-
-    /**
      * @phpstan-self-out self<Authenticated>
      */
-    public function login(): void
-    {
-        $this->state = new Authenticated();
-    }
+    public function login(): void {}
 
     /**
      * @phpstan-self-out self<Unauthenticated>
      */
-    public function logout(): void
-    {
-        $this->state = new Unauthenticated();
-    }
+    public function logout(): void {}
 }
 
 /**
@@ -241,25 +226,27 @@ function accessVault(Session $session): void
 }
 
 // -------------------------------------------------------------
-// 1. Direct Transition (Succeeds)
+// 1. Direct Transition (Both PHPStan & TypePHP Pass)
 // -------------------------------------------------------------
+
 $s1 = new Session();
 $s1->login();
-accessVault($s1);
+accessVault($s1); // ✓ Succeeded in both!
 
 // -------------------------------------------------------------
-// 2. The Shared-Reference Case
+// 2. The Aliasing Test (PHPStan fails on line 55, TypePHP succeeds)
 // -------------------------------------------------------------
+
 $alice = new Session();
 $shared = $alice; // Points to the EXACT same instance in RAM!
+
 $alice->login();
 
-// TypePHP knows $shared points to the same authenticated heap instance.
-// This matches the natural expectation when an object changes state.
-accessVault($shared);
+// PHPStan throws a false positive here because it tracks variable names:
+accessVault($shared); // ✓ TypePHP succeeds!
 
 // -------------------------------------------------------------
-// 3. Opaque Framework Boundary
+// 3. Opaque Framework Boundary (PHPStan fails on line 71, TypePHP succeeds)
 // -------------------------------------------------------------
 function untypedLayer(object $s): void
 {
@@ -271,24 +258,24 @@ function untypedLayer(object $s): void
 $bob = new Session();
 untypedLayer($bob);
 
-// At runtime, $bob physically logged in. TypePHP verifies its live state:
-accessVault($bob);
+// PHPStan throws a false positive here because $bob passed through `object`:
+accessVault($bob); // ✓ TypePHP succeeds!
 
 // -------------------------------------------------------------
-// 4. Runtime Gatekeeping (Catches actual unauthenticated access)
+// 4. Runtime Gatekeeping (Both PHPStan and TypePHP Catch This)
 // -------------------------------------------------------------
 $s1->logout();
 echo "Attempting access after logout...\n";
-accessVault($s1);
+accessVault($s1); //  Both agree: Throws TypeError on line 78!
 ```
 
 </TypePHPSnippet>
 
 TypePHP succeeds here for three concrete reasons:
 
-1. **Speculative Property Rollbacks:** When `$this->state = new Authenticated()` runs inside `login()`, TypePHP’s `InlineChecker::trySelfOutTransition()` speculatively tests the impending `@self-out` transition and allows the assignment without requiring ugly suppress comments.
+1. **Zero Boilerplate:** By declaring `@template TState of State = Unauthenticated`, `$s1 = new Session()` defaults cleanly to `Unauthenticated` without needing `@var` comments.
 2. **Heap Pointer Aliasing:** It keys state by `spl_object_id`. When `$alice->login()` runs, the physical instance updates, so `$shared` reflects the change immediately.
-3. **Observing the Actual Heap:** It observes what physically happened in memory, not what a static symbol graph guessed.
+3. **Observing the Actual Heap:** It observes what physically happened in memory, not what a static symbol graph guessed. Both tools agree on line 78, but only TypePHP lets lines 55 and 71 run as intended.
 
 ---
 
@@ -361,19 +348,17 @@ Notice what this eliminates:
 
 ---
 
-## Conclusion: PHP’s Accidental Advantage
+## Conclusion: Different Languages, Different Trade-Offs
 
-For over twenty years, computer science purists have treated PHP’s lack of native C-level reified generics as proof that it is a toy language for building simple websites.
+It is easy to look at PHP's lack of native C-level reified generics and assume the language is behind compiled peers like C# or Rust. But language design is always an exercise in choosing the right trade-offs for a specific domain:
 
-That missing C-level rigidity turned out to be an unexpected gift:
+* **C# and Swift** prioritized raw throughput and cache-friendly memory layouts by embedding generic metadata directly into physical object headers, making in-place type changes an intentional impossibility for safety and performance reasons.
+* **Rust** chose affine ownership to guarantee thread safety and memory management without a garbage collector, which naturally models state machines by moving and consuming values rather than mutating shared references. It is a brilliant design for systems programming.
+* **TypePHP** takes advantage of PHP's dynamic, garbage-collected object model to decouple generic metadata into an external `\WeakMap`, evolving the type tag in place while keeping the shared-reference model that PHP developers rely on every day.
 
-* **C# and Swift** welded generic metadata into the heap header and locked it in carbonite forever.
-* **Rust** chose affine ownership and forced you to destroy your data just to change its clothes.
-* **TypePHP** took advantage of PHP's dynamic userland, decoupled generic metadata into `\WeakMap`, and simply mutated it in place, preserving the shared-reference model that PHP developers already take for granted.
+The result is practical **in-place Typestate-Oriented Programming**: state machines enforced by structural type contracts without breaking reference identity, all running in 100% pure PHP.
 
-The result is actual **in-place Typestate-Oriented Programming**: state machines enforced by structural type contracts, without breaking reference identity, running in 100% pure PHP.
-
-Sometimes the language everyone calls "dumb" is the only one flexible enough to do the smart thing.
+Different languages make different compromises for their runtimes. In PHP's case, its dynamic userland turned out to be the exact architectural ingredient needed to make in-place typestates feel right at home.
 
 ***
 
