@@ -183,7 +183,7 @@ Now run the exact same code below inside TypePHP's live WebAssembly engine:
 ::: tip Try it yourself
 1. Click **Run** below. All three accesses succeed cleanly with `Access granted!`, followed by line 78 halting with an uncaught `TypeError` because `$s1` logged out!
 2. Click **Edit**, comment out line 76 (`$s1->logout();`), and run again. All four accesses now succeed with Exit 0!
-3. [Open the exact same code in the PHPStan Playground](https://phpstan.org/try) to see the 3 static errors side by side.
+3. [Open the exact same code in the PHPStan Playground](https://phpstan.org/r/2fb95ce4-c315-4aab-8adf-2c86b508b005) to see the 3 static errors side by side.
 :::
 
 <TypePHPSnippet title="Typestate Example: Static Analysis vs Runtime" default-view="source">
