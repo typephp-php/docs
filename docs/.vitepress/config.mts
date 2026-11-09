@@ -162,6 +162,7 @@ export default withMermaid(
             { text: 'Liskov & DocBlock Inheritance', link: '/docs/core-concepts/liskov-and-inheritance' },
             { text: 'Inline Variables & Destructuring', link: '/docs/core-concepts/inline-variables' },
             { text: 'Class Property Validation & Hooks', link: '/docs/core-concepts/property-validation' },
+            { text: 'Constant Contracts', link: '/docs/core-concepts/constant-contracts' }, 
             { text: 'By-Reference Contracts & Mutations', link: '/docs/core-concepts/by-reference-contracts' },
             { text: 'Magic Annotations (@property & @method)', link: '/docs/core-concepts/magic-annotations' },
           ]

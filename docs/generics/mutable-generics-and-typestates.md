@@ -58,6 +58,118 @@ flowchart LR
 
 ---
 
+## Tag Variations & Ecosystem Interoperability
+
+Depending on whether your team uses **PHPStan**, **Psalm**, or prefers clean tool-agnostic PHPDocs, you will encounter different tags for declaring typestate transitions across the PHP ecosystem.
+
+TypePHP parses all six of the following annotations **identically**:
+
+| Tag Variation | Origin / Primary Tool | Supported Syntax Target |
+| :--- | :--- | :--- |
+| **`@self-out`** | Standard / Modern | `self<State>`, `static<State>`, `$this<State>` |
+| **`@this-out`** | Standard / Modern | `self<State>`, `static<State>`, `$this<State>` |
+| **`@phpstan-self-out`** | PHPStan 1.9+ | `self<State>`, `static<State>`, `$this<State>` |
+| **`@phpstan-this-out`** | PHPStan | `self<State>`, `static<State>`, `$this<State>` |
+| **`@psalm-self-out`** | Psalm | `self<State>`, `static<State>`, `$this<State>` |
+| **`@psalm-this-out`** | Psalm (Original) | `self<State>`, `static<State>`, `$this<State>` |
+
+---
+
+### Why So Many Variations?
+
+The proliferation of these tags is a byproduct of how static analysis evolved in PHP:
+
+1. **Psalm Pioneered `@this-out`:** Psalm originally introduced `@psalm-this-out` to represent changing the type of `$this` on method completion.
+2. **PHPStan Adopted `@self-out`:** PHPStan 1.9 introduced `@phpstan-self-out` (alongside `@phpstan-this-out`) to represent returning a mutated generic state for `self`.
+3. **Clean Un-prefixed Standards:** Modern developers often prefer clean, vendor-neutral tags (`@self-out` and `@this-out`) rather than prefixing every comment with tool-specific branding.
+
+### Semantic Intent vs. Runtime Reality
+
+In community discussions, developers sometimes differentiate them stylistically:
+* Using **`@self-out`** when modeling finite state machine transitions (e.g. `login()`, `commit()`).
+* Using **`@this-out`** when writing progressive fluent builders returning `$this` (e.g. `setTable()`, `prepare()`).
+
+Under the hood in TypePHP, **they are 100% functional equivalents**. Both annotations target the exact same runtime mechanism: mutating the generic type tags of the current object instance (`$this`) in `\WeakMap` memory.
+
+### Tooling Priority Hierarchy
+
+If a legacy codebase or multi-tool setup declares both vendor-specific and standard tags on the same method, TypePHP resolves the active contract using its deterministic **3-tier priority hierarchy**:
+
+$$\mathbf{@phpstan\text{-}*} \quad \longrightarrow \quad \mathbf{@psalm\text{-}*} \quad \longrightarrow \quad \mathbf{\text{Standard (@self-out / @this-out)}}$$
+
+This guarantees full drop-in compatibility: you can use whichever syntax your existing linter, PHPStan configuration, or team style guide requires without changing a single line of code for TypePHP.
+
+### Interactive Demo: Tag Interoperability
+
+Notice in the interactive snippet below that `stepOne()` uses Psalm's `@psalm-this-out`, `stepTwo()` uses PHPStan's `@phpstan-self-out`, and `stepThree()` uses clean `@self-out`. TypePHP transitions the generic state seamlessly across all three styles:
+
+<TypePHPSnippet title="Typestate Tag Interoperability" default-view="source">
+
+```php:line-numbers
+<?php
+
+declare(strict_types=1);
+
+use TypePHP\TypePHP;
+
+/**
+ * @template TState of 'initial'|'step_1'|'step_2'|'finished'
+ */
+class Pipeline
+{
+    /**
+     * 1. Psalm convention: @psalm-this-out
+     * @psalm-this-out self<'step_1'>
+     */
+    public function stepOne(): void {}
+
+    /**
+     * 2. PHPStan convention: @phpstan-self-out
+     * @phpstan-self-out self<'step_2'>
+     */
+    public function stepTwo(): void {}
+
+    /**
+     * 3. Clean vendor-neutral convention: @self-out
+     * @self-out self<'finished'>
+     */
+    public function stepThree(): void {}
+}
+
+/**
+ * Gatekeeper requiring the pipeline to have reached 'finished':
+ *
+ * @param Pipeline<'finished'> $pipeline
+ */
+function verifyCompletion(Pipeline $pipeline): void
+{
+    echo "✓ Pipeline successfully verified as FINISHED!\n";
+}
+
+/** @var Pipeline<'initial'> */
+$pipeline = new Pipeline();
+echo "State 0: " . TypePHP::getGenericType($pipeline) . "\n";
+
+// Transition 1 via @psalm-this-out:
+$pipeline->stepOne();
+echo "State 1: " . TypePHP::getGenericType($pipeline) . "\n";
+
+// Transition 2 via @phpstan-self-out:
+$pipeline->stepTwo();
+echo "State 2: " . TypePHP::getGenericType($pipeline) . "\n";
+
+// Transition 3 via @self-out:
+$pipeline->stepThree();
+echo "State 3: " . TypePHP::getGenericType($pipeline) . "\n\n";
+
+// Verified by gatekeeper!
+verifyCompletion($pipeline);
+```
+
+</TypePHPSnippet>
+
+---
+
 ## In-Place State Machines (`@self-out`)
 
 Model business workflows where methods are only permitted when an object has reached a specific verified state:
